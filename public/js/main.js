@@ -1,9 +1,10 @@
 import { api, getToken, setToken } from './api.js';
 import { state, setUser } from './state.js';
 import { loadLang, preferredLang } from './i18n.js';
-import { registerScreens, navigate, currentScreen } from './router.js';
-import { connectSocket, identify, on as onSocket } from './net/socket.js';
-import { toast } from './ui.js';
+import { registerScreens, navigate, currentScreen, setScreenChangeHandler } from './router.js';
+import { connectSocket, identify, on as onSocket, emit as socketEmit } from './net/socket.js';
+import { toast, openModal, closeModal } from './ui.js';
+import { t } from './i18n.js';
 import * as audio from './engine/audio.js';
 
 import * as onboarding from './screens/onboarding.js';
@@ -78,11 +79,49 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Background music belongs in the menus; during a match the table sounds carry it.
+const SILENT_SCREENS = new Set(['game', 'search']);
+setScreenChangeHandler((name) => {
+  if (SILENT_SCREENS.has(name)) audio.stopMusic();
+  else audio.startMusic();
+});
+
+// Any match that starts - from the queue, a rematch or a friend's challenge -
+// takes you to the table from wherever you are. Handled once, here, so no screen
+// can navigate twice for the same event.
+const toTable = (matchData) => {
+  if (currentScreen()?.name === 'game') return;
+  closeModal();
+  navigate('game', { matchData });
+};
+onSocket('match_start', toTable);
 // Reconnecting into a match you are still in beats the old behaviour, where
 // dropping out for any reason meant losing on the clock.
-onSocket('match_resume', (matchData) => {
-  if (currentScreen()?.name === 'game') return;
-  navigate('game', { matchData });
+onSocket('match_resume', toTable);
+
+// A friend's challenge arrives as an invitation you can accept or turn down.
+onSocket('challenge_invite', (inv) => {
+  if (currentScreen()?.name === 'game') return;   // don't interrupt a live match
+  audio.coin();
+  openModal(`
+    <h3>${t('challengeFrom', { name: inv.fromNickname })}</h3>
+    <p class="muted">${inv.tableName} · ${t('friendlyMatch')}</p>
+    <button class="btn gold block" id="ch-accept">${t('accept')}</button>
+    <button class="btn ghost block" id="ch-decline">${t('decline')}</button>
+  `, {
+    onMount: (root) => {
+      const respond = (accept) => {
+        closeModal();
+        socketEmit('challenge_respond', { challengeId: inv.challengeId, accept });
+      };
+      root.querySelector('#ch-accept').onclick = () => respond(true);
+      root.querySelector('#ch-decline').onclick = () => respond(false);
+    },
+  });
+});
+onSocket('challenge_sent', ({ nickname }) => toast(t('challengeSent', { name: nickname })));
+onSocket('challenge_declined', ({ reason, nickname }) => {
+  toast(t(reason === 'expired' ? 'challengeExpired' : 'challengeDeclined', { name: nickname }));
 });
 
 connectSocket();

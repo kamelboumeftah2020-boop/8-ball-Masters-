@@ -10,8 +10,7 @@ export async function render(root) {
   await draw();
 
   const offErr = on('challenge_error', () => toast('Friend is not online right now'));
-  const offStart = on('match_start', (payload) => navigate('game', { matchData: payload }));
-  onLeave(() => { offErr(); offStart(); });
+  onLeave(() => { offErr(); });
 
   async function draw() {
     let friends = [];

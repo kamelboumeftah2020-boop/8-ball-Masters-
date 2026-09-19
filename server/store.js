@@ -26,10 +26,29 @@ export const db = load();
 let saveTimer = null;
 export function persist() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  }, 250);
+  saveTimer = setTimeout(writeNow, 250);
+}
+
+// Write to a sibling file and rename over the original: a crash mid-write leaves
+// the previous database intact instead of a truncated one that loses every account.
+function writeNow() {
+  saveTimer = null;
+  const tmp = `${DB_PATH}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
+    fs.renameSync(tmp, DB_PATH);
+  } catch (err) {
+    console.error('failed to persist database:', err.message);
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
+// Don't lose the last few hundred milliseconds of play on a clean shutdown.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (saveTimer) { clearTimeout(saveTimer); writeNow(); }
+    process.exit(0);
+  });
 }
 
 export function getUser(id) {

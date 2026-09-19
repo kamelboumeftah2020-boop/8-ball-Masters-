@@ -111,6 +111,35 @@ export function render(root, { matchData }) {
     else audio.cushionHit(intensity);
   }
 
+  // Roll a short recording of the table so a win can be shared as an actual clip
+  // rather than a still card. Kept to the last ~12s by dropping old chunks.
+  let recorder = null;
+  const clipChunks = [];
+  function startClipRecording() {
+    if (typeof MediaRecorder === 'undefined' || !canvas.captureStream) return;
+    try {
+      const stream = canvas.captureStream(30);
+      const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        .find(m => MediaRecorder.isTypeSupported(m));
+      if (!mime) return;
+      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+      recorder.ondataavailable = (e) => {
+        if (!e.data.size) return;
+        clipChunks.push(e.data);
+        while (clipChunks.length > 12) clipChunks.shift();   // ~12 seconds
+      };
+      recorder.start(1000);
+      state.clipMime = mime;
+    } catch { recorder = null; }
+  }
+  function stopClipRecording() {
+    if (!recorder) return;
+    try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
+    recorder = null;
+    state.lastClip = clipChunks.length ? new Blob(clipChunks, { type: state.clipMime }) : null;
+  }
+  startClipRecording();
+
   function resize() { sizeCanvas(canvas, tableArea); }
   resize();
   window.addEventListener('resize', resize);
@@ -284,11 +313,13 @@ export function render(root, { matchData }) {
   });
 
   const offEnd = on('match_end', (payload) => {
+    stopClipRecording();
     cleanup();
     navigate('result', { payload });
   });
 
   function cleanup() {
+    stopClipRecording();
     cancelAnimationFrame(rafId);
     window.removeEventListener('resize', resize);
     offTick(); offSync(); offEmoji(); offEnd();

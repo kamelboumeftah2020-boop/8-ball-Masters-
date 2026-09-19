@@ -51,11 +51,12 @@ Everything is reachable with one thumb, in portrait:
 - The on-table aim guide shows a ghost cue ball at the predicted contact point plus
   the object ball's predicted direction.
 
-Sound is synthesised at runtime with the Web Audio API — there are no audio files
-to ship. Ball clicks are pitched and shaped from the actual impact speed, cushions
-thud lower and softer, and there are separate cues for potting, the strike, the
-last five seconds, coins and the win/lose stings. It all follows the player's
-sound setting.
+Sound and music are synthesised at runtime with the Web Audio API — there are no
+audio files to ship. Ball clicks are pitched and shaped from the actual impact
+speed, cushions thud lower and softer, and there are separate cues for potting,
+the strike, the last five seconds, coins and the win/lose stings. A quiet chord
+bed plays in the menus and steps aside during a match. It all follows the
+player's sound setting.
 
 ## Tests
 
@@ -70,6 +71,9 @@ sound setting.
 - `npm run test:ui` — drives a real browser: captures the layout the server sends,
   computes a potting shot, aims and strikes it with genuine pointer input, and
   checks the pot comes back from the server. (Start the server first.)
+- `npm run test:weekly` — covers the Friday season rollover: the schedule, who is
+  paid, that fourth place gets nothing, that star tiers pay independently, and
+  that a season never pays out twice.
 
 ## What's implemented from the GDD
 
@@ -85,12 +89,14 @@ sound setting.
 | 10-star global league system, weekly reset (Fridays 00:00 UTC), scaled prizes, local + friends leaderboards | ✅ |
 | Shop: 5 coin packages w/ first-purchase x2, 32 cues w/ real stat bonuses, 52 avatars | ✅ |
 | Profile: ID + copy, stats, title, career coins, add friend / report | ✅ |
-| Friends: add by ID, online status, challenge (stakes-free) | ✅ |
+| Friends: add by ID, online status, challenge invites you accept or decline (stakes-free) | ✅ |
 | Settings: 6 languages (ar/fr/en/de/es/tr) incl. Arabic RTL, vibration, sound, aim sensitivity, report, privacy/TOS | ✅ |
 | Daily Box (24h), 3 daily missions/day | ✅ |
 | Retention hooks: Revenge (2x stake rematch), Near-Miss message + cue upsell, 2h loss box, win-streak (4th win = 2x), shareable result-card image, friend invite links, emoji reactions in-match | ✅ |
 | Admin dashboard: player list (active/inactive/banned), reports, ban/unban, analytics | ✅ |
-| Anti-cheat: server-authoritative time, coins, and queue length | ✅ |
+| Anti-cheat: server deals the layout, simulates every shot, and owns time, coins and queue length | ✅ |
+| Session tokens (a public profile ID can't act on an account) | ✅ |
+| Reconnect into a match after dropping out | ✅ |
 | Auto temp-ban at 5 reports, permanent ban after 3 temp-bans | ✅ |
 
 ## Honest limitations (things that need real infrastructure this environment doesn't have)
@@ -107,9 +113,12 @@ real third-party credentials/services in production:
 - **Push notifications** — there's no FCM/APNs wired up, so the spec's "9pm reminder"
   is implemented as a server-side scheduled job that populates each user's in-app
   notification inbox rather than a native push.
-- **10-second gameplay clip** — recording actual video isn't practical here; instead a
-  shareable result-card PNG is generated client-side and downloaded (same "share your
-  win" goal, different medium).
+- **Storage** — persistence is a JSON file written atomically (temp file + rename, so
+  a crash mid-write can't corrupt it) and flushed on shutdown. Fine for development
+  and small scale; a real deployment wants a proper database.
+- **10-second gameplay clip** — the table is recorded with MediaRecorder and the last
+  ~12 seconds are offered as a real `.webm` after a match. Browsers without
+  MediaRecorder fall back to a shareable result-card PNG.
 - **50/30+ unique art assets** — cues/avatars are data-driven (name, category, rarity,
   stat bonuses) and rendered with CSS gradients + emoji rather than bespoke art.
 

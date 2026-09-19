@@ -122,5 +122,12 @@
   "spinCenter": "Merkez",
   "spinTop": "Üst dönüş",
   "spinBack": "Geri dönüş",
-  "spinSide": "Yan dönüş"
+  "spinSide": "Yan dönüş",
+  "challengeSent": "{name} oyuncusuna meydan okuma gönderildi",
+  "challengeFrom": "{name} sana meydan okuyor!",
+  "challengeDeclined": "{name} reddetti",
+  "challengeExpired": "{name} cevap vermedi",
+  "accept": "Kabul et",
+  "decline": "Reddet",
+  "friendlyMatch": "Dostluk maçı — bahissiz"
 }

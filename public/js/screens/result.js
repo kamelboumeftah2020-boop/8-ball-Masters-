@@ -107,15 +107,29 @@ export async function render(root, { payload }) {
     emit('revenge', { matchId: payload.matchId });
     toast('Rematch requested...');
   }
-  const offStart = on('match_start', (m) => navigate('game', { matchData: m }));
   const offErr = on('queue_error', (e) => {
     const map = { insufficient_coins: t('insufficientCoins'), opponent_offline: 'Opponent is offline', opponent_insufficient_coins: 'Opponent can\'t afford the rematch' };
     toast(map[e.error] || 'Could not start rematch');
   });
 
-  onLeave(() => { offDouble(); offStart(); offErr(); });
+  onLeave(() => { offDouble(); offErr(); });
 
   function shareClip() {
+    if (state.lastClip && state.lastClip.size > 0) {
+      const url = URL.createObjectURL(state.lastClip);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '8ballmasters-clip.webm';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Clip saved — share it on TikTok / WhatsApp!');
+      return;
+    }
+    shareResultCard();
+  }
+
+  // Fallback for browsers without MediaRecorder: a still result card.
+  function shareResultCard() {
     const canvas = document.createElement('canvas');
     canvas.width = 600; canvas.height = 800;
     const ctx = canvas.getContext('2d');

@@ -122,5 +122,12 @@
   "spinCenter": "Centre",
   "spinTop": "Effet haut",
   "spinBack": "Rétro",
-  "spinSide": "Effet latéral"
+  "spinSide": "Effet latéral",
+  "challengeSent": "Défi envoyé à {name}",
+  "challengeFrom": "{name} vous défie !",
+  "challengeDeclined": "{name} a refusé",
+  "challengeExpired": "{name} n'a pas répondu",
+  "accept": "Accepter",
+  "decline": "Refuser",
+  "friendlyMatch": "Match amical — sans mise"
 }

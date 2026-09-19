@@ -25,14 +25,11 @@ export function render(root, { tableId }) {
     toast(payload.error === 'insufficient_coins' ? t('insufficientCoins') : 'Table locked');
     navigate('home');
   });
-  const offStart = on('match_start', (payload) => {
-    navigate('game', { matchData: payload });
-  });
 
   root.querySelector('#cancel').onclick = () => {
     emit('leave_queue', { tableId });
     navigate('home');
   };
 
-  onLeave(() => { offErr(); offStart(); });
+  onLeave(() => { offErr(); });
 }

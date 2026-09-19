@@ -122,5 +122,12 @@
   "spinCenter": "Mitte",
   "spinTop": "Oberer Effet",
   "spinBack": "Rückzieher",
-  "spinSide": "Seiteneffet"
+  "spinSide": "Seiteneffet",
+  "challengeSent": "Herausforderung an {name} gesendet",
+  "challengeFrom": "{name} fordert dich heraus!",
+  "challengeDeclined": "{name} hat abgelehnt",
+  "challengeExpired": "{name} hat nicht geantwortet",
+  "accept": "Annehmen",
+  "decline": "Ablehnen",
+  "friendlyMatch": "Freundschaftsspiel — ohne Einsatz"
 }

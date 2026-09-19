@@ -122,5 +122,12 @@
   "spinCenter": "المنتصف",
   "spinTop": "ضربة علوية",
   "spinBack": "ضربة سفلية",
-  "spinSide": "ضربة جانبية"
+  "spinSide": "ضربة جانبية",
+  "challengeSent": "تم إرسال التحدي إلى {name}",
+  "challengeFrom": "{name} يتحداك!",
+  "challengeDeclined": "{name} رفض التحدي",
+  "challengeExpired": "{name} لم يرد",
+  "accept": "قبول",
+  "decline": "رفض",
+  "friendlyMatch": "ماتش ودي — بدون رهان"
 }

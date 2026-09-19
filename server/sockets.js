@@ -11,6 +11,9 @@ import {
 } from './game/matchEngine.js';
 
 const BOT_FILL_MS = 5000;
+const CHALLENGE_TTL_MS = 30000;
+
+const challenges = new Map(); // challengeId -> invite
 
 const presence = new Map(); // userId -> Set<socketId>
 const socketUser = new Map(); // socketId -> userId
@@ -110,21 +113,67 @@ export function initSockets(io) {
       if (opp && !opp.isBot) io.to(`user:${opp.userId}`).emit('opponent_emoji', { emoji });
     });
 
+    // A challenge is now an invitation the friend can accept or turn down, rather
+    // than a match that simply appears on their screen.
     socket.on('challenge_friend', ({ friendId, tableId }) => {
       const userId = socketUser.get(socket.id);
       const user = getUser(userId);
       const friend = getUser(friendId);
       const table = getTable(tableId) || getTable(1);
-      if (!user || !friend) return;
-      const friendSockets = presence.get(friend.id);
-      if (!friendSockets || friendSockets.size === 0) {
+      if (!user || !friend || friend.id === user.id) return;
+      if (!isOnline(friend.id)) {
         socket.emit('challenge_error', { error: 'friend_offline' });
         return;
       }
-      const friendSocketId = [...friendSockets][0];
-      startFriendlyMatch(io, table, [
-        { userId: user.id, socketId: socket.id, cueId: user.equippedCueId },
-        { userId: friend.id, socketId: friendSocketId, cueId: friend.equippedCueId },
+      const challengeId = nanoid(10);
+      const invite = {
+        id: challengeId,
+        fromUserId: user.id,
+        toUserId: friend.id,
+        tableId: table.id,
+        expiresAt: Date.now() + CHALLENGE_TTL_MS,
+      };
+      challenges.set(challengeId, invite);
+      setTimeout(() => {
+        if (challenges.delete(challengeId)) {
+          io.to(`user:${user.id}`).emit('challenge_declined', { reason: 'expired', nickname: friend.nickname });
+        }
+      }, CHALLENGE_TTL_MS);
+
+      io.to(`user:${friend.id}`).emit('challenge_invite', {
+        challengeId,
+        fromUserId: user.id,
+        fromNickname: user.nickname,
+        fromAvatarId: user.avatarId,
+        tableId: table.id,
+        tableName: table.name,
+      });
+      socket.emit('challenge_sent', { nickname: friend.nickname });
+    });
+
+    socket.on('challenge_respond', ({ challengeId, accept }) => {
+      const userId = socketUser.get(socket.id);
+      const invite = challenges.get(challengeId);
+      if (!invite || invite.toUserId !== userId) return;
+      challenges.delete(challengeId);
+
+      const challenger = getUser(invite.fromUserId);
+      const responder = getUser(invite.toUserId);
+      if (!challenger || !responder) return;
+
+      if (!accept) {
+        io.to(`user:${challenger.id}`).emit('challenge_declined', {
+          reason: 'declined', nickname: responder.nickname,
+        });
+        return;
+      }
+      if (!isOnline(challenger.id)) {
+        socket.emit('challenge_error', { error: 'friend_offline' });
+        return;
+      }
+      startFriendlyMatch(io, getTable(invite.tableId) || getTable(1), [
+        { userId: challenger.id, socketId: null, cueId: challenger.equippedCueId },
+        { userId: responder.id, socketId: socket.id, cueId: responder.equippedCueId },
       ]);
     });
 

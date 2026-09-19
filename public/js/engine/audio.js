@@ -159,6 +159,57 @@ export function lose() {
   });
 }
 
+/* ---------------------------------------------------------------- music */
+// A slow, quiet chord bed for the menus - also synthesised, so it costs nothing
+// to ship. It never plays during a match, where the impact sounds carry the feel.
+const CHORDS = [
+  [196.00, 246.94, 293.66],   // Gm-ish
+  [174.61, 220.00, 261.63],
+  [155.56, 196.00, 233.08],
+  [174.61, 233.08, 277.18],
+];
+let musicTimer = null;
+let musicGain = null;
+let chordIndex = 0;
+
+export function startMusic() {
+  const c = live();
+  if (!c || musicTimer) return;
+  musicGain = c.createGain();
+  musicGain.gain.value = 0.055;          // deliberately just under the UI sounds
+  musicGain.connect(master);
+
+  const playChord = () => {
+    const ctxNow = live();
+    if (!ctxNow || !musicGain) return;
+    const chord = CHORDS[chordIndex++ % CHORDS.length];
+    const t = ctxNow.currentTime;
+    chord.forEach((freq, i) => {
+      const osc = ctxNow.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const env = ctxNow.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(0.5 - i * 0.12, t + 1.2);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 3.8);
+      osc.connect(env).connect(musicGain);
+      osc.start(t);
+      osc.stop(t + 4);
+    });
+  };
+  playChord();
+  musicTimer = setInterval(playChord, 3800);
+}
+
+export function stopMusic() {
+  clearInterval(musicTimer);
+  musicTimer = null;
+  if (musicGain) {
+    try { musicGain.disconnect(); } catch {}
+    musicGain = null;
+  }
+}
+
 export function levelUp() {
   const c = live();
   if (!c) return;

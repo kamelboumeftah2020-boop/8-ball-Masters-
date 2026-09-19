@@ -122,5 +122,12 @@
   "spinCenter": "Center",
   "spinTop": "Top spin",
   "spinBack": "Back spin",
-  "spinSide": "Side spin"
+  "spinSide": "Side spin",
+  "challengeSent": "Challenge sent to {name}",
+  "challengeFrom": "{name} challenges you!",
+  "challengeDeclined": "{name} declined",
+  "challengeExpired": "{name} did not answer",
+  "accept": "Accept",
+  "decline": "Decline",
+  "friendlyMatch": "Friendly match — no stake"
 }

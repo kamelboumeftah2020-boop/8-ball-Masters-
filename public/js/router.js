@@ -10,9 +10,13 @@ export function registerScreens(map) {
 // leave a matchmaking queue) that runs right before the next navigation away from it.
 export function onLeave(fn) { cleanup = fn; }
 
+let onScreenChange = null;
+export function setScreenChangeHandler(fn) { onScreenChange = fn; }
+
 export function navigate(name, params = {}) {
   const fn = screens[name];
   if (!fn) { console.error('Unknown screen', name); return; }
+  onScreenChange?.(name);
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
   current = { name, params };
   const root = document.getElementById('app');
