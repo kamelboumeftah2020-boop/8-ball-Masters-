@@ -49,6 +49,7 @@ export function privateUserDto(user) {
     notifications: user.notifications,
     weeklyCoins: user.weeklyCoins,
     isAdmin: !!user.isAdmin,
+    hasPin: !!user.pinHash,
   };
 }
 

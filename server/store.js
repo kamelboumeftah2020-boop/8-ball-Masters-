@@ -81,6 +81,29 @@ export function issueToken(user) {
   return token;
 }
 
+// A PIN is optional account protection. Like the session token it is only ever
+// stored as a salted hash.
+export function setPin(user, pin) {
+  if (!pin) { delete user.pinHash; delete user.pinSalt; persist(); return; }
+  user.pinSalt = crypto.randomBytes(12).toString('hex');
+  user.pinHash = hashPin(pin, user.pinSalt);
+  persist();
+}
+
+export function hasPin(user) { return !!user?.pinHash; }
+
+export function checkPin(user, pin) {
+  if (!user?.pinHash) return true;           // no PIN set: the name is enough
+  if (!pin) return false;
+  const given = Buffer.from(hashPin(String(pin), user.pinSalt));
+  const known = Buffer.from(user.pinHash);
+  return given.length === known.length && crypto.timingSafeEqual(given, known);
+}
+
+function hashPin(pin, salt) {
+  return crypto.createHash('sha256').update(`${salt}:${pin}`).digest('hex');
+}
+
 export function userByToken(token) {
   if (!token) return null;
   const id = tokenIndex.get(hashToken(token));
@@ -92,13 +115,12 @@ export function findByNickname(nick) {
   return id ? db.users[id] : null;
 }
 
-export function createGuestUser({ nickname, avatarId, country = 'INT' }) {
+export function createAccount({ nickname, avatarId, country = 'INT' }) {
   let id;
   do { id = genNumericId(8); } while (db.users[id]);
 
   const user = {
     id,
-    provider: 'guest',
     nickname,
     nicknameChangedAt: Date.now(),
     avatarId: avatarId ?? 0,

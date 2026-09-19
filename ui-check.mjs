@@ -48,8 +48,7 @@ const bonuses = (await (await fetch('http://localhost:3000/api/cues')).json()).c
 
 await page.goto('http://localhost:3000/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(400);
-await page.click('#guest'); await page.waitForTimeout(200);
-await page.fill('#nick', 'Pot' + Date.now() % 10000); await page.click('#next'); await page.waitForTimeout(200);
+await page.fill('#username', 'Pot' + Date.now() % 10000); await page.click('#go'); await page.waitForTimeout(400);
 await page.click('.avatar-pick'); await page.click('#create'); await page.waitForTimeout(900);
 await page.click('#go'); await page.waitForTimeout(600);
 await page.click('[data-play="1"]');

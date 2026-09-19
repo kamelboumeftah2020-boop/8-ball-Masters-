@@ -41,6 +41,10 @@ export function render(root) {
             <span>🎯 ${t('aimSensitivity')}</span>
             <input type="range" min="0" max="100" value="${s.aimSensitivity}" id="aim-sens" />
           </div>
+          <div class="setting-row" id="account-pin" role="button">
+            <span>🔐 ${t('accountPin')}</span>
+            <span class="${state.user.hasPin ? 'gold-text' : 'muted'}">${state.user.hasPin ? t('pinOn') : t('pinOff')} ›</span>
+          </div>
           <div class="setting-row" id="report-problem" role="button">
             <span>🐞 ${t('reportProblem')}</span><span>›</span>
           </div>
@@ -68,6 +72,7 @@ export function render(root) {
       save({ sound: next }).then(() => draw());
     };
     root.querySelector('#aim-sens').onchange = (e) => save({ aimSensitivity: Number(e.target.value) });
+    root.querySelector('#account-pin').onclick = managePin;
     root.querySelector('#report-problem').onclick = reportProblem;
     root.querySelector('#privacy').onclick = () => showText(t('privacyPolicy'), PRIVACY_TEXT);
     root.querySelector('#tos').onclick = () => showText(t('termsOfService'), TOS_TEXT);
@@ -78,6 +83,43 @@ export function render(root) {
       const { user } = await api.put('/settings', patch);
       setUser(user);
     } catch { toast('Could not save setting'); }
+  }
+
+  // A username on its own is public, so this is what actually stops someone else
+  // signing in as you.
+  function managePin() {
+    const has = state.user.hasPin;
+    openModal(`
+      <h3>🔐 ${t('accountPin')}</h3>
+      <p class="muted" style="font-size:15px;line-height:1.5;margin:0;">${t('pinExplain')}</p>
+      ${has ? `<input class="text-input" id="cur-pin" type="password" inputmode="numeric" maxlength="8" placeholder="${t('currentPin')}" />` : ''}
+      <input class="text-input" id="new-pin" type="password" inputmode="numeric" maxlength="8" placeholder="${t('newPin')}" />
+      <button class="btn gold block" id="save-pin">${has ? t('changePin') : t('setPin')}</button>
+      ${has ? `<button class="btn ghost block" id="clear-pin">${t('removePin')}</button>` : ''}
+    `, {
+      onMount: (m) => {
+        const currentPin = () => m.querySelector('#cur-pin')?.value || '';
+        m.querySelector('#save-pin').onclick = async () => {
+          const pin = m.querySelector('#new-pin').value.trim();
+          if (!/^\d{4,8}$/.test(pin)) { toast(t('invalidPin')); return; }
+          await savePin(pin, currentPin(), t('pinSaved'));
+        };
+        m.querySelector('#clear-pin')?.addEventListener('click', () => savePin('', currentPin(), t('pinRemoved')));
+      },
+    });
+  }
+
+  async function savePin(pin, currentPin, okMessage) {
+    try {
+      await api.put('/auth/pin', { pin, currentPin });
+      const { user } = await api.get('/session');
+      setUser(user);
+      closeModal();
+      toast(okMessage);
+      draw();
+    } catch (e) {
+      toast(e.status === 401 ? t('wrongPin') : t('invalidPin'));
+    }
   }
 
   function reportProblem() {
@@ -100,5 +142,5 @@ export function render(root) {
   }
 }
 
-const PRIVACY_TEXT = `8 Ball Masters collects only what's needed to run your account: your nickname, avatar, gameplay stats and coin balance are stored on our servers. We never sell your data. Guest accounts can be deleted at any time by contacting support.`;
+const PRIVACY_TEXT = `8 Ball Masters collects only what's needed to run your account: your nickname, avatar, gameplay stats and coin balance are stored on our servers. We never sell your data. Your account is tied to your username alone, and can be deleted at any time by contacting support.`;
 const TOS_TEXT = `By playing 8 Ball Masters you agree to play fair - exploiting bugs, using bots/macros or abusive behavior can result in a temporary or permanent ban. Virtual coins have no real-world cash value and purchases are final.`;

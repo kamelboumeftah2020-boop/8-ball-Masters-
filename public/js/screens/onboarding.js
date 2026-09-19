@@ -3,12 +3,15 @@ import { state, setUser } from '../state.js';
 import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
 import { connectSocket, identify } from '../net/socket.js';
-import { toast, avatarHtml } from '../ui.js';
+import { toast } from '../ui.js';
 import * as audio from '../engine/audio.js';
 
+// Sign-in is a username and nothing else. Names are unique, so one name is one
+// player: a name nobody has taken opens a new account, a name that exists signs
+// back into it (asking for the PIN if that account set one).
 export function render(root, params = {}) {
-  let step = 'login';
-  let nickname = '';
+  let step = 'username';
+  let username = '';
   let avatarId = 0;
   let inviteInfo = null;
 
@@ -17,47 +20,82 @@ export function render(root, params = {}) {
   }
 
   function draw() {
-    if (step === 'login') return drawLogin();
-    if (step === 'nickname') return drawNickname();
+    if (step === 'username') return drawUsername();
+    if (step === 'pin') return drawPin();
     if (step === 'avatar') return drawAvatar();
   }
 
-  function drawLogin() {
+  function logoHtml(small) {
+    const size = small ? 'style="width:74px;height:74px;"' : '';
+    const badge = small ? 'style="width:34px;height:34px;font-size:16px;"' : '';
+    return `<div class="logo-ball" ${size}><div class="inner"><div class="badge" ${badge}>8</div></div></div>`;
+  }
+
+  function drawUsername() {
     root.innerHTML = `
       <div class="onboarding">
-        <div class="logo-ball"><div class="inner"><div class="badge">8</div></div></div>
+        ${logoHtml(false)}
         <div>
           <div class="app-title">${t('appName')}</div>
           <div class="app-tagline">${t('tagline')}</div>
         </div>
-        <div class="onboarding-buttons">
-          <button class="btn block" id="fb">📘 ${t('continueFacebook')}</button>
-          <button class="btn block" id="gg">🔴 ${t('continueGoogle')}</button>
-          <button class="btn primary block" id="guest">${t('continueGuest')}</button>
-        </div>
+        <input class="text-input" id="username" maxlength="18" autocomplete="username"
+               placeholder="${t('usernamePlaceholder')}" value="${username}" />
+        <div class="muted" style="font-size:14px;max-width:340px;">${t('usernameHint')}</div>
+        <button class="btn primary block" id="go" style="max-width:360px;">${t('continueBtn')}</button>
       </div>`;
-    root.querySelector('#fb').onclick = () => { toast('Facebook login demo — continuing as guest'); step = 'nickname'; draw(); };
-    root.querySelector('#gg').onclick = () => { toast('Google login demo — continuing as guest'); step = 'nickname'; draw(); };
-    root.querySelector('#guest').onclick = () => { step = 'nickname'; draw(); };
+
+    const input = root.querySelector('#username');
+    input.focus();
+    const submit = () => continueWithName(input.value);
+    root.querySelector('#go').onclick = submit;
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
   }
 
-  function drawNickname() {
+  async function continueWithName(raw) {
+    const name = String(raw || '').trim().replace(/\s+/g, ' ');
+    if (name.length < 3) { toast(t('usernameTooShort')); return; }
+    username = name;
+    try {
+      const { exists, needsPin } = await api.post('/auth/check', { username: name });
+      if (!exists) { step = 'avatar'; draw(); return; }
+      if (needsPin) { step = 'pin'; draw(); return; }
+      await signIn(null);
+    } catch {
+      toast(t('somethingWrong'));
+    }
+  }
+
+  function drawPin() {
     root.innerHTML = `
       <div class="onboarding">
-        <div class="logo-ball" style="width:74px;height:74px;"><div class="inner"><div class="badge" style="width:34px;height:34px;font-size:16px;">8</div></div></div>
-        <h2>${t('enterNickname')}</h2>
-        <input class="text-input" id="nick" maxlength="18" placeholder="${t('nicknamePlaceholder')}" value="${nickname}" />
-        <button class="btn primary block" id="next" style="max-width:320px;">${t('confirm')}</button>
+        ${logoHtml(true)}
+        <h2>${t('welcomeBack', { name: username })}</h2>
+        <p class="muted">${t('enterPin')}</p>
+        <input class="text-input" id="pin" type="password" inputmode="numeric"
+               maxlength="8" autocomplete="current-password" placeholder="••••" />
+        <button class="btn primary block" id="go" style="max-width:360px;">${t('continueBtn')}</button>
+        <button class="btn ghost block" id="back" style="max-width:360px;">${t('back')}</button>
       </div>`;
-    const input = root.querySelector('#nick');
+    const input = root.querySelector('#pin');
     input.focus();
-    root.querySelector('#next').onclick = () => {
-      const val = input.value.trim();
-      if (val.length < 3) { toast('Nickname too short'); return; }
-      nickname = val;
-      step = 'avatar';
-      draw();
-    };
+    const submit = () => signIn(input.value);
+    root.querySelector('#go').onclick = submit;
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    root.querySelector('#back').onclick = () => { step = 'username'; draw(); };
+  }
+
+  async function signIn(pin) {
+    try {
+      const { user, token } = await api.post('/auth/login', { username, pin });
+      setToken(token);
+      await enterGame(user);
+      navigate('home');
+    } catch (e) {
+      if (e.status === 401) toast(t('wrongPin'));
+      else if (e.status === 403) navigate('banned', { reason: e.data?.reason });
+      else toast(t('somethingWrong'));
+    }
   }
 
   function drawAvatar() {
@@ -65,38 +103,45 @@ export function render(root, params = {}) {
     root.innerHTML = `
       <div class="onboarding">
         <h2>${t('chooseAvatar')}</h2>
+        <p class="muted">${t('newAccountFor', { name: username })}</p>
         <div class="avatar-grid">
           ${starters.map(a => `
             <button class="avatar-pick ${a.id === avatarId ? 'selected' : ''}" data-id="${a.id}"
               style="background:linear-gradient(135deg, ${a.gradient[0]}, ${a.gradient[1]})">${a.emoji}</button>
           `).join('')}
         </div>
-        <button class="btn primary block" id="create" style="max-width:320px;">${t('claim')}</button>
+        <button class="btn primary block" id="create" style="max-width:360px;">${t('claim')}</button>
+        <button class="btn ghost block" id="back" style="max-width:360px;">${t('back')}</button>
       </div>`;
     root.querySelectorAll('.avatar-pick').forEach(btn => {
       btn.onclick = () => { avatarId = Number(btn.dataset.id); drawAvatar(); };
     });
     root.querySelector('#create').onclick = createAccount;
+    root.querySelector('#back').onclick = () => { step = 'username'; draw(); };
   }
 
   async function createAccount() {
     try {
-      const { user, token } = await api.post('/auth/guest', { nickname, avatarId, country: 'INT' });
+      const { user, token } = await api.post('/auth/signup', { username, avatarId, country: 'INT' });
       setToken(token);
-      setUser(user);
-      audio.setEnabled(user.settings.sound);
-      audio.unlock();
-      await loadLang(user.settings.lang);
-      connectSocket();
-      identify();
+      await enterGame(user);
       if (inviteInfo?.fromUserId) {
         api.post('/friends/add', { friendId: inviteInfo.fromUserId }).catch(() => {});
       }
       showGift();
     } catch (e) {
-      if (e.status === 409) toast(t('idCopied') && 'Nickname already taken');
-      else toast('Something went wrong, try again');
+      if (e.status === 409) { toast(t('usernameTaken')); step = 'username'; draw(); }
+      else toast(t('somethingWrong'));
     }
+  }
+
+  async function enterGame(user) {
+    setUser(user);
+    audio.setEnabled(user.settings.sound);
+    audio.unlock();
+    await loadLang(user.settings.lang);
+    connectSocket();
+    identify();
   }
 
   function showGift() {
@@ -105,10 +150,10 @@ export function render(root, params = {}) {
         <div style="font-size:78px;">🎁</div>
         <h2 class="gold-text">${t('startGiftTitle')}</h2>
         <p class="muted">${t('startGiftDesc')}</p>
-        <div class="card" style="max-width:320px;">
+        <div class="card" style="max-width:340px;">
           <p style="font-size:17px;line-height:1.5;margin:0;">${t('tutorialText')}</p>
         </div>
-        <button class="btn primary block" id="go" style="max-width:320px;">${t('gotIt')}</button>
+        <button class="btn primary block" id="go" style="max-width:360px;">${t('gotIt')}</button>
       </div>`;
     root.querySelector('#go').onclick = () => navigate('home');
   }

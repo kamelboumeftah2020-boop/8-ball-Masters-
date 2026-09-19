@@ -18,7 +18,7 @@ async function api(method, path, body, token) {
 }
 
 async function makePlayer(name) {
-  const { body } = await api('POST', '/auth/guest', { nickname: name, avatarId: 0, country: 'INT' });
+  const { body } = await api('POST', '/auth/signup', { username: name, avatarId: 0, country: 'INT' });
   const { user, token } = body;
   const socket = io(BASE, { transports: ['websocket'] });
   await new Promise(r => socket.on('connect', r));

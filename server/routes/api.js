@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  db, getUser, createGuestUser, findByNickname, persist,
+  db, getUser, createAccount, findByNickname, persist,
   createInvite, addReport, ensureFreshMissions, cueById, avatarById, allUsers,
-  issueToken, userByToken,
+  issueToken, userByToken, setPin, hasPin, checkPin,
 } from '../store.js';
 import { TABLES, getTable } from '../data/tables.js';
 import { CUES } from '../data/cues.js';
@@ -50,13 +50,53 @@ function requireSelf(req, res) {
 }
 
 // ---------- Auth / session ----------
-api.post('/auth/guest', (req, res) => {
-  const { nickname, avatarId, country } = req.body || {};
-  const clean = String(nickname || '').trim().slice(0, 18);
-  if (!clean || clean.length < 3) return res.status(400).json({ error: 'invalid_nickname' });
-  if (findByNickname(clean)) return res.status(409).json({ error: 'nickname_taken' });
-  const user = createGuestUser({ nickname: clean, avatarId, country: country || 'INT' });
+// Sign-in is the username and nothing else. Names are unique, so one name is one
+// player: a new name opens an account, a known name signs back into it.
+const NAME_MIN = 3, NAME_MAX = 18;
+
+function cleanName(raw) {
+  return String(raw || '').trim().replace(/\s+/g, ' ').slice(0, NAME_MAX);
+}
+
+// Tells the sign-in screen whether this name opens an account or resumes one,
+// and whether that account is PIN-protected. Deliberately says nothing else.
+api.post('/auth/check', (req, res) => {
+  const name = cleanName(req.body?.username);
+  if (name.length < NAME_MIN) return res.status(400).json({ error: 'invalid_username' });
+  const existing = findByNickname(name);
+  res.json({ exists: !!existing, needsPin: hasPin(existing) });
+});
+
+api.post('/auth/signup', (req, res) => {
+  const name = cleanName(req.body?.username);
+  const { avatarId, country, pin } = req.body || {};
+  if (name.length < NAME_MIN) return res.status(400).json({ error: 'invalid_username' });
+  if (findByNickname(name)) return res.status(409).json({ error: 'username_taken' });
+  const user = createAccount({ nickname: name, avatarId, country: country || 'INT' });
+  if (pin) setPin(user, String(pin));
   res.json({ user: privateUserDto(user), token: issueToken(user) });
+});
+
+api.post('/auth/login', (req, res) => {
+  const name = cleanName(req.body?.username);
+  const user = findByNickname(name);
+  if (!user) return res.status(404).json({ error: 'no_such_username' });
+  if (user.banned) return res.status(403).json({ error: 'banned', reason: user.banReason });
+  if (!checkPin(user, req.body?.pin)) return res.status(401).json({ error: 'wrong_pin' });
+  ensureFreshMissions(user);
+  res.json({ user: privateUserDto(user), token: issueToken(user) });
+});
+
+// Setting a PIN is how a player stops anyone else signing in as them, since a
+// username on its own is public.
+api.put('/auth/pin', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const { pin, currentPin } = req.body || {};
+  if (!checkPin(user, currentPin)) return res.status(401).json({ error: 'wrong_pin' });
+  const next = pin === null || pin === '' ? null : String(pin);
+  if (next && !/^\d{4,8}$/.test(next)) return res.status(400).json({ error: 'invalid_pin' });
+  setPin(user, next);
+  res.json({ ok: true, hasPin: hasPin(user) });
 });
 
 // Resume a stored session. The token is the credential; nothing is looked up by ID.
@@ -70,8 +110,8 @@ api.get('/session', (req, res) => {
 
 api.put('/nickname', (req, res) => {
   const user = requireUser(req, res); if (!user) return;
-  const { nickname } = req.body || {};
-  const clean = String(nickname || '').trim().slice(0, 18);
+  const clean = cleanName(req.body?.nickname);
+  if (clean.length < NAME_MIN) return res.status(400).json({ error: 'invalid_username' });
   const cooldownMs = 90 * 24 * 60 * 60 * 1000;
   if (Date.now() - user.nicknameChangedAt < cooldownMs) {
     return res.status(429).json({ error: 'cooldown', retryAt: user.nicknameChangedAt + cooldownMs });

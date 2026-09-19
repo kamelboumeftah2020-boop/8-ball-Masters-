@@ -58,6 +58,25 @@ the strike, the last five seconds, coins and the win/lose stings. A quiet chord
 bed plays in the menus and steps aside during a match. It all follows the
 player's sound setting.
 
+## Signing in
+
+There is no password and no third-party login: a player is their username.
+
+- Names are unique. Capitalisation and stray spaces don't make a new name, so
+  `Kamel`, `kamel` and `  Kamel  ` are all the same player.
+- A name nobody has taken opens a new account (pick an avatar, collect the gift).
+- A name you already own signs you straight back into it, with your coins, cues
+  and stats intact.
+
+A username is public — it is on every leaderboard — so on its own it is not a
+secret. Anyone who types your name gets your account. Settings → Account PIN
+closes that: with a PIN set, the name alone is refused and sign-in asks for the
+PIN. It is optional because the spec asks for sign-in to be the username and
+nothing else; it is there because without it a name is not a credential.
+
+PINs are stored only as a salted SHA-256 hash and compared in constant time, and
+signing in issues a fresh session token that retires the previous one.
+
 ## Tests
 
 - `npm run test:physics` — fires 200 shots across the power range and asserts no
@@ -74,12 +93,19 @@ player's sound setting.
 - `npm run test:weekly` — covers the Friday season rollover: the schedule, who is
   paid, that fourth place gets nothing, that star tiers pay independently, and
   that a season never pays out twice.
+- `npm run test:auth` — covers username sign-in: that a name is unique (ignoring
+  case and stray spaces), that a known name returns you to your own account with
+  your progress, that an unknown one cannot sign in, and the whole optional-PIN
+  behaviour. (Start the server first.)
+- `npm run test:signin` — walks the sign-in screen itself in a real browser: a new
+  name opens an account, the same name from a clean browser comes back to it, and a
+  PIN set in settings is then asked for. (Start the server first.)
 
 ## What's implemented from the GDD
 
 | Section | Status |
 |---|---|
-| Onboarding (guest/FB/Google stub, nickname, 6 starter avatars, 5,000 coin + cue gift, 10s tutorial) | ✅ |
+| Onboarding (username sign-in with unique names, 6 starter avatars, 5,000 coin + cue gift, 10s tutorial) | ✅ |
 | Home lobby (top bar, 10 tables, online counts, bottom nav) | ✅ |
 | Per-table isolated matchmaking + searching animation | ✅ |
 | Vertical 8%/72%/20% gameplay layout, one-thumb controls (see below) | ✅ |
@@ -104,8 +130,6 @@ player's sound setting.
 These are all wired up end-to-end with clear, working demo behavior, but would need
 real third-party credentials/services in production:
 
-- **Facebook/Google login** — buttons exist and are wired up, but fall back to guest
-  auth (no OAuth app credentials available here).
 - **Real payments** — the coin shop is a genuine server-authoritative economy, but
   "buying" a package is an instant demo grant, not a real payment gateway charge.
 - **Video ads** — rescue/double-prize/interstitial "ads" are simulated with a progress
