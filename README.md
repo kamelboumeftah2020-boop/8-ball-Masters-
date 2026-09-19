@@ -32,6 +32,26 @@ and cheat-resistant:
 - Win condition: pot all 7 balls first, or your opponent's timer reaches `00.00` first.
 - Scratching the cue ball has no time penalty — it just respawns (per spec).
 
+## Controls
+
+Everything is reachable with one thumb, in portrait:
+
+- **Aim** — drag anywhere on the cloth. The aim does *not* jump to your finger; it
+  rotates by how far your finger swings around the cue ball, so fine placement is
+  possible. The strip under the table scrubs the angle degree-by-degree (its rate
+  follows the player's aim-sensitivity setting) and the ◀ ▶ buttons nudge it, with
+  hold-to-repeat.
+- **Shoot** — pull straight back from behind the cue ball to draw the stick, then
+  release. The side slider (shaped like a cue) does the same thing for anyone who
+  prefers a slider. There is no separate "hit" button.
+- The on-table aim guide shows a ghost cue ball at the predicted contact point plus
+  the object ball's predicted direction.
+
+`npm run test:physics` runs a headless sanity check on the simulation: it fires
+200 shots across the power range and asserts no ball tunnels through another, no
+ball escapes the cushions, nothing ends up stuck overlapping, and roll times stay
+in a sane range for a 20-second clock.
+
 ## What's implemented from the GDD
 
 | Section | Status |
@@ -39,7 +59,7 @@ and cheat-resistant:
 | Onboarding (guest/FB/Google stub, nickname, 6 starter avatars, 5,000 coin + cue gift, 10s tutorial) | ✅ |
 | Home lobby (top bar, 10 tables, online counts, bottom nav) | ✅ |
 | Per-table isolated matchmaking + searching animation | ✅ |
-| Vertical 8%/72%/20% gameplay layout, aim dial + drag-on-table aiming, vertical power slider, one-thumb shoot-on-release | ✅ |
+| Vertical 8%/72%/20% gameplay layout, one-thumb controls (see below) | ✅ |
 | Hand-rolled 2D billiard physics (cushions, ball-ball collisions, 6 pockets) | ✅ |
 | Timer (20s start, +10s/ball, red+shake <10s, server authoritative) | ✅ |
 | XP / level curve (1–10,000), career titles (Beginner → Godfather of Billiards) | ✅ |

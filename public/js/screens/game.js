@@ -57,14 +57,18 @@ export function render(root, { matchData }) {
       </div>
 
       <div class="controls-area">
-        <div class="aim-control">
-          <button class="fine-btn" id="aim-ccw">◀</button>
-          <div class="aim-dial" id="aim-dial">
-            <div class="dial-ticks"></div>
-            <div class="needle" id="needle"></div>
-            <div class="dial-hub"><span id="angle-readout">0°</span></div>
+        <div class="ctrl-left">
+          <div class="aim-row">
+            <button class="fine-btn" id="aim-ccw">◀</button>
+            <div class="aim-strip" id="aim-strip">
+              <div class="strip-ticks" id="strip-ticks"></div>
+              <span id="angle-readout">0°</span>
+            </div>
+            <button class="fine-btn" id="aim-cw">▶</button>
           </div>
-          <button class="fine-btn" id="aim-cw">▶</button>
+          <div class="emoji-bar" id="emoji-bar">
+            ${EMOJIS.map(e => `<button data-e="${e}">${e}</button>`).join('')}
+          </div>
         </div>
 
         <div class="power-control">
@@ -73,10 +77,6 @@ export function render(root, { matchData }) {
             <div class="power-cue" id="power-cue"></div>
           </div>
           <div class="power-label" id="power-label">0%</div>
-        </div>
-
-        <div class="emoji-bar" id="emoji-bar">
-          ${EMOJIS.map(e => `<button data-e="${e}">${e}</button>`).join('')}
         </div>
       </div>
     </div>`;
@@ -103,26 +103,25 @@ export function render(root, { matchData }) {
   window.addEventListener('resize', resize);
 
   const controls = createControls({
-    dialEl: document.getElementById('aim-dial'),
-    powerEl: document.getElementById('power-track'),
     canvasEl: canvas,
-    needleEl: document.getElementById('needle'),
+    powerEl: document.getElementById('power-track'),
     fillEl: document.getElementById('power-fill'),
     cueEl: document.getElementById('power-cue'),
     labelEl: document.getElementById('power-label'),
+    stripEl: document.getElementById('aim-strip'),
+    tickEl: document.getElementById('strip-ticks'),
     readoutEl: document.getElementById('angle-readout'),
     ccwEl: document.getElementById('aim-ccw'),
     cwEl: document.getElementById('aim-cw'),
     sensitivity: state.user?.settings?.aimSensitivity ?? 50,
+    getCueBall: () => gameTable.cue,
+    tableFromNorm: canvasNormToTable,
+    canPlay: () => gameTable.isAllStopped() && !shotAnim,
     onShoot: (angle, power) => {
       if (!gameTable.isAllStopped() || shotAnim) return;
       shotAnim = { start: performance.now(), power };
       pendingShot = { angle, power };
     },
-  });
-  controls.setCanvasAimHandler((nx, ny) => {
-    const p = canvasNormToTable(nx, ny);
-    controls.setAim(Math.atan2(p.y - gameTable.cue.y, p.x - gameTable.cue.x));
   });
 
   document.getElementById('emoji-bar').addEventListener('click', (e) => {

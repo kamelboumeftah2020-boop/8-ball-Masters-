@@ -312,41 +312,40 @@ input.text-input {
   box-shadow: 0 -4px 14px rgba(0,0,0,0.4); position: relative; z-index: 3;
 }
 
-/* --- aim: metal dial with tick ring + fine-adjust arrows --- */
-.aim-control { display: flex; align-items: center; gap: 5px; }
+/* --- aim: precision scrub strip + fine-adjust arrows (main aiming is on the cloth) --- */
+.ctrl-left { flex: 1; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.aim-row { display: flex; align-items: center; gap: 7px; }
 .fine-btn {
-  width: 26px; height: 46px; border-radius: 9px; border: 1px solid var(--line-strong);
+  width: 40px; height: 48px; border-radius: 12px; border: 1px solid var(--line-strong);
   background: linear-gradient(180deg, var(--card-2), #0f0d14); color: var(--gold);
-  font-size: 12px; font-weight: 800; box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255,255,255,0.07);
+  font-size: 14px; font-weight: 800; box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255,255,255,0.07);
+  flex-shrink: 0;
 }
 .fine-btn:active { transform: scale(0.92); background: linear-gradient(180deg, #2c2838, #16131d); }
-.aim-dial {
-  width: 96px; height: 96px; border-radius: 50%; position: relative; touch-action: none;
-  background:
-    radial-gradient(circle at 34% 26%, #34303f 0%, #1a1722 45%, #0a080e 100%);
-  border: 2px solid rgba(255,255,255,0.14);
-  box-shadow: var(--shadow-2), inset 0 3px 6px rgba(255,255,255,0.08), inset 0 -6px 14px rgba(0,0,0,0.65);
-}
-.dial-ticks {
-  position: absolute; inset: 4px; border-radius: 50%;
-  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.30) 0deg 1.3deg, rgba(255,255,255,0) 1.3deg 15deg);
-  -webkit-mask: radial-gradient(circle, transparent 63%, #000 65%);
-  mask: radial-gradient(circle, transparent 63%, #000 65%);
-}
-.aim-dial .needle {
-  position: absolute; left: 50%; top: 50%; width: 4px; height: 40px;
-  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-2) 70%, rgba(255,178,56,0) 100%);
-  transform-origin: top center; margin-left: -2px; border-radius: 4px;
-  box-shadow: 0 0 10px rgba(255,213,74,0.75);
-}
-.dial-hub {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-  width: 46px; height: 46px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #2f2b3a, #121019 75%);
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: inset 0 2px 4px rgba(255,255,255,0.08), 0 3px 8px rgba(0,0,0,0.5);
+.aim-strip {
+  flex: 1; min-width: 0; height: 48px; border-radius: 13px; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, #1c1926, #0b090f);
+  border: 1px solid var(--line-strong); touch-action: none;
+  box-shadow: inset 0 3px 7px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.05);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums;
+}
+.aim-strip.active { border-color: rgba(255,213,74,0.5); }
+.strip-ticks {
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.22) 0 1px, rgba(255,255,255,0) 1px 12px);
+  -webkit-mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
+}
+/* centre index: short notches top and bottom so the degree readout stays legible */
+.aim-strip::after, .aim-strip::before {
+  content: ''; position: absolute; left: 50%; width: 2px; margin-left: -1px; height: 9px;
+  background: var(--gold); box-shadow: 0 0 8px rgba(255,213,74,0.7);
+}
+.aim-strip::before { top: 3px; border-radius: 0 0 2px 2px; }
+.aim-strip::after { bottom: 3px; border-radius: 2px 2px 0 0; }
+.aim-strip span {
+  position: relative; font-size: 14px; font-weight: 800; color: var(--gold);
+  font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px #000, 0 0 12px #000;
 }
 
 /* --- power: pull the cue down, release to shoot --- */
@@ -384,7 +383,8 @@ input.text-input {
 }
 .power-label { font-size: 11px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
 
-.emoji-bar { display: flex; gap: 5px; flex-wrap: wrap; max-width: 80px; justify-content: center; }
+.emoji-bar { display: flex; gap: 6px; justify-content: space-between; }
+.emoji-bar button { flex: 1; }
 .emoji-bar button {
   background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line-strong);
   border-radius: 11px; font-size: 17px; padding: 5px 7px; box-shadow: var(--shadow-1);
