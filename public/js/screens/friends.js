@@ -49,8 +49,8 @@ export async function render(root) {
         <span class="dotstat ${f.online ? 'on' : ''}"></span>
         ${avatarHtml(f.avatarId, 'sm')}
         <div style="flex:1;" data-view="${f.id}">
-          <div style="font-weight:700;font-size:13px;">${f.nickname}</div>
-          <div class="muted" style="font-size:11px;">LVL ${f.level} · ${f.online ? t('online') : ''}</div>
+          <div style="font-weight:800;font-size:17px;">${f.nickname}</div>
+          <div class="muted" style="font-size:14px;margin-top:2px;">LVL ${f.level} · ${f.online ? t('online') : ''}</div>
         </div>
         <button class="btn sm gold" data-challenge="${f.id}" ${f.online ? '' : 'disabled'}>${t('challenge')}</button>
       </div>`;

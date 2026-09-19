@@ -41,13 +41,13 @@ export function render(root, { matchData }) {
           </div>
         </div>
         <div class="timer" id="my-timer">20.00</div>
-        <div class="timer opp" id="opp-timer">20.00</div>
-        <div class="side" style="flex-direction:row-reverse; text-align:end;">
-          ${avatarHtml(matchData.opponent?.avatarId ?? 0, 'sm')}
-          <div class="info" style="align-items:flex-end;">
+        <div class="side opp-side">
+          <div class="info">
             <span class="nm">${matchData.opponent?.nickname || 'Bot'}</span>
+            <span class="timer opp" id="opp-timer">20.00</span>
             <div class="balls-left" id="opp-balls"></div>
           </div>
+          ${avatarHtml(matchData.opponent?.avatarId ?? 0, 'sm')}
         </div>
       </div>
 

@@ -7,7 +7,8 @@
 //   * A fine-aim strip and arrow buttons under the table for last-degree adjustments,
 //     plus the side power slider for anyone who prefers a slider.
 
-const PULL_ZONE = 105;    // how far behind the ball a touch still grabs the stick
+const PULL_REACH = 185;   // how far back along the stick a touch still grabs it
+const PULL_WIDTH = 34;    // how far off the stick's axis that touch may be
 const PULL_FULL = 120;    // drag distance (table units) that equals 100% power
 
 export function createControls({
@@ -60,10 +61,12 @@ export function createControls({
     const p = pointFromEvent(e);
     const ball = getCueBall();
     const dx = p.x - ball.x, dy = p.y - ball.y;
-    const d = Math.hypot(dx, dy);
-    // Behind the ball (opposite the aim direction) and close by => grab the stick.
-    const behind = -(dx * Math.cos(aimAngle) + dy * Math.sin(aimAngle));
-    if (d < PULL_ZONE && behind > 0) {
+    const ax = Math.cos(aimAngle), ay = Math.sin(aimAngle);
+    // Touching the drawn stick (behind the ball, near its axis) grabs it to shoot.
+    // Anywhere else on the cloth aims.
+    const behind = -(dx * ax + dy * ay);
+    const offAxis = Math.abs(dx * -ay + dy * ax);
+    if (behind > -ball.r && behind < PULL_REACH && offAxis < PULL_WIDTH) {
       gesture = { kind: 'pull', startX: p.x, startY: p.y, base: power };
     } else {
       gesture = { kind: 'aim', startAngle: Math.atan2(dy, dx), baseAim: aimAngle };

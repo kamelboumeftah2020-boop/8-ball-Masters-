@@ -1,4 +1,4 @@
-import { TABLE_W, TABLE_H, BALL_R, POCKET_R, CUSHION } from './physics.js';
+import { TABLE_W, TABLE_H, BALL_R, POCKET_R, CUSHION, applyRot } from './physics.js';
 
 // The canvas is bigger than the physics area so the wooden frame can sit *outside*
 // the playfield. All drawing happens in physics coordinates: the context is
@@ -373,30 +373,58 @@ function drawDiamonds(ctx, accent) {
   }
 }
 
-/* ---------------------------------------------------------- ball sprites */
+/* ---------------------------------------------------------- ball rendering
+   A ball is drawn in three passes so it can actually *roll*:
+     1. cached body sprite  - the coloured sphere and its cloth shadow
+     2. live markings       - the number discs, projected through the ball's 3D
+                              orientation, so they turn and slide over the horizon
+     3. cached gloss sprite - limb darkening, specular highlight and rim, which
+                              belong to the light and the camera, not to the ball
+*/
 const ballSprites = new Map();
 
-function getBallSprite(ball, px) {
+// Markings live on the ball's surface as unit vectors. Real solids carry the
+// numbered white circle on two opposite poles; a spot cue ball carries two red dots.
+const NUMBER_MARKS = [
+  { dir: [0, 0, 1], up: [0, 1, 0] },
+  { dir: [0, 0, -1], up: [0, -1, 0] },
+];
+const CUE_MARKS = [
+  { dir: [0, 0, 1], up: [0, 1, 0] },
+  { dir: [0, 0, -1], up: [0, -1, 0] },
+];
+const MARK_SIN = 0.56;     // angular radius of the number disc, as sin(alpha)
+const CUE_DOT_SIN = 0.22;
+
+function getBallSprites(ball, px) {
   const key = `${ball.isCue ? 'cue' : ball.number}@${px.toFixed(2)}`;
   if (ballSprites.has(key)) return ballSprites.get(key);
   const pad = 8;
   const size = (BALL_R + pad) * 2;
-  const c = document.createElement('canvas');
-  c.width = Math.ceil(size * px);
-  c.height = Math.ceil(size * px);
-  const g = c.getContext('2d');
-  g.setTransform(px, 0, 0, px, (size / 2) * px, (size / 2) * px);
-  paintBall(g, ball.number, ball.isCue);
-  const sprite = { canvas: c, size, half: size / 2 };
+
+  const make = (painter) => {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(size * px);
+    c.height = Math.ceil(size * px);
+    const g = c.getContext('2d');
+    g.setTransform(px, 0, 0, px, (size / 2) * px, (size / 2) * px);
+    painter(g);
+    return c;
+  };
+
+  const color = ball.isCue ? '#f6f4ef' : (BALL_COLORS[ball.number] || '#cccccc');
+  const sprite = {
+    body: make((g) => paintBallBody(g, color)),
+    gloss: make(paintBallGloss),
+    size, half: size / 2,
+  };
   if (ballSprites.size > 40) ballSprites.clear();
   ballSprites.set(key, sprite);
   return sprite;
 }
 
-// Paints one ball centred on (0,0) with a fixed top-left light source.
-function paintBall(ctx, number, isCue) {
+function paintBallBody(ctx, color) {
   const R = BALL_R;
-  const color = isCue ? '#f6f4ef' : (BALL_COLORS[number] || '#cccccc');
 
   // contact shadow on the cloth
   ctx.save();
@@ -407,55 +435,39 @@ function paintBall(ctx, number, isCue) {
   ctx.fill();
   ctx.restore();
 
-  // sphere body
   ctx.beginPath();
   ctx.arc(0, 0, R, 0, Math.PI * 2);
   const body = ctx.createRadialGradient(-R * 0.36, -R * 0.42, R * 0.08, 0, 0, R * 1.12);
-  body.addColorStop(0, mix(color, '#ffffff', 0.72));
-  body.addColorStop(0.28, mix(color, '#ffffff', 0.28));
-  body.addColorStop(0.62, color);
-  body.addColorStop(0.88, mix(color, '#000000', 0.42));
-  body.addColorStop(1, mix(color, '#000000', 0.62));
+  body.addColorStop(0, mix(color, '#ffffff', 0.62));
+  body.addColorStop(0.3, mix(color, '#ffffff', 0.22));
+  body.addColorStop(0.64, color);
+  body.addColorStop(1, mix(color, '#000000', 0.3));
   ctx.fillStyle = body;
   ctx.fill();
+}
 
-  // bounce light from the cloth along the lower-right limb
+function paintBallGloss(ctx) {
+  const R = BALL_R;
+
+  // limb darkening - also shades whatever marking is underneath
   ctx.save();
   ctx.beginPath();
   ctx.arc(0, 0, R, 0, Math.PI * 2);
   ctx.clip();
-  ctx.beginPath();
-  ctx.arc(R * 0.32, R * 0.36, R * 0.78, 0, Math.PI * 2);
-  const bounce = ctx.createRadialGradient(R * 0.4, R * 0.44, 0, R * 0.32, R * 0.36, R * 0.8);
-  bounce.addColorStop(0, 'rgba(255,255,255,0.22)');
+  const limb = ctx.createRadialGradient(-R * 0.25, -R * 0.3, R * 0.25, 0, 0, R * 1.02);
+  limb.addColorStop(0, 'rgba(0,0,0,0)');
+  limb.addColorStop(0.72, 'rgba(0,0,0,0.05)');
+  limb.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = limb;
+  ctx.fillRect(-R, -R, R * 2, R * 2);
+
+  // bounce light from the cloth along the lower-right limb
+  const bounce = ctx.createRadialGradient(R * 0.45, R * 0.5, 0, R * 0.3, R * 0.36, R * 0.8);
+  bounce.addColorStop(0, 'rgba(255,255,255,0.20)');
   bounce.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = bounce;
-  ctx.fill();
+  ctx.fillRect(-R, -R, R * 2, R * 2);
   ctx.restore();
-
-  // numbered balls carry the white circle, curved with the sphere
-  if (!isCue) {
-    ctx.save();
-    ctx.translate(-R * 0.07, -R * 0.09);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, R * 0.58, R * 0.54, 0, 0, Math.PI * 2);
-    const disc = ctx.createRadialGradient(-R * 0.2, -R * 0.24, R * 0.05, 0, 0, R * 0.62);
-    disc.addColorStop(0, '#ffffff');
-    disc.addColorStop(0.7, '#f4f2ec');
-    disc.addColorStop(1, '#d8d4c8');
-    ctx.fillStyle = disc;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.14)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-
-    ctx.fillStyle = '#1b1b1b';
-    ctx.font = `bold ${R * 0.82}px 'Segoe UI', Arial, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(number), 0, R * 0.04);
-    ctx.restore();
-  }
 
   // specular highlight
   ctx.save();
@@ -471,18 +483,94 @@ function paintBall(ctx, number, isCue) {
   ctx.fill();
   ctx.restore();
 
-  // tiny second glint
   ctx.beginPath();
   ctx.arc(R * 0.34, -R * 0.26, R * 0.09, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fill();
 
-  // limb darkening outline
   ctx.beginPath();
   ctx.arc(0, 0, R - 0.2, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.32)';
   ctx.lineWidth = 0.8;
   ctx.stroke();
+}
+
+// Orthographic projection of a disc that sits on the sphere's surface.
+function drawMark(ctx, ball, mark, sinA, paint) {
+  const C = applyRot(ball.rot, mark.dir);
+  if (C[2] <= 0.02) return;                       // facing away from the camera
+
+  const U = applyRot(ball.rot, mark.up);
+  // tangent frame at the marking's centre
+  const d = U[0] * C[0] + U[1] * C[1] + U[2] * C[2];
+  let t1 = [U[0] - d * C[0], U[1] - d * C[1], U[2] - d * C[2]];
+  const l = Math.hypot(t1[0], t1[1], t1[2]);
+  if (l < 1e-4) return;
+  t1 = [t1[0] / l, t1[1] / l, t1[2] / l];
+  // t1 x C (not C x t1): the screen's y axis points down, so this ordering is the
+  // one that keeps the projected basis right-handed and the digits un-mirrored.
+  const t2 = [
+    t1[1] * C[2] - t1[2] * C[1],
+    t1[2] * C[0] - t1[0] * C[2],
+    t1[0] * C[1] - t1[1] * C[0],
+  ];
+
+  const R = ball.r;
+  const s = R * sinA;
+  // The projected disc is exactly the unit circle mapped by the tangent vectors'
+  // screen components - foreshortening near the limb falls out of the maths.
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, Math.max(0, (C[2] - 0.02) / 0.16));
+  ctx.translate(ball.x + C[0] * R * 0.995, ball.y + C[1] * R * 0.995);
+  ctx.transform(t2[0] * s, t2[1] * s, t1[0] * s, t1[1] * s, 0, 0);
+  paint(ctx);
+  ctx.restore();
+}
+
+function paintNumberDisc(number) {
+  return (ctx) => {
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
+    ctx.fillStyle = '#f7f5ee';
+    ctx.fill();
+    ctx.lineWidth = 0.06;
+    ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+    ctx.stroke();
+
+    // work in a 10x space so the glyph rasterises crisply under the tiny transform
+    ctx.scale(0.1, 0.1);
+    ctx.fillStyle = '#1b1b1b';
+    ctx.font = `bold 12px 'Segoe UI', Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(number), 0, 0.5);
+  };
+}
+
+function paintCueDot(ctx) {
+  ctx.beginPath();
+  ctx.arc(0, 0, 1, 0, Math.PI * 2);
+  ctx.fillStyle = '#d23b3b';
+  ctx.fill();
+}
+
+function drawBall(ctx, ball, px) {
+  const s = getBallSprites(ball, px);
+  ctx.drawImage(s.body, ball.x - s.half, ball.y - s.half, s.size, s.size);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.clip();
+  if (ball.isCue) {
+    for (const m of CUE_MARKS) drawMark(ctx, ball, m, CUE_DOT_SIN, paintCueDot);
+  } else {
+    const paint = paintNumberDisc(ball.number);
+    for (const m of NUMBER_MARKS) drawMark(ctx, ball, m, MARK_SIN, paint);
+  }
+  ctx.restore();
+
+  ctx.drawImage(s.gloss, ball.x - s.half, ball.y - s.half, s.size, s.size);
 }
 
 /* ----------------------------------------------------------- cue stick */
@@ -636,10 +724,7 @@ export function drawTable(ctx, table, opts = {}) {
   }
 
   const balls = table.balls.filter(b => b.active).sort((a, b) => a.y - b.y);
-  for (const b of balls) {
-    const sprite = getBallSprite(b, px);
-    ctx.drawImage(sprite.canvas, b.x - sprite.half, b.y - sprite.half, sprite.size, sprite.size);
-  }
+  for (const b of balls) drawBall(ctx, b, px);
 
   if (stick && stick.visible && table.cue.active) {
     drawCueStick(ctx, table.cue, stick.angle, stick.pullback, cueStyle);

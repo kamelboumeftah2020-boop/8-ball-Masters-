@@ -13,13 +13,13 @@ export async function openMissionsModal(onChange) {
       <div class="stack gap" style="text-align:start;">
         ${list.map(m => `
           <div>
-            <div class="row between" style="font-size:13px;margin-bottom:4px;">
+            <div class="row between" style="font-size:16px;font-weight:700;margin-bottom:8px;">
               <span>${t(m.descKey)}</span>
               <span class="gold-text">${m.progress}/${m.target}</span>
             </div>
             <div class="progress-bar"><div class="fill" style="width:${Math.min(100, m.progress / m.target * 100)}%"></div></div>
             <div class="row between" style="margin-top:6px;">
-              <span class="muted" style="font-size:11px;">🪙 ${m.reward}</span>
+              <span class="muted" style="font-size:15px;font-weight:700;">🪙 ${m.reward}</span>
               <button class="btn sm ${m.claimed ? 'ghost' : 'gold'}" data-claim="${m.key}"
                 ${m.claimed || m.progress < m.target ? 'disabled' : ''}>
                 ${m.claimed ? t('owned') : t('claim')}

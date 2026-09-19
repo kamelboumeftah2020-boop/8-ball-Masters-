@@ -34,7 +34,7 @@ export async function render(root, params = {}) {
             <div class="row gap">
               <span class="badge-lvl">LVL ${profile.level}</span>
               <span class="star-badge" style="background:${profile.starColor || '#c7cdd6'}33;">⭐</span>
-              <span class="gold-text" style="font-size:13px;font-weight:700;">${t(TITLE_KEY[profile.title] || 'titleBeginner')}</span>
+              <span class="gold-text" style="font-size:17px;font-weight:800;">${t(TITLE_KEY[profile.title] || 'titleBeginner')}</span>
             </div>
           </div>
           <div class="stat-grid">

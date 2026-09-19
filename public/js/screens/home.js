@@ -26,7 +26,7 @@ export async function render(root) {
         ${topbarHtml()}
         <div class="scroll">
           <div class="section-title">${t('tables')}</div>
-          <div class="row between" style="margin:0 14px 10px;">
+          <div class="quick-row">
             <button class="btn sm gold" id="daily-box">📦 ${t('dailyBox')}</button>
             <button class="btn sm ghost" id="missions-btn">🎯 ${t('missions')}</button>
           </div>
@@ -57,13 +57,15 @@ export async function render(root) {
         <div class="thumb">${STYLE_ICONS[table.style] || '🎱'}</div>
         <div class="meta">
           <div class="name">${table.name}</div>
-          ${table.locked ? '' : `
+          ${table.locked ? `
+            <div class="sub locked-sub">🔒 ${t('unlockAtLevel', { lvl: table.unlockLvl })}</div>
+          ` : `
             <div class="sub">${t('entryFee')}: 🪙 ${formatCoins(table.entry)} · XP ${formatCoins(table.xp)}</div>
             <div class="online"><span class="dot"></span> ${table.onlineCount.toLocaleString()} ${t('online')}</div>
           `}
         </div>
         ${table.locked
-          ? `<div class="lock-badge"><span class="lock-ic">🔒</span>${t('unlockAtLevel', { lvl: table.unlockLvl })}</div>`
+          ? `<div class="lock-chip">🔒</div>`
           : `<button class="play-btn" data-play="${table.id}">▶</button>`}
       </div>`;
   }

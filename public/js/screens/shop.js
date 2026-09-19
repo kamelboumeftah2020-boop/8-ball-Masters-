@@ -45,14 +45,13 @@ export async function render(root, params = {}) {
     return packages.map(p => `
       <div class="card pkg-card">
         <div>
-          <div style="font-weight:800;">$${p.usd}</div>
-          <div class="gold-text" style="font-size:13px;">🪙 ${p.coins.toLocaleString()}
+          <div class="usd">$${p.usd}</div>
+          <div class="coins gold-text">🪙 ${p.coins.toLocaleString()}
             ${!state.user.firstPurchaseDone ? `<span class="pkg-badge">x2 FIRST</span>` : ''}
           </div>
         </div>
-        <button class="btn gold sm" data-buy-coin="${p.id}">${t('buy')}</button>
+        <button class="btn gold" data-buy-coin="${p.id}">${t('buy')}</button>
       </div>
-      <div style="height:2px;"></div>
     `).join('');
   }
 

@@ -23,21 +23,21 @@ export async function render(root, { payload }) {
         ${!r.won && r.nearMiss ? `
           <div class="card" style="max-width:320px;">
             <div class="gold-text" style="font-weight:800;">${t('nearMissTitle')}</div>
-            <p style="font-size:13px;">${t('nearMissDesc')}</p>
+            <p style="font-size:16px;margin:8px 0 0;">${t('nearMissDesc')}</p>
           </div>` : ''}
         <div class="result-stats">
           <div class="stat">
             <div class="val" style="color:${r.coinsDelta >= 0 ? 'var(--gold)' : 'var(--red)'}">
               ${r.coinsDelta >= 0 ? '+' : ''}${formatCoins(r.coinsDelta)}
             </div>
-            <div class="muted" style="font-size:11px;">🪙 ${r.coinsDelta >= 0 ? t('coinsWon') : t('coinsLost')}</div>
+            <div class="muted" style="font-size:14px;margin-top:4px;">🪙 ${r.coinsDelta >= 0 ? t('coinsWon') : t('coinsLost')}</div>
           </div>
           <div class="stat">
             <div class="val">+${r.xpGained}</div>
-            <div class="muted" style="font-size:11px;">${t('xpGained')}</div>
+            <div class="muted" style="font-size:14px;margin-top:4px;">${t('xpGained')}</div>
           </div>
         </div>
-        ${r.won && r.streak > 1 ? `<div class="muted" style="font-size:12px;">🔥 ${t('streakLabel')}: ${r.streak} ${r.streak % 4 === 0 ? '· ' + t('streakBonus') : ''}</div>` : ''}
+        ${r.won && r.streak > 1 ? `<div class="muted" style="font-size:15px;font-weight:700;">🔥 ${t('streakLabel')}: ${r.streak} ${r.streak % 4 === 0 ? '· ' + t('streakBonus') : ''}</div>` : ''}
         ${r.leveledUp ? `<div class="gold-text" style="font-weight:800;">⭐ ${t('newLevel')} ${r.newLevel}</div>` : ''}
         <div class="result-actions">
           ${r.won && !bonusApplied ? `<button class="btn gold block" id="double-ad">📺 ${t('watchAdDouble')}</button>` : ''}
@@ -62,7 +62,7 @@ export async function render(root, { payload }) {
     return `
       <div class="card">
         <div class="gold-text" style="font-weight:800;">📦 ${t('lossBoxTitle')}</div>
-        <p style="font-size:12px;" class="muted">${t('lossBoxDesc')}</p>
+        <p style="font-size:15px;margin:8px 0 12px;" class="muted">${t('lossBoxDesc')}</p>
         <button class="btn sm ${ready ? 'gold' : 'ghost'} block" id="claim-lossbox" ${ready ? '' : 'disabled'} data-box="${box.id}">
           ${ready ? t('claim') : t('opensIn') + ' ' + minsLeft(box.availableAt)}
         </button>

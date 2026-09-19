@@ -87,7 +87,7 @@ export function render(root) {
   }
 
   function showText(title, text) {
-    openModal(`<h3>${title}</h3><div class="muted" style="font-size:12px;max-height:280px;overflow:auto;text-align:start;white-space:pre-line;">${text}</div>
+    openModal(`<h3>${title}</h3><div class="muted" style="font-size:15px;line-height:1.55;max-height:320px;overflow:auto;text-align:start;white-space:pre-line;">${text}</div>
       <button class="btn ghost block" id="close-text">${t('back')}</button>`, {
       onMount: (m) => { m.querySelector('#close-text').onclick = closeModal; },
     });

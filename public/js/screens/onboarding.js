@@ -98,11 +98,11 @@ export function render(root, params = {}) {
   function showGift() {
     root.innerHTML = `
       <div class="onboarding">
-        <div style="font-size:54px;">🎁</div>
+        <div style="font-size:78px;">🎁</div>
         <h2 class="gold-text">${t('startGiftTitle')}</h2>
         <p class="muted">${t('startGiftDesc')}</p>
         <div class="card" style="max-width:320px;">
-          <p style="font-size:13px;">${t('tutorialText')}</p>
+          <p style="font-size:17px;line-height:1.5;margin:0;">${t('tutorialText')}</p>
         </div>
         <button class="btn primary block" id="go" style="max-width:320px;">${t('gotIt')}</button>
       </div>`;

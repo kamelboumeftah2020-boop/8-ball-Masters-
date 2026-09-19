@@ -13,8 +13,8 @@ export function topbarHtml() {
       <button class="row gap avatar-btn" id="tb-profile">
         ${avatarHtml(u.avatarId, 'sm')}
         <div style="text-align:start;">
-          <div style="font-size:12px;font-weight:700;">${u.nickname}</div>
-          <div style="font-size:10px;" class="muted">${STAR_EMOJI[u.starId] || '⚪'} <span class="badge-lvl">LVL ${u.level}</span></div>
+          <div style="font-size:17px;font-weight:800;">${u.nickname}</div>
+          <div style="font-size:13px;margin-top:3px;" class="muted">${STAR_EMOJI[u.starId] || '⚪'} <span class="badge-lvl">LVL ${u.level}</span></div>
         </div>
       </button>
       <div class="row gap">

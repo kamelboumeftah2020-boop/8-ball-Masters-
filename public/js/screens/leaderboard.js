@@ -67,7 +67,7 @@ export async function render(root) {
       </div>
       <div class="card" style="margin:0 14px 10px;">
         <div class="row between">
-          <span class="muted" style="font-size:12px;">${t('resetsIn')} ${days}d ${hours}h</span>
+          <span class="muted" style="font-size:15px;font-weight:700;">${t('resetsIn')} ${days}d ${hours}h</span>
         </div>
         <div class="row gap" style="margin-top:8px;">
           <div class="stat-box" style="flex:1;"><div class="v gold-text">🥇 ${formatCoins(data.prizes.top1)}</div><div class="l">${t('prize')} #1</div></div>

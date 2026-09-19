@@ -39,8 +39,65 @@ export class Ball {
     this.r = BALL_R;
     this.isCue = isCue;
     this.active = true;
+    // 3D orientation (row-major 3x3). The renderer projects the ball's markings
+    // through this, so a rolling ball visibly turns instead of sliding like a decal.
+    this.rot = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    this.spinSteps = 0;
   }
   get speed() { return Math.hypot(this.vx, this.vy); }
+
+  // Rolling without slipping: omega = (z_hat x v) / r
+  roll(h) {
+    const wx = -this.vy / this.r;
+    const wy = this.vx / this.r;
+    const w = Math.hypot(wx, wy);
+    if (w < 1e-6) return;
+    const angle = w * h;
+    this.rot = mat3mul(axisAngle(wx / w, wy / w, 0, angle), this.rot);
+    if ((++this.spinSteps & 511) === 0) orthonormalize(this.rot);
+  }
+}
+
+export function applyRot(m, v) {
+  return [
+    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+    m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+    m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
+  ];
+}
+
+function axisAngle(ax, ay, az, angle) {
+  const c = Math.cos(angle), s = Math.sin(angle), t = 1 - c;
+  return [
+    t * ax * ax + c, t * ax * ay - s * az, t * ax * az + s * ay,
+    t * ax * ay + s * az, t * ay * ay + c, t * ay * az - s * ax,
+    t * ax * az - s * ay, t * ay * az + s * ax, t * az * az + c,
+  ];
+}
+
+function mat3mul(a, b) {
+  const o = new Array(9);
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+    }
+  }
+  return o;
+}
+
+// Float drift over thousands of multiplications would slowly skew the basis.
+function orthonormalize(m) {
+  const n = (i) => {
+    const l = Math.hypot(m[i], m[i + 1], m[i + 2]) || 1;
+    m[i] /= l; m[i + 1] /= l; m[i + 2] /= l;
+  };
+  n(0);
+  const d = m[0] * m[3] + m[1] * m[4] + m[2] * m[5];
+  m[3] -= d * m[0]; m[4] -= d * m[1]; m[5] -= d * m[2];
+  n(3);
+  m[6] = m[1] * m[5] - m[2] * m[4];
+  m[7] = m[2] * m[3] - m[0] * m[5];
+  m[8] = m[0] * m[4] - m[1] * m[3];
 }
 
 export class Table {
@@ -132,6 +189,7 @@ export class Table {
           b.vx *= k; b.vy *= k;
           b.x += b.vx * h;
           b.y += b.vy * h;
+          b.roll(h);
         }
       }
       this._wallCollide(b);
