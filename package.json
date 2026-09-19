@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test:physics": "node physics-check.mjs"
+    "test:physics": "node physics-check.mjs",
+    "test:pvp": "node pvp-check.mjs"
   },
   "repository": {
     "type": "git",
@@ -24,5 +25,8 @@
     "express": "^5.2.1",
     "nanoid": "^3.3.19",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

@@ -124,15 +124,16 @@ function tick(match) {
     anyAlive = true;
     if (p.time <= 0) {
       p.finished = true;
+      p.timedOut = true;
       p.won = false;
     }
   }
   broadcastTick(match);
-  if (match.players.every(p => p.finished) || !anyAlive) {
+  // The match is decided the moment either player finishes: one of them cleared the
+  // table, or one of them ran out of clock. Nobody keeps playing a settled match.
+  if (match.players.some(p => p.finished) || !anyAlive) {
     resolveMatch(match);
-    return;
   }
-  // if one already finished by time and the other hasn't, keep ticking the other
 }
 
 function broadcastTick(match) {
@@ -171,7 +172,7 @@ export function applyRescueAd(match, userId) {
 }
 
 function checkResolution(match) {
-  if (match.players.every(p => p.finished)) resolveMatch(match);
+  if (match.players.some(p => p.finished)) resolveMatch(match);
 }
 
 function marginAtLoss(loser, winner) {
@@ -188,14 +189,21 @@ function resolveMatch(match) {
 
   const [p1, p2] = match.players;
   let winner, loser;
-  if (p1.won && !p2.won) { winner = p1; loser = p2; }
-  else if (p2.won && !p1.won) { winner = p2; loser = p1; }
-  else {
-    // both timed out simultaneously (rare) -> more balls potted wins; tie -> earlier finisher
+  const cleared = match.players.find(p => p.potted >= TOTAL_BALLS);
+  const ranOut = match.players.find(p => p.timedOut);
+  if (cleared) {
+    // cleared the table first
+    winner = cleared;
+  } else if (ranOut && !match.players.every(p => p.timedOut)) {
+    // the other player's clock hit 00.00
+    winner = match.players.find(p => p !== ranOut);
+  } else {
+    // both clocks expired together (rare) -> more balls potted takes it
     winner = p1.potted >= p2.potted ? p1 : p2;
-    loser = winner === p1 ? p2 : p1;
-    winner.won = true;
   }
+  loser = match.players.find(p => p !== winner);
+  winner.won = true;
+  loser.won = false;
 
   const results = {};
   for (const side of [winner, loser]) {
