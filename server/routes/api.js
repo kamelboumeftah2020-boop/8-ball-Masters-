@@ -1,0 +1,338 @@
+import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  db, getUser, createGuestUser, findByNickname, persist,
+  createInvite, addReport, ensureFreshMissions, cueById, avatarById, allUsers,
+} from '../store.js';
+import { TABLES, getTable } from '../data/tables.js';
+import { CUES } from '../data/cues.js';
+import { AVATARS } from '../data/avatars.js';
+import { COIN_PACKAGES, getPackage } from '../data/coinPackages.js';
+import { STARS, weeklyPrizes } from '../data/stars.js';
+import { levelFromXp } from '../util/econ.js';
+import { privateUserDto, publicUserDto, tableDto } from '../util/dto.js';
+import { queueLength } from '../game/matchQueue.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const I18N_DIR = path.join(__dirname, '..', 'data', 'i18n');
+const LANGS = ['en', 'ar', 'fr', 'de', 'es', 'tr'];
+
+export const api = Router();
+
+function requireUser(req, res, idField = 'userId') {
+  const id = req.body?.[idField] || req.params?.[idField] || req.query?.[idField];
+  const user = getUser(id);
+  if (!user) { res.status(404).json({ error: 'user_not_found' }); return null; }
+  if (user.banned) { res.status(403).json({ error: 'banned', reason: user.banReason }); return null; }
+  user.lastSeenAt = Date.now();
+  return user;
+}
+
+// ---------- Auth / session ----------
+api.post('/auth/guest', (req, res) => {
+  const { nickname, avatarId, country } = req.body || {};
+  const clean = String(nickname || '').trim().slice(0, 18);
+  if (!clean || clean.length < 3) return res.status(400).json({ error: 'invalid_nickname' });
+  if (findByNickname(clean)) return res.status(409).json({ error: 'nickname_taken' });
+  const user = createGuestUser({ nickname: clean, avatarId, country: country || 'INT' });
+  res.json({ user: privateUserDto(user) });
+});
+
+api.get('/session/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  if (user.banned) return res.status(403).json({ error: 'banned', reason: user.banReason });
+  user.lastSeenAt = Date.now();
+  ensureFreshMissions(user);
+  res.json({ user: privateUserDto(user) });
+});
+
+api.put('/nickname', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const { nickname } = req.body || {};
+  const clean = String(nickname || '').trim().slice(0, 18);
+  const cooldownMs = 90 * 24 * 60 * 60 * 1000;
+  if (Date.now() - user.nicknameChangedAt < cooldownMs) {
+    return res.status(429).json({ error: 'cooldown', retryAt: user.nicknameChangedAt + cooldownMs });
+  }
+  if (findByNickname(clean)) return res.status(409).json({ error: 'nickname_taken' });
+  delete db.nicknames[user.nickname.toLowerCase()];
+  user.nickname = clean;
+  user.nicknameChangedAt = Date.now();
+  db.nicknames[clean.toLowerCase()] = user.id;
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+api.put('/settings', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const { lang, vibration, sound, aimSensitivity, country } = req.body || {};
+  if (lang && LANGS.includes(lang)) user.settings.lang = lang;
+  if (typeof vibration === 'boolean') user.settings.vibration = vibration;
+  if (typeof sound === 'boolean') user.settings.sound = sound;
+  if (typeof aimSensitivity === 'number') user.settings.aimSensitivity = Math.max(0, Math.min(100, aimSensitivity));
+  if (country) user.country = country;
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+// ---------- i18n ----------
+api.get('/i18n/:lang', (req, res) => {
+  const lang = LANGS.includes(req.params.lang) ? req.params.lang : 'en';
+  const raw = fs.readFileSync(path.join(I18N_DIR, `${lang}.json`), 'utf-8');
+  res.type('application/json').send(raw);
+});
+api.get('/i18n', (req, res) => res.json({ languages: LANGS }));
+
+// ---------- Catalogs ----------
+api.get('/tables', (req, res) => {
+  const user = req.query.userId ? getUser(req.query.userId) : null;
+  res.json({
+    tables: TABLES.map(t => ({ ...tableDto(t, user), onlineCount: simulatedOnline(t.id) })),
+  });
+});
+
+function simulatedOnline(tableId) {
+  // Demo population: a stable per-table baseline plus real queue size plus slow time-based drift,
+  // so the lobby feels alive without pretending to have real production traffic.
+  const base = [1243, 3110, 2087, 940, 512, 388, 240, 133, 71, 19][tableId - 1] || 50;
+  const drift = Math.round(Math.sin(Date.now() / 60000 + tableId) * base * 0.08);
+  return Math.max(1, base + drift + queueLength(tableId));
+}
+
+api.get('/cues', (req, res) => res.json({ cues: CUES }));
+api.get('/avatars', (req, res) => res.json({ avatars: AVATARS }));
+api.get('/coin-packages', (req, res) => res.json({ packages: COIN_PACKAGES }));
+api.get('/stars', (req, res) => res.json({ stars: STARS }));
+
+// ---------- Profile ----------
+api.get('/me/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ user: privateUserDto(user) });
+});
+
+api.get('/profile/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ user: publicUserDto(user) });
+});
+
+api.post('/report', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const { targetId, reason } = req.body || {};
+  const target = getUser(targetId);
+  if (!target) return res.status(404).json({ error: 'target_not_found' });
+  addReport(targetId, user.id, reason || 'unspecified');
+  res.json({ ok: true });
+});
+
+// ---------- Shop ----------
+api.post('/shop/buy-cue', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const cue = cueById(Number(req.body?.cueId));
+  if (!cue) return res.status(404).json({ error: 'cue_not_found' });
+  if (user.ownedCues.includes(cue.id)) return res.status(409).json({ error: 'already_owned' });
+  if (levelFromXp(user.xp).level < cue.unlockLvl) return res.status(403).json({ error: 'level_locked' });
+  if (cue.currency === 'coins' && user.coins < cue.price) return res.status(402).json({ error: 'insufficient_coins' });
+  if (cue.currency === 'coins') user.coins -= cue.price;
+  user.ownedCues.push(cue.id);
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+api.post('/shop/equip-cue', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const cueId = Number(req.body?.cueId);
+  if (!user.ownedCues.includes(cueId)) return res.status(403).json({ error: 'not_owned' });
+  user.equippedCueId = cueId;
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+api.post('/shop/buy-avatar', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const avatar = avatarById(Number(req.body?.avatarId));
+  if (!avatar) return res.status(404).json({ error: 'avatar_not_found' });
+  if (user.ownedAvatars.includes(avatar.id)) return res.status(409).json({ error: 'already_owned' });
+  if (levelFromXp(user.xp).level < avatar.unlockLvl) return res.status(403).json({ error: 'level_locked' });
+  if (avatar.currency === 'coins' && user.coins < avatar.price) return res.status(402).json({ error: 'insufficient_coins' });
+  if (avatar.currency === 'coins') user.coins -= avatar.price;
+  user.ownedAvatars.push(avatar.id);
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+api.post('/shop/equip-avatar', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const avatarId = Number(req.body?.avatarId);
+  if (!user.ownedAvatars.includes(avatarId)) return res.status(403).json({ error: 'not_owned' });
+  user.avatarId = avatarId;
+  persist();
+  res.json({ user: privateUserDto(user) });
+});
+
+// Coin purchase: DEMO checkout only - no real payment processor is wired up. Instantly
+// grants the package's coins server-side (server is the single source of truth for coins).
+api.post('/shop/buy-coins', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const pkg = getPackage(req.body?.packageId);
+  if (!pkg) return res.status(404).json({ error: 'package_not_found' });
+  let coins = pkg.coins;
+  let bonus = false;
+  if (!user.firstPurchaseDone) {
+    coins *= 2;
+    user.firstPurchaseDone = true;
+    bonus = true;
+  }
+  user.coins += coins;
+  persist();
+  res.json({ user: privateUserDto(user), coinsGranted: coins, firstPurchaseBonus: bonus });
+});
+
+// ---------- Missions / Daily Box / Loss boxes ----------
+api.get('/missions/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  ensureFreshMissions(user);
+  res.json({ missions: user.missions });
+});
+
+api.post('/missions/claim', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  ensureFreshMissions(user);
+  const m = user.missions.list.find(x => x.key === req.body?.missionKey);
+  if (!m) return res.status(404).json({ error: 'mission_not_found' });
+  if (m.claimed) return res.status(409).json({ error: 'already_claimed' });
+  if (m.progress < m.target) return res.status(400).json({ error: 'not_complete' });
+  m.claimed = true;
+  user.coins += m.reward;
+  persist();
+  res.json({ user: privateUserDto(user), reward: m.reward });
+});
+
+api.post('/dailybox/claim', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  if (Date.now() < user.dailyBoxAvailableAt) {
+    return res.status(429).json({ error: 'not_ready', availableAt: user.dailyBoxAvailableAt });
+  }
+  const reward = 300 + Math.floor(Math.random() * 1200);
+  user.coins += reward;
+  user.dailyBoxAvailableAt = Date.now() + 24 * 60 * 60 * 1000;
+  persist();
+  res.json({ user: privateUserDto(user), reward });
+});
+
+api.post('/lossboxes/claim', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const box = user.lossBoxes.find(b => b.id === req.body?.boxId);
+  if (!box) return res.status(404).json({ error: 'box_not_found' });
+  if (box.opened) return res.status(409).json({ error: 'already_opened' });
+  if (Date.now() < box.availableAt) return res.status(429).json({ error: 'not_ready', availableAt: box.availableAt });
+  box.opened = true;
+  user.coins += box.coins;
+  persist();
+  res.json({ user: privateUserDto(user), reward: box.coins });
+});
+
+// ---------- Leaderboard ----------
+api.get('/leaderboard/global', (req, res) => {
+  const user = getUser(req.query.userId);
+  const starId = Number(req.query.starId) || user?.starId || 1;
+  const rows = allUsers()
+    .filter(u => u.starId === starId && !u.banned)
+    .sort((a, b) => b.weeklyCoins - a.weeklyCoins)
+    .slice(0, 50)
+    .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, weeklyCoins: u.weeklyCoins }));
+  res.json({ starId, stars: STARS, prizes: weeklyPrizes(starId), rows, resetsAt: nextFridayMidnight() });
+});
+
+api.get('/leaderboard/local', (req, res) => {
+  const user = getUser(req.query.userId);
+  const country = req.query.country || user?.country || 'INT';
+  const rows = allUsers()
+    .filter(u => u.country === country && !u.banned)
+    .sort((a, b) => b.careerCoinsWon - a.careerCoinsWon)
+    .slice(0, 50)
+    .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, coins: u.careerCoinsWon }));
+  res.json({ country, rows });
+});
+
+api.get('/leaderboard/friends', (req, res) => {
+  const user = getUser(req.query.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const rows = [user, ...user.friends.map(getUser).filter(Boolean)]
+    .sort((a, b) => b.careerCoinsWon - a.careerCoinsWon)
+    .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, coins: u.careerCoinsWon, isMe: u.id === user.id }));
+  res.json({ rows });
+});
+
+function nextFridayMidnight() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0 Sun .. 5 Fri
+  let daysUntilFri = (5 - day + 7) % 7;
+  if (daysUntilFri === 0 && now.getUTCHours() >= 0 && now.getUTCMinutes() > 0) daysUntilFri = 7;
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilFri, 0, 0, 0));
+  return next.getTime();
+}
+
+// ---------- Friends ----------
+api.get('/friends/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const list = user.friends.map(getUser).filter(Boolean).map(u => ({
+    id: u.id, nickname: u.nickname, avatarId: u.avatarId,
+    online: Date.now() - u.lastSeenAt < 60_000,
+    level: levelFromXp(u.xp).level,
+  }));
+  res.json({ friends: list });
+});
+
+api.post('/friends/add', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const { friendId } = req.body || {};
+  const friend = getUser(friendId);
+  if (!friend) return res.status(404).json({ error: 'user_not_found' });
+  if (friend.id === user.id) return res.status(400).json({ error: 'cannot_add_self' });
+  if (!user.friends.includes(friend.id)) user.friends.push(friend.id);
+  if (!friend.friends.includes(user.id)) friend.friends.push(user.id);
+  persist();
+  res.json({ ok: true });
+});
+
+api.get('/users/search', (req, res) => {
+  const id = req.query.id;
+  const user = getUser(id);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ user: publicUserDto(user) });
+});
+
+// ---------- Invite ----------
+api.post('/invite/create', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  const code = createInvite(user.id);
+  res.json({ code, url: `https://8ballmasters.com/invite/${code}` });
+});
+
+api.get('/invite/:code', (req, res) => {
+  const invite = db.invites[req.params.code];
+  if (!invite) return res.status(404).json({ error: 'invite_not_found' });
+  const from = getUser(invite.fromUserId);
+  res.json({ fromUserId: invite.fromUserId, fromNickname: from?.nickname || 'Player' });
+});
+
+// ---------- Notifications ----------
+api.get('/notifications/:userId', (req, res) => {
+  const user = getUser(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ notifications: user.notifications || [] });
+});
+
+api.post('/notifications/read', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  user.notifications = [];
+  persist();
+  res.json({ ok: true });
+});

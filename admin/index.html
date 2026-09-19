@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>8 Ball Masters — Admin</title>
+<style>
+  :root { --bg:#0b0b0f; --card:#171720; --line:#2b2b38; --gold:#ffd447; --text:#f2f0ea; --dim:#9a97a8; --red:#ff4757; --green:#35d07f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, Arial, sans-serif; }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:18px; margin:0; }
+  main { padding:20px; max-width:1100px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card .v { font-size:22px; font-weight:800; color:var(--gold); }
+  .card .l { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th, td { padding:9px 10px; text-align:left; font-size:13px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; }
+  tr:last-child td { border-bottom:none; }
+  .tag { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+  .tag.active { background:rgba(53,208,127,0.15); color:var(--green); }
+  .tag.inactive { background:rgba(154,151,168,0.15); color:var(--dim); }
+  .tag.banned { background:rgba(255,71,87,0.15); color:var(--red); }
+  button { cursor:pointer; border:none; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; }
+  .btn-ban { background:var(--red); color:#2a0000; }
+  .btn-unban { background:var(--green); color:#00220f; }
+  input[type=text], input[type=password] { background:var(--card); border:1px solid var(--line); color:var(--text); padding:10px; border-radius:8px; font-size:14px; }
+  section { margin-bottom:30px; }
+  section h2 { font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin-bottom:10px; }
+  #login-box { max-width:340px; margin:80px auto; text-align:center; display:flex; flex-direction:column; gap:10px; }
+  #app { display:none; }
+</style>
+</head>
+<body>
+<div id="login-box">
+  <h1>🎱 8 Ball Masters — Admin</h1>
+  <input type="password" id="token" placeholder="Admin token" />
+  <button class="btn-unban" id="login-btn" style="padding:12px;">Enter</button>
+  <p style="color:#9a97a8;font-size:12px;">Default demo token: admin123 (set ADMIN_TOKEN env var to change)</p>
+</div>
+
+<div id="app">
+  <header>
+    <h1>🎱 8 Ball Masters — Admin</h1>
+    <div>
+      <input type="text" id="search" placeholder="Search by ID or nickname" />
+      <button id="refresh" style="background:#232332;color:#fff;">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>Analytics</h2>
+      <div class="cards" id="analytics"></div>
+    </section>
+    <section>
+      <h2>Players</h2>
+      <table>
+        <thead><tr>
+          <th>Status</th><th>ID</th><th>Nickname</th><th>Level</th><th>Coins</th>
+          <th>W/L</th><th>Career Coins</th><th>Reports</th><th>Action</th>
+        </tr></thead>
+        <tbody id="players"></tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Reports</h2>
+      <table>
+        <thead><tr><th>Target</th><th>Reporter</th><th>Reason</th><th>When</th></tr></thead>
+        <tbody id="reports"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('bm_admin_token') || '';
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api/admin' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': TOKEN, ...(opts.headers || {}) },
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+document.getElementById('login-btn').onclick = async () => {
+  TOKEN = document.getElementById('token').value.trim();
+  try {
+    await api('/analytics');
+    localStorage.setItem('bm_admin_token', TOKEN);
+    document.getElementById('login-box').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadAll();
+  } catch { alert('Invalid token'); }
+};
+
+if (TOKEN) {
+  api('/analytics').then(() => {
+    document.getElementById('login-box').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadAll();
+  }).catch(() => {});
+}
+
+async function loadAll() {
+  const [{ totalPlayers, active24h, banned, totalMatches, totalCoinsInEconomy, winRateAvg, reportsCount }, { players }, { reports }] = await Promise.all([
+    api('/analytics'), api('/players' + queryStr()), api('/reports'),
+  ]);
+  document.getElementById('analytics').innerHTML = [
+    ['Total Players', totalPlayers], ['Active 24h', active24h], ['Banned', banned],
+    ['Matches Played', totalMatches], ['Coins in Economy', totalCoinsInEconomy.toLocaleString()],
+    ['Avg Win Rate', winRateAvg + '%'], ['Reports', reportsCount],
+  ].map(([l, v]) => `<div class="card"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  document.getElementById('players').innerHTML = players.map(p => `
+    <tr>
+      <td>${p.banned ? '<span class="tag banned">Banned</span>' : p.active ? '<span class="tag active">Active</span>' : '<span class="tag inactive">Inactive</span>'}</td>
+      <td>${p.id}</td><td>${p.nickname}</td><td>${p.level}</td><td>${p.coins.toLocaleString()}</td>
+      <td>${p.totalWins}/${p.totalLosses}</td><td>${p.careerCoinsWon.toLocaleString()}</td>
+      <td>${p.incomingReports}</td>
+      <td>${p.banned
+        ? `<button class="btn-unban" data-unban="${p.id}">Unban</button>`
+        : `<button class="btn-ban" data-ban="${p.id}">Ban</button>`}</td>
+    </tr>`).join('');
+
+  document.getElementById('reports').innerHTML = reports.map(r => `
+    <tr><td>${r.targetNickname || r.targetId}</td><td>${r.reporterNickname || r.reporterId}</td>
+      <td>${r.reason}</td><td>${new Date(r.at).toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="4">No reports</td></tr>';
+
+  document.querySelectorAll('[data-ban]').forEach(b => b.onclick = async () => {
+    await api('/ban', { method: 'POST', body: JSON.stringify({ userId: b.dataset.ban, reason: 'Account banned for violating the rules.' }) });
+    loadAll();
+  });
+  document.querySelectorAll('[data-unban]').forEach(b => b.onclick = async () => {
+    await api('/unban', { method: 'POST', body: JSON.stringify({ userId: b.dataset.unban }) });
+    loadAll();
+  });
+}
+
+function queryStr() {
+  const q = document.getElementById('search')?.value.trim();
+  return q ? `?q=${encodeURIComponent(q)}` : '';
+}
+
+document.getElementById('refresh').onclick = loadAll;
+document.getElementById('search').addEventListener('keyup', (e) => { if (e.key === 'Enter') loadAll(); });
+</script>
+</body>
+</html>
