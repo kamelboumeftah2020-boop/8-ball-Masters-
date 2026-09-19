@@ -4,10 +4,12 @@ import { navigate, onLeave } from '../router.js';
 import { on, emit } from '../net/socket.js';
 import { avatarHtml, formatTime } from '../ui.js';
 import { Table } from '../engine/physics.js';
-import { sizeCanvas, drawTable } from '../engine/render.js';
+import { sizeCanvas, drawTable, canvasNormToTable, cueStyleFor } from '../engine/render.js';
 import { createControls } from '../engine/controls.js';
 
 const EMOJIS = ['😂', '🥲', '😡', '😱'];
+const PULL_MAX = 34;       // how far the stick draws back at full power
+const THRUST_MS = 110;     // stick follow-through before the ball is actually struck
 
 export function render(root, { matchData }) {
   const matchId = matchData.matchId;
@@ -21,8 +23,11 @@ export function render(root, { matchData }) {
   let lastTickAt = performance.now();
   let rescueUsed = false;
   let rafId = null;
+  let shotAnim = null;      // { start, power }
+  let pendingShot = null;   // fired once the stick finishes its thrust
 
   const cue = state.cues.find(c => c.id === state.user.equippedCueId) || state.cues[0];
+  const cueStyle = cueStyleFor(cue?.category);
 
   root.innerHTML = `
     <div class="game-screen">
@@ -36,7 +41,7 @@ export function render(root, { matchData }) {
           </div>
         </div>
         <div class="timer" id="my-timer">20.00</div>
-        <div class="timer" id="opp-timer" style="color:var(--text-dim);font-size:16px;">20.00</div>
+        <div class="timer opp" id="opp-timer">20.00</div>
         <div class="side" style="flex-direction:row-reverse; text-align:end;">
           ${avatarHtml(matchData.opponent?.avatarId ?? 0, 'sm')}
           <div class="info" style="align-items:flex-end;">
@@ -45,15 +50,31 @@ export function render(root, { matchData }) {
           </div>
         </div>
       </div>
+
       <div class="table-area" id="table-area">
         <canvas id="table-canvas"></canvas>
-        <button class="btn sm gold" id="rescue-btn" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); display:none;">
-          📺 ${t('watchAdRescue')}
-        </button>
+        <button class="btn sm gold rescue-btn" id="rescue-btn">📺 ${t('watchAdRescue')}</button>
       </div>
+
       <div class="controls-area">
-        <div class="aim-dial" id="aim-dial"><div class="needle" id="needle"></div></div>
-        <div class="power-track" id="power-track"><div class="power-fill" id="power-fill"></div></div>
+        <div class="aim-control">
+          <button class="fine-btn" id="aim-ccw">◀</button>
+          <div class="aim-dial" id="aim-dial">
+            <div class="dial-ticks"></div>
+            <div class="needle" id="needle"></div>
+            <div class="dial-hub"><span id="angle-readout">0°</span></div>
+          </div>
+          <button class="fine-btn" id="aim-cw">▶</button>
+        </div>
+
+        <div class="power-control">
+          <div class="power-track" id="power-track">
+            <div class="power-fill" id="power-fill"></div>
+            <div class="power-cue" id="power-cue"></div>
+          </div>
+          <div class="power-label" id="power-label">0%</div>
+        </div>
+
         <div class="emoji-bar" id="emoji-bar">
           ${EMOJIS.map(e => `<button data-e="${e}">${e}</button>`).join('')}
         </div>
@@ -62,6 +83,7 @@ export function render(root, { matchData }) {
 
   const canvas = document.getElementById('table-canvas');
   const tableArea = document.getElementById('table-area');
+  const rescueBtn = document.getElementById('rescue-btn');
   const gameTable = new Table(onPot, onScratch, cue?.bonuses || {});
 
   function onPot() {
@@ -76,9 +98,7 @@ export function render(root, { matchData }) {
     emit('cue_scratch', { matchId });
   }
 
-  function resize() {
-    sizeCanvas(canvas, tableArea);
-  }
+  function resize() { sizeCanvas(canvas, tableArea); }
   resize();
   window.addEventListener('resize', resize);
 
@@ -88,21 +108,30 @@ export function render(root, { matchData }) {
     canvasEl: canvas,
     needleEl: document.getElementById('needle'),
     fillEl: document.getElementById('power-fill'),
-    onShoot: (angle, power) => gameTable.shootCue(angle, power),
+    cueEl: document.getElementById('power-cue'),
+    labelEl: document.getElementById('power-label'),
+    readoutEl: document.getElementById('angle-readout'),
+    ccwEl: document.getElementById('aim-ccw'),
+    cwEl: document.getElementById('aim-cw'),
+    sensitivity: state.user?.settings?.aimSensitivity ?? 50,
+    onShoot: (angle, power) => {
+      if (!gameTable.isAllStopped() || shotAnim) return;
+      shotAnim = { start: performance.now(), power };
+      pendingShot = { angle, power };
+    },
   });
-  controls.setCanvasAimHandler((px, py) => {
-    const targetX = px * 300, targetY = py * 540;
-    const angle = Math.atan2(targetY - gameTable.cue.y, targetX - gameTable.cue.x);
-    controls.setAim(angle);
+  controls.setCanvasAimHandler((nx, ny) => {
+    const p = canvasNormToTable(nx, ny);
+    controls.setAim(Math.atan2(p.y - gameTable.cue.y, p.x - gameTable.cue.x));
   });
 
   document.getElementById('emoji-bar').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-e]');
     if (btn) emit('emoji', { matchId, emoji: btn.dataset.e });
   });
-  document.getElementById('rescue-btn').addEventListener('click', () => {
+  rescueBtn.addEventListener('click', () => {
     rescueUsed = true;
-    document.getElementById('rescue-btn').style.display = 'none';
+    rescueBtn.classList.remove('show');
     playFakeAd(() => emit('watch_ad_rescue', { matchId }));
   });
 
@@ -115,13 +144,36 @@ export function render(root, { matchData }) {
   }
   updateBallsUi();
 
-  let crossedFive = myTime >= 5;
+  let aboveFive = myTime >= 5;
+
   function loop(now) {
     const dt = Math.min(0.033, (now - (loop.last || now)) / 1000);
     loop.last = now;
     gameTable.step(dt);
+
+    // cue stick: idle draw-back scales with the power slider, then thrusts forward
+    const settled = gameTable.isAllStopped();
+    let stick = null;
+    if (shotAnim) {
+      const k = Math.min(1, (now - shotAnim.start) / THRUST_MS);
+      const eased = k * k;
+      stick = { visible: true, angle: pendingShot.angle, pullback: shotAnim.power * PULL_MAX * (1 - eased) - eased * 6 };
+      if (k >= 1) {
+        gameTable.shootCue(pendingShot.angle, pendingShot.power);
+        pendingShot = null;
+        shotAnim = null;
+      }
+    } else if (settled) {
+      stick = { visible: true, angle: controls.getAimAngle(), pullback: 7 + controls.getPower() * PULL_MAX };
+    }
+
     drawTable(canvas.getContext('2d'), gameTable, {
-      theme: table.colors, aimAngle: controls.getAimAngle(), power: controls.getPower(), canShoot: true,
+      theme: table.colors,
+      aimAngle: controls.getAimAngle(),
+      power: controls.getPower(),
+      canShoot: !shotAnim,
+      stick,
+      cueStyle,
     });
 
     const elapsed = (performance.now() - lastTickAt) / 1000;
@@ -130,8 +182,8 @@ export function render(root, { matchData }) {
     setTimerText('my-timer', dispMy);
     setTimerText('opp-timer', dispOpp, true);
 
-    if (dispMy < 5 && crossedFive) { crossedFive = false; vibrate(250); }
-    document.getElementById('rescue-btn').style.display = (dispMy <= 10 && dispMy > 0 && !rescueUsed) ? 'block' : 'none';
+    if (dispMy < 5 && aboveFive) { aboveFive = false; vibrate(250); }
+    rescueBtn.classList.toggle('show', dispMy <= 10 && dispMy > 0 && !rescueUsed);
 
     rafId = requestAnimationFrame(loop);
   }
