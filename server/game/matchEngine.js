@@ -68,13 +68,21 @@ export function createMatch({ id, tableId, mode = 'ranked', entry = 0, xpReward 
   return match;
 }
 
+// Bot skill climbs with the table tier, so Garage is a warm-up and the top tables
+// actually punish a slow player: it lines up faster and misses less often.
+function botSkill(tableId) {
+  return Math.min(0.94, 0.34 + (Number(tableId) || 1) * 0.062);
+}
+
 function scheduleBotShot(match, botPlayer) {
   if (match.status !== 'live' || botPlayer.finished) return;
-  const delay = 1800 + Math.random() * 2200;
+  const skill = botSkill(match.tableId);
+  const base = 2700 - skill * 1500;              // ~2.5s down to ~1.3s between shots
+  const delay = base + Math.random() * base * 0.55;
   setTimeout(() => {
     if (match.status !== 'live' || botPlayer.finished) return;
-    if (Math.random() < 0.12) {
-      // bot scratches occasionally - no penalty, just re-schedule
+    if (Math.random() > skill) {
+      // missed the pot - the clock keeps running, then it lines up again
       scheduleBotShot(match, botPlayer);
       return;
     }

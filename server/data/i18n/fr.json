@@ -118,5 +118,9 @@
   "copyLink": "Copier le lien",
   "banned": "Compte banni",
   "bannedDesc": "Votre compte a été banni pour non-respect des règles.",
-  "notificationsInbox": "Notifications"
+  "notificationsInbox": "Notifications",
+  "spinCenter": "Centre",
+  "spinTop": "Effet haut",
+  "spinBack": "Rétro",
+  "spinSide": "Effet latéral"
 }

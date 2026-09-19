@@ -6,6 +6,7 @@ import { avatarHtml, formatTime } from '../ui.js';
 import { Table } from '../engine/physics.js';
 import { sizeCanvas, drawTable, canvasNormToTable, cueStyleFor } from '../engine/render.js';
 import { createControls } from '../engine/controls.js';
+import * as audio from '../engine/audio.js';
 
 const EMOJIS = ['😂', '🥲', '😡', '😱'];
 const PULL_MAX = 34;       // how far the stick draws back at full power
@@ -28,6 +29,7 @@ export function render(root, { matchData }) {
 
   const cue = state.cues.find(c => c.id === state.user.equippedCueId) || state.cues[0];
   const cueStyle = cueStyleFor(cue?.category);
+  const spin = { x: 0, y: 0 };
 
   root.innerHTML = `
     <div class="game-screen">
@@ -66,8 +68,16 @@ export function render(root, { matchData }) {
             </div>
             <button class="fine-btn" id="aim-cw">▶</button>
           </div>
-          <div class="emoji-bar" id="emoji-bar">
-            ${EMOJIS.map(e => `<button data-e="${e}">${e}</button>`).join('')}
+          <div class="aim-row">
+            <div class="spin-ball" id="spin-ball" title="spin">
+              <div class="spin-cross"></div>
+              <div class="spin-dot" id="spin-dot"></div>
+            </div>
+            <div class="spin-label" id="spin-label">${t('spinCenter')}</div>
+            <button class="fine-btn" id="emoji-toggle">😀</button>
+            <div class="emoji-bar" id="emoji-bar">
+              ${EMOJIS.map(e => `<button data-e="${e}">${e}</button>`).join('')}
+            </div>
           </div>
         </div>
 
@@ -84,18 +94,24 @@ export function render(root, { matchData }) {
   const canvas = document.getElementById('table-canvas');
   const tableArea = document.getElementById('table-area');
   const rescueBtn = document.getElementById('rescue-btn');
-  const gameTable = new Table(onPot, onScratch, cue?.bonuses || {});
+  const gameTable = new Table(onPot, onScratch, cue?.bonuses || {}, onCollide);
 
   function onPot() {
     myPotted++;
     myTime += 10;
     lastTickAt = performance.now();
     vibrate(60);
+    audio.pocket();
     emit('ball_potted', { matchId });
     updateBallsUi();
   }
   function onScratch() {
+    audio.pocket();
     emit('cue_scratch', { matchId });
+  }
+  function onCollide(kind, intensity) {
+    if (kind === 'ball') audio.ballHit(intensity);
+    else audio.cushionHit(intensity);
   }
 
   function resize() { sizeCanvas(canvas, tableArea); }
@@ -124,9 +140,49 @@ export function render(root, { matchData }) {
     },
   });
 
-  document.getElementById('emoji-bar').addEventListener('click', (e) => {
+  setupSpinControl();
+
+  function setupSpinControl() {
+    const ball = document.getElementById('spin-ball');
+    const dot = document.getElementById('spin-dot');
+    const label = document.getElementById('spin-label');
+
+    const render = () => {
+      dot.style.transform = `translate(calc(-50% + ${spin.x * 34}%), calc(-50% + ${-spin.y * 34}%))`;
+      let key = 'spinCenter';
+      if (spin.y > 0.3) key = 'spinTop';
+      else if (spin.y < -0.3) key = 'spinBack';
+      else if (Math.abs(spin.x) > 0.3) key = 'spinSide';
+      label.textContent = t(key);
+    };
+
+    const setFromEvent = (e) => {
+      const r = ball.getBoundingClientRect();
+      let nx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+      let ny = -((e.clientY - r.top) / r.height - 0.5) * 2;
+      const len = Math.hypot(nx, ny);
+      if (len > 1) { nx /= len; ny /= len; }
+      spin.x = nx; spin.y = ny;
+      render();
+    };
+
+    ball.addEventListener('pointerdown', (e) => { ball.setPointerCapture(e.pointerId); setFromEvent(e); });
+    ball.addEventListener('pointermove', (e) => { if (e.buttons > 0) setFromEvent(e); });
+    ball.addEventListener('dblclick', () => { spin.x = 0; spin.y = 0; render(); });
+    render();
+  }
+
+  const emojiBar = document.getElementById('emoji-bar');
+  document.getElementById('emoji-toggle').addEventListener('click', () => {
+    emojiBar.classList.toggle('open');
+  });
+
+  emojiBar.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-e]');
-    if (btn) emit('emoji', { matchId, emoji: btn.dataset.e });
+    if (btn) {
+      emit('emoji', { matchId, emoji: btn.dataset.e });
+      emojiBar.classList.remove('open');
+    }
   });
   rescueBtn.addEventListener('click', () => {
     rescueUsed = true;
@@ -144,6 +200,7 @@ export function render(root, { matchData }) {
   updateBallsUi();
 
   let aboveFive = myTime >= 5;
+  let lastBeepSecond = null;
 
   function loop(now) {
     const dt = Math.min(0.033, (now - (loop.last || now)) / 1000);
@@ -158,7 +215,9 @@ export function render(root, { matchData }) {
       const eased = k * k;
       stick = { visible: true, angle: pendingShot.angle, pullback: shotAnim.power * PULL_MAX * (1 - eased) - eased * 6 };
       if (k >= 1) {
-        gameTable.shootCue(pendingShot.angle, pendingShot.power);
+        gameTable.shootCue(pendingShot.angle, pendingShot.power, spin);
+        audio.cueStrike(pendingShot.power);
+        vibrate(25);
         pendingShot = null;
         shotAnim = null;
       }
@@ -182,6 +241,13 @@ export function render(root, { matchData }) {
     setTimerText('opp-timer', dispOpp, true);
 
     if (dispMy < 5 && aboveFive) { aboveFive = false; vibrate(250); }
+    // one beep per second over the last five
+    if (dispMy > 0 && dispMy <= 5) {
+      const whole = Math.ceil(dispMy);
+      if (whole !== lastBeepSecond) { lastBeepSecond = whole; audio.warnBeep(); }
+    } else if (dispMy > 5) {
+      lastBeepSecond = null;
+    }
     rescueBtn.classList.toggle('show', dispMy <= 10 && dispMy > 0 && !rescueUsed);
 
     rafId = requestAnimationFrame(loop);

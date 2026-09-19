@@ -118,5 +118,9 @@
   "copyLink": "نسخ الرابط",
   "banned": "الحساب محظور",
   "bannedDesc": "تم حظر حسابك بسبب خرق القواعد.",
-  "notificationsInbox": "الإشعارات"
+  "notificationsInbox": "الإشعارات",
+  "spinCenter": "المنتصف",
+  "spinTop": "ضربة علوية",
+  "spinBack": "ضربة سفلية",
+  "spinSide": "ضربة جانبية"
 }

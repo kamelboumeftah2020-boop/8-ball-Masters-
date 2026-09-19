@@ -44,13 +44,26 @@ Everything is reachable with one thumb, in portrait:
 - **Shoot** — pull straight back from behind the cue ball to draw the stick, then
   release. The side slider (shaped like a cue) does the same thing for anyone who
   prefers a slider. There is no separate "hit" button.
+- **Spin** — drag the red dot on the little cue ball to pick your contact point.
+  Top spin follows through after contact, back spin draws the cue ball back, side
+  spin kicks off the cushion. Double-tap the ball to re-centre.
 - The on-table aim guide shows a ghost cue ball at the predicted contact point plus
   the object ball's predicted direction.
 
-`npm run test:physics` runs a headless sanity check on the simulation: it fires
-200 shots across the power range and asserts no ball tunnels through another, no
-ball escapes the cushions, nothing ends up stuck overlapping, and roll times stay
-in a sane range for a 20-second clock.
+Sound is synthesised at runtime with the Web Audio API — there are no audio files
+to ship. Ball clicks are pitched and shaped from the actual impact speed, cushions
+thud lower and softer, and there are separate cues for potting, the strike, the
+last five seconds, coins and the win/lose stings. It all follows the player's
+sound setting.
+
+## Tests
+
+- `npm run test:physics` — fires 200 shots across the power range and asserts no
+  ball tunnels through another, none escape the cushions, none end up stuck
+  overlapping, and roll times stay sane for a 20-second clock.
+- `npm run test:pvp` — drives two real socket clients through a full match and
+  asserts both win conditions from the spec, live opponent progress, and that the
+  stake moves whole with no coins created or destroyed. (Start the server first.)
 
 ## What's implemented from the GDD
 

@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { state, setUser } from '../state.js';
 import { t } from '../i18n.js';
 import { openModal, closeModal, toast } from '../ui.js';
+import * as audio from '../engine/audio.js';
 
 export async function openMissionsModal(onChange) {
   const { missions } = await api.get(`/missions/${state.user.id}`);
@@ -37,6 +38,7 @@ export async function openMissionsModal(onChange) {
             try {
               const { user, reward } = await api.post('/missions/claim', { userId: state.user.id, missionKey: btn.dataset.claim });
               setUser(user);
+              audio.coin();
               toast(`+${reward} 🪙`);
               const fresh = await api.get(`/missions/${state.user.id}`);
               render(fresh.missions.list);

@@ -4,6 +4,7 @@ import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
 import { connectSocket, identify } from '../net/socket.js';
 import { toast, avatarHtml } from '../ui.js';
+import * as audio from '../engine/audio.js';
 
 export function render(root, params = {}) {
   let step = 'login';
@@ -82,6 +83,8 @@ export function render(root, params = {}) {
     try {
       const { user } = await api.post('/auth/guest', { nickname, avatarId, country: 'INT' });
       setUser(user);
+      audio.setEnabled(user.settings.sound);
+      audio.unlock();
       await loadLang(user.settings.lang);
       connectSocket();
       identify();

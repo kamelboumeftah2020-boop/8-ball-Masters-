@@ -118,5 +118,9 @@
   "copyLink": "Bağlantıyı Kopyala",
   "banned": "Hesap Yasaklandı",
   "bannedDesc": "Hesabın kurallara aykırı davranış nedeniyle yasaklandı.",
-  "notificationsInbox": "Bildirimler"
+  "notificationsInbox": "Bildirimler",
+  "spinCenter": "Merkez",
+  "spinTop": "Üst dönüş",
+  "spinBack": "Geri dönüş",
+  "spinSide": "Yan dönüş"
 }

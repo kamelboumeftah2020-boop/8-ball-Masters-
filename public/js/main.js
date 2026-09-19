@@ -4,6 +4,7 @@ import { loadLang, preferredLang } from './i18n.js';
 import { registerScreens, navigate } from './router.js';
 import { connectSocket, identify } from './net/socket.js';
 import { toast } from './ui.js';
+import * as audio from './engine/audio.js';
 
 import * as onboarding from './screens/onboarding.js';
 import * as home from './screens/home.js';
@@ -51,6 +52,7 @@ async function boot() {
     try {
       const { user } = await api.get(`/session/${savedId}`);
       setUser(user);
+      audio.setEnabled(user.settings.sound);
       await loadLang(user.settings.lang);
       connectSocket();
       identify();
@@ -66,6 +68,15 @@ async function boot() {
   }
   navigate('onboarding', { invite });
 }
+
+// Browsers keep audio muted until the page has been touched, so unlock on the
+// first interaction and give every tappable control a click.
+document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.btn, .icon-btn, .tab-btn, .play-btn, .fine-btn, .avatar-pick, [data-nav]')) {
+    audio.uiTap();
+  }
+});
 
 connectSocket();
 boot().catch((e) => {

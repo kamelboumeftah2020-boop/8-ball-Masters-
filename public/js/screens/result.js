@@ -4,6 +4,7 @@ import { t } from '../i18n.js';
 import { navigate, onLeave } from '../router.js';
 import { on, emit } from '../net/socket.js';
 import { toast, formatCoins } from '../ui.js';
+import * as audio from '../engine/audio.js';
 
 export async function render(root, { payload }) {
   const r = payload.you;
@@ -13,6 +14,9 @@ export async function render(root, { payload }) {
     const { user } = await api.get(`/me/${state.user.id}`);
     setUser(user);
   } catch {}
+
+  if (r.won) audio.win(); else audio.lose();
+  if (r.leveledUp) setTimeout(() => audio.levelUp(), 700);
 
   draw();
 
@@ -79,6 +83,7 @@ export async function render(root, { payload }) {
     try {
       const { user, reward } = await api.post('/lossboxes/claim', { userId: state.user.id, boxId: box.id });
       setUser(user);
+      audio.coin();
       toast(`+${reward} 🪙`);
       draw();
     } catch { toast('Not ready yet'); }

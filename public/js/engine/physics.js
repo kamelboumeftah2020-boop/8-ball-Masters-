@@ -101,16 +101,19 @@ function orthonormalize(m) {
 }
 
 export class Table {
-  constructor(onPot, onScratch, cueBonuses = {}) {
+  constructor(onPot, onScratch, cueBonuses = {}, onCollide = null) {
     this.balls = [];
     this.pockets = pocketPositions();
     this.onPot = onPot;
     this.onScratch = onScratch;
+    // onCollide(kind, intensity 0..1) - drives the impact sounds
+    this.onCollide = onCollide;
     // The equipped cue's bonuses give a small, honest edge: a slightly more
     // forgiving pocket mouth and a shot-speed multiplier.
     this.pocketForgiveness = 1 + (cueBonuses.aimBonus || 0) / 100 * 0.15;
     this.powerMult = 1 + (cueBonuses.powerBonus || 0) / 100 * 0.3;
     this.cueRespawnAt = 0;
+    this.cueSpin = { x: 0, y: 0 };
     this.reset();
   }
 
@@ -149,13 +152,15 @@ export class Table {
     return this.balls.every(b => !b.active || b.speed === 0);
   }
 
-  shootCue(angle, power01) {
+  // spin: { x: side english -1..1, y: back(-1) .. top(+1) }
+  shootCue(angle, power01, spin = { x: 0, y: 0 }) {
     if (!this.cue.active || !this.isAllStopped()) return false;
     const p = Math.max(0, Math.min(1, power01));
     // slightly curved response so soft shots are easy to feather
     const speed = (0.08 + 0.92 * Math.pow(p, 1.4)) * MAX_SHOT_SPEED * this.powerMult;
     this.cue.vx = Math.cos(angle) * speed;
     this.cue.vy = Math.sin(angle) * speed;
+    this.cueSpin = { x: spin.x || 0, y: spin.y || 0 };
     return true;
   }
 
@@ -201,10 +206,21 @@ export class Table {
   _wallCollide(b) {
     const minX = CUSHION + b.r, maxX = TABLE_W - CUSHION - b.r;
     const minY = CUSHION + b.r, maxY = TABLE_H - CUSHION - b.r;
-    if (b.x < minX) { b.x = minX; b.vx = Math.abs(b.vx) * WALL_RESTITUTION; }
-    if (b.x > maxX) { b.x = maxX; b.vx = -Math.abs(b.vx) * WALL_RESTITUTION; }
-    if (b.y < minY) { b.y = minY; b.vy = Math.abs(b.vy) * WALL_RESTITUTION; }
-    if (b.y > maxY) { b.y = maxY; b.vy = -Math.abs(b.vy) * WALL_RESTITUTION; }
+    let impact = 0;
+    if (b.x < minX) { b.x = minX; impact = Math.abs(b.vx); b.vx = impact * WALL_RESTITUTION; this._sideSpinKick(b, 'y'); }
+    else if (b.x > maxX) { b.x = maxX; impact = Math.abs(b.vx); b.vx = -impact * WALL_RESTITUTION; this._sideSpinKick(b, 'y'); }
+    if (b.y < minY) { b.y = minY; impact = Math.max(impact, Math.abs(b.vy)); b.vy = Math.abs(b.vy) * WALL_RESTITUTION; this._sideSpinKick(b, 'x'); }
+    else if (b.y > maxY) { b.y = maxY; impact = Math.max(impact, Math.abs(b.vy)); b.vy = -Math.abs(b.vy) * WALL_RESTITUTION; this._sideSpinKick(b, 'x'); }
+    if (impact > 40) this.onCollide?.('cushion', Math.min(1, impact / 700));
+  }
+
+  // Side english kicks the ball sideways coming off a cushion, then bleeds away.
+  _sideSpinKick(b, axis) {
+    if (!b.isCue || !this.cueSpin || Math.abs(this.cueSpin.x) < 0.05) return;
+    const speed = Math.hypot(b.vx, b.vy);
+    const kick = this.cueSpin.x * speed * 0.22;
+    if (axis === 'y') b.vy += kick; else b.vx += kick;
+    this.cueSpin.x *= 0.5;
   }
 
   _ballCollisions() {
@@ -235,10 +251,16 @@ export class Table {
         a.vx -= impulse * nx; a.vy -= impulse * ny;
         b.vx += impulse * nx; b.vy += impulse * ny;
 
-        // A rolling cue ball doesn't stop dead on a full hit - it carries forward.
+        this.onCollide?.('ball', Math.min(1, Math.abs(along) / 750));
+
+        // A rolling cue ball doesn't stop dead on a full hit. Top spin makes it
+        // follow through, back spin (draw) sends it back the way it came.
         if (pre && pre.sp > 1) {
-          cueSide.vx += (pre.vx / pre.sp) * pre.sp * CUE_FOLLOW;
-          cueSide.vy += (pre.vy / pre.sp) * pre.sp * CUE_FOLLOW;
+          const spinY = this.cueSpin ? this.cueSpin.y : 0;
+          const carry = CUE_FOLLOW + spinY * 0.78;
+          cueSide.vx += pre.vx * carry;
+          cueSide.vy += pre.vy * carry;
+          if (this.cueSpin) { this.cueSpin.y *= 0.25; this.cueSpin.x *= 0.6; }
         }
       }
     }

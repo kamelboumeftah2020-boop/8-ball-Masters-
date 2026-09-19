@@ -3,6 +3,7 @@ import { state, setUser } from '../state.js';
 import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
 import { toast, openModal, closeModal } from '../ui.js';
+import * as audio from '../engine/audio.js';
 
 const LANGS = [
   { code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }, { code: 'fr', label: 'Français' },
@@ -60,7 +61,12 @@ export function render(root) {
       navigate('settings');
     };
     root.querySelector('#vib-toggle').onclick = () => save({ vibration: !s.vibration }).then(() => draw());
-    root.querySelector('#sound-toggle').onclick = () => save({ sound: !s.sound }).then(() => draw());
+    root.querySelector('#sound-toggle').onclick = () => {
+      const next = !s.sound;
+      audio.setEnabled(next);
+      if (next) { audio.unlock(); audio.uiTap(); }
+      save({ sound: next }).then(() => draw());
+    };
     root.querySelector('#aim-sens').onchange = (e) => save({ aimSensitivity: Number(e.target.value) });
     root.querySelector('#report-problem').onclick = reportProblem;
     root.querySelector('#privacy').onclick = () => showText(t('privacyPolicy'), PRIVACY_TEXT);

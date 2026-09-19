@@ -3,6 +3,7 @@ import { state, setUser } from '../state.js';
 import { t } from '../i18n.js';
 import { navigate } from '../router.js';
 import { toast, formatCoins } from '../ui.js';
+import * as audio from '../engine/audio.js';
 import { topbarHtml, wireTopbar, bottomNavHtml, wireBottomNav } from './chrome.js';
 
 const STYLE_ICONS = {
@@ -74,6 +75,7 @@ export async function render(root) {
     try {
       const { user, reward } = await api.post('/dailybox/claim', { userId: state.user.id });
       setUser(user);
+      audio.coin();
       toast(`+${reward} 🪙`);
       draw();
     } catch (e) {

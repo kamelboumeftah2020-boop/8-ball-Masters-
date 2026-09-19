@@ -118,5 +118,9 @@
   "copyLink": "Link kopieren",
   "banned": "Konto gesperrt",
   "bannedDesc": "Dein Konto wurde wegen Regelverstoßes gesperrt.",
-  "notificationsInbox": "Benachrichtigungen"
+  "notificationsInbox": "Benachrichtigungen",
+  "spinCenter": "Mitte",
+  "spinTop": "Oberer Effet",
+  "spinBack": "Rückzieher",
+  "spinSide": "Seiteneffet"
 }
