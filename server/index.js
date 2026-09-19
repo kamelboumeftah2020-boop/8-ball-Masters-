@@ -8,6 +8,7 @@ import { api } from './routes/api.js';
 import { admin } from './routes/admin.js';
 import { initSockets } from './sockets.js';
 import { allUsers, persist } from './store.js';
+import { runWeeklyResetIfDue } from './game/weekly.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -27,6 +28,13 @@ app.get('/invite/:code', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 initSockets(io);
+
+// Close the leaderboard season every Friday 00:00 UTC and pay out the podiums.
+runWeeklyResetIfDue();
+setInterval(() => {
+  const paid = runWeeklyResetIfDue();
+  if (paid?.length) console.log(`weekly reset: paid ${paid.length} prize(s)`);
+}, 60 * 1000);
 
 // Stand-in for a real push-notification service (no FCM/APNs credentials in this
 // environment): every day at ~21:00 server time we drop a personalized message into

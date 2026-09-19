@@ -109,6 +109,19 @@ export function getMatch(id) {
   return matches.get(id);
 }
 
+// Used when a player comes back after dropping out: their match kept running
+// server-side, so they can be put straight back into it with the real state.
+export function resumeMatchFor(userId) {
+  for (const match of matches.values()) {
+    if (match.status !== 'live') continue;
+    const player = findPlayer(match, userId);
+    if (player && !player.isBot && !player.finished) {
+      return serializeMatchFor(match, userId);
+    }
+  }
+  return null;
+}
+
 function otherPlayer(match, userId) {
   return match.players.find(p => p.userId !== userId);
 }

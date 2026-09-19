@@ -25,6 +25,7 @@ async function makePlayer(name) {
   socket.emit('identify', { token });
   const p = { user, token, socket, match: null, result: null, sawOpponentProgress: false };
   socket.on('match_start', (m) => { p.match = m; p.layout = m.layout; });
+  socket.on('match_resume', (m) => { p.resumed = m; p.match = m; p.layout = m.layout; });
   socket.on('table_sync', (m) => { p.layout = m.snapshot; });
   socket.on('match_tick', (m) => {
     if (m.opponent && m.opponent.potted > 0) p.sawOpponentProgress = true;
@@ -128,12 +129,49 @@ async function main() {
   fails += check('0% tax: the pot moved whole, nothing vanished',
     (afterA.coins + afterB.coins) === (startCoins.a + startCoins.b));
 
+  fails += await reconnectScenario();
   fails += await cheatScenario();
   fails += await authScenario(a, b);
   fails += await timeoutScenario();
 
   console.log(fails === 0 ? '\nPvP OK' : `\n${fails} CHECK(S) FAILED`);
   process.exit(fails === 0 ? 0 : 1);
+}
+
+// Dropping out mid-match must not be an automatic loss.
+async function reconnectScenario() {
+  console.log('\n-- reconnect --');
+  const stamp = Date.now() % 100000;
+  const f = await makePlayer('Recon' + stamp);
+  f.socket.emit('join_queue', { tableId: 1 });
+  if (!await until(() => f.match)) return check('reconnect match started', false);
+  await until(() => f.lastTick, 4000);
+
+  // pot one so there is real progress to come back to
+  await potBalls(f, 1);
+  const pottedBefore = f.lastTick.me.potted;
+  const matchId = f.match.matchId;
+
+  let fails = 0;
+  f.socket.disconnect();
+  await wait(1200);
+
+  // come back on a brand new connection, exactly like reopening the app
+  const back = io(BASE, { transports: ['websocket'] });
+  await new Promise(r => back.on('connect', r));
+  let resumed = null;
+  back.on('match_resume', (m) => { resumed = m; });
+  back.emit('identify', { token: f.token });
+  const gotBack = await until(() => resumed, 6000);
+
+  fails += check('a returning player is put back into their match', gotBack);
+  if (gotBack) {
+    fails += check('back in the same match', resumed.matchId === matchId);
+    fails += check('progress survived the disconnect', resumed.me.potted === pottedBefore);
+    fails += check('the table came back with them', !!resumed.layout?.balls?.length);
+  }
+  back.disconnect();
+  return fails;
 }
 
 // A tampered client must not be able to award itself anything: the only thing it

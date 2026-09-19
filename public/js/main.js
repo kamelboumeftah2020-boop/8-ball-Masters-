@@ -1,8 +1,8 @@
 import { api, getToken, setToken } from './api.js';
 import { state, setUser } from './state.js';
 import { loadLang, preferredLang } from './i18n.js';
-import { registerScreens, navigate } from './router.js';
-import { connectSocket, identify } from './net/socket.js';
+import { registerScreens, navigate, currentScreen } from './router.js';
+import { connectSocket, identify, on as onSocket } from './net/socket.js';
 import { toast } from './ui.js';
 import * as audio from './engine/audio.js';
 
@@ -76,6 +76,13 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.btn, .icon-btn, .tab-btn, .play-btn, .fine-btn, .avatar-pick, [data-nav]')) {
     audio.uiTap();
   }
+});
+
+// Reconnecting into a match you are still in beats the old behaviour, where
+// dropping out for any reason meant losing on the clock.
+onSocket('match_resume', (matchData) => {
+  if (currentScreen()?.name === 'game') return;
+  navigate('game', { matchData });
 });
 
 connectSocket();

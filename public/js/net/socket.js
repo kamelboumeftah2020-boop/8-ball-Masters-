@@ -21,7 +21,7 @@ export function connectSocket() {
   [
     'queue_joined', 'queue_error', 'match_start', 'match_tick', 'match_end',
     'rescue_result', 'double_result', 'opponent_emoji', 'challenge_error',
-    'table_sync', 'auth_error',
+    'table_sync', 'auth_error', 'match_resume',
   ].forEach(forward);
 
   return socket;

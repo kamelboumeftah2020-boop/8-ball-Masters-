@@ -7,6 +7,7 @@ import {
 } from './game/matchQueue.js';
 import {
   initMatchEngine, createMatch, getMatch, applyShot, applyRescueAd, applyDoubleAd,
+  resumeMatchFor,
 } from './game/matchEngine.js';
 
 const BOT_FILL_MS = 5000;
@@ -27,6 +28,11 @@ export function initSockets(io) {
       if (!presence.has(userId)) presence.set(userId, new Set());
       presence.get(userId).add(socket.id);
       user.lastSeenAt = Date.now();
+
+      // Dropping out mid-match used to be a guaranteed loss: the match kept
+      // running and there was no way back in. Put them straight back on the table.
+      const live = resumeMatchFor(userId);
+      if (live) socket.emit('match_resume', live);
     });
 
     socket.on('join_queue', ({ tableId }) => {

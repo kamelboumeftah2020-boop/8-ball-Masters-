@@ -15,6 +15,7 @@ import { STARS, weeklyPrizes } from '../data/stars.js';
 import { levelFromXp } from '../util/econ.js';
 import { privateUserDto, publicUserDto, tableDto } from '../util/dto.js';
 import { queueLength } from '../game/matchQueue.js';
+import { nextResetAt } from '../game/weekly.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const I18N_DIR = path.join(__dirname, '..', 'data', 'i18n');
@@ -262,7 +263,7 @@ api.get('/leaderboard/global', (req, res) => {
     .sort((a, b) => b.weeklyCoins - a.weeklyCoins)
     .slice(0, 50)
     .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, weeklyCoins: u.weeklyCoins }));
-  res.json({ starId, stars: STARS, prizes: weeklyPrizes(starId), rows, resetsAt: nextFridayMidnight() });
+  res.json({ starId, stars: STARS, prizes: weeklyPrizes(starId), rows, resetsAt: nextResetAt() });
 });
 
 api.get('/leaderboard/local', (req, res) => {
@@ -283,15 +284,6 @@ api.get('/leaderboard/friends', (req, res) => {
     .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, coins: u.careerCoinsWon, isMe: u.id === user.id }));
   res.json({ rows });
 });
-
-function nextFridayMidnight() {
-  const now = new Date();
-  const day = now.getUTCDay(); // 0 Sun .. 5 Fri
-  let daysUntilFri = (5 - day + 7) % 7;
-  if (daysUntilFri === 0 && now.getUTCHours() >= 0 && now.getUTCMinutes() > 0) daysUntilFri = 7;
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilFri, 0, 0, 0));
-  return next.getTime();
-}
 
 // ---------- Friends ----------
 api.get('/friends/:userId', (req, res) => {
