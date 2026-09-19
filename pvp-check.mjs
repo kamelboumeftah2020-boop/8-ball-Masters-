@@ -1,6 +1,7 @@
 // Two real clients, same table, at the same time: they must be paired with each other
 // (not with bots), see each other's live clock and pot count, and settle opposite results.
 import { io } from 'socket.io-client';
+import { Table } from './public/js/engine/physics.js';
 
 const BASE = 'http://localhost:3000';
 
@@ -23,13 +24,47 @@ async function makePlayer(name) {
   await new Promise(r => socket.on('connect', r));
   socket.emit('identify', { token });
   const p = { user, token, socket, match: null, result: null, sawOpponentProgress: false };
-  socket.on('match_start', (m) => { p.match = m; });
+  socket.on('match_start', (m) => { p.match = m; p.layout = m.layout; });
+  socket.on('table_sync', (m) => { p.layout = m.snapshot; });
   socket.on('match_tick', (m) => {
     if (m.opponent && m.opponent.potted > 0) p.sawOpponentProgress = true;
     p.lastTick = m;
   });
   socket.on('match_end', (r) => { p.result = r; });
   return p;
+}
+
+let cueBonuses = {};
+
+// Brute-force a shot that pots a ball, using the very same physics the server runs.
+function findPottingShot(layout) {
+  for (const power of [0.45, 0.6, 0.8, 0.3]) {
+    for (let i = 0; i < 180; i++) {
+      const angle = (i / 180) * Math.PI * 2;
+      const t = new Table(null, null, cueBonuses);
+      t.applySnapshot(JSON.parse(JSON.stringify(layout)));
+      let potted = 0;
+      t.onPot = () => { potted++; };
+      if (!t.shootCue(angle, power)) continue;
+      let guard = 0;
+      while (!t.isAllStopped() && guard++ < 4000) t.step(1 / 60);
+      if (potted > 0) return { angle, power, predicted: potted };
+    }
+  }
+  return null;
+}
+
+// Play real shots until the server has credited `target` pots to this player.
+async function potBalls(player, target) {
+  let guard = 0;
+  while ((player.lastTick?.me.potted ?? 0) < target && !player.result && guard++ < 40) {
+    const shot = findPottingShot(player.layout);
+    if (!shot) return false;
+    const before = player.lastTick?.me.potted ?? 0;
+    player.socket.emit('shoot', { matchId: player.match.matchId, ...shot, spin: { x: 0, y: 0 } });
+    await until(() => (player.lastTick?.me.potted ?? 0) > before || player.result, 8000);
+  }
+  return (player.lastTick?.me.potted ?? 0) >= target || !!player.result;
 }
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -48,6 +83,7 @@ function check(label, ok) {
 }
 
 async function main() {
+  cueBonuses = (await api('GET', '/cues')).body.cues.find(c => c.id === 1).bonuses;
   const stamp = Date.now() % 100000;
   const a = await makePlayer('PvpA' + stamp);
   const b = await makePlayer('PvpB' + stamp);
@@ -68,15 +104,11 @@ async function main() {
   fails += check('same match id on both sides', a.match.matchId === b.match.matchId);
   fails += check('entry fee is the table stake (200)', a.match.entry === 200);
 
-  // A clears the table, B pots two
-  for (let i = 0; i < 2; i++) {
-    await wait(280);
-    b.socket.emit('ball_potted', { matchId: b.match.matchId });
-  }
-  for (let i = 0; i < 7; i++) {
-    await wait(280);
-    a.socket.emit('ball_potted', { matchId: a.match.matchId });
-  }
+  // Both play real shots. The server simulates each one and decides what dropped.
+  fails += check('the server sent an authoritative ball layout', !!a.layout?.balls?.length);
+  const bPotted = await potBalls(b, 2);
+  fails += check('shots reported to the server score on the server', bPotted);
+  await potBalls(a, 7);
 
   const ended = await until(() => a.result && b.result);
   fails += check('both players received the result', ended);
@@ -96,11 +128,45 @@ async function main() {
   fails += check('0% tax: the pot moved whole, nothing vanished',
     (afterA.coins + afterB.coins) === (startCoins.a + startCoins.b));
 
+  fails += await cheatScenario();
   fails += await authScenario(a, b);
   fails += await timeoutScenario();
 
   console.log(fails === 0 ? '\nPvP OK' : `\n${fails} CHECK(S) FAILED`);
   process.exit(fails === 0 ? 0 : 1);
+}
+
+// A tampered client must not be able to award itself anything: the only thing it
+// can send is how it struck the ball.
+async function cheatScenario() {
+  console.log('\n-- cheat attempts --');
+  const stamp = Date.now() % 100000;
+  const e = await makePlayer('Cheat' + stamp);
+  e.socket.emit('join_queue', { tableId: 1 });
+  if (!await until(() => e.match)) return check('cheat-test match started', false);
+  await until(() => e.lastTick, 4000);
+
+  let fails = 0;
+  const before = e.lastTick.me.potted;
+
+  // the old "I potted a ball" message no longer exists
+  for (let i = 0; i < 12; i++) e.socket.emit('ball_potted', { matchId: e.match.matchId });
+  // nor can a client claim a pot under any other name
+  for (let i = 0; i < 12; i++) e.socket.emit('match_tick', { me: { potted: 7 } });
+  await wait(900);
+  fails += check('claiming pots directly does nothing', e.lastTick.me.potted === before);
+
+  // a shot with absurd values is clamped, not trusted
+  e.socket.emit('shoot', { matchId: e.match.matchId, angle: 0, power: 9999, spin: { x: 50, y: 50 } });
+  await wait(900);
+  fails += check('an out-of-range shot cannot pot the whole table', e.lastTick.me.potted < 7);
+
+  e.socket.emit('shoot', { matchId: 'some-other-match', angle: 0, power: 0.5 });
+  await wait(400);
+  fails += check('shooting at a match you are not in is ignored', e.lastTick.me.potted < 7);
+
+  e.socket.disconnect();
+  return fails;
 }
 
 // A player's 8-digit ID is printed publicly on their profile, so knowing it must
@@ -146,8 +212,10 @@ async function timeoutScenario() {
 
   // D keeps its clock alive by potting; C never shoots and runs out of time.
   const keepAlive = setInterval(() => {
-    if (!d.result) d.socket.emit('ball_potted', { matchId: d.match.matchId });
-  }, 4000);
+    if (d.result || !d.layout) return;
+    const shot = findPottingShot(d.layout);
+    if (shot) d.socket.emit('shoot', { matchId: d.match.matchId, ...shot, spin: { x: 0, y: 0 } });
+  }, 3000);
 
   const ended = await until(() => c.result && d.result, 40000);
   clearInterval(keepAlive);

@@ -6,15 +6,13 @@ import {
   enqueue, dequeueByUser, popOpponent, queueLength,
 } from './game/matchQueue.js';
 import {
-  initMatchEngine, createMatch, getMatch, applyPot, applyScratch, applyRescueAd, applyDoubleAd,
+  initMatchEngine, createMatch, getMatch, applyShot, applyRescueAd, applyDoubleAd,
 } from './game/matchEngine.js';
 
 const BOT_FILL_MS = 5000;
-const MIN_SHOT_GAP_MS = 220; // crude anti-cheat: no physically-possible instant multi-pot spam
 
 const presence = new Map(); // userId -> Set<socketId>
 const socketUser = new Map(); // socketId -> userId
-const lastShotAt = new Map(); // `${matchId}:${userId}` -> timestamp
 
 export function initSockets(io) {
   initMatchEngine(io);
@@ -73,25 +71,13 @@ export function initSockets(io) {
       if (userId) dequeueByUser(tableId, userId);
     });
 
-    socket.on('ball_potted', ({ matchId }) => {
+    // A client can only say how it struck the ball. The server runs the shot on
+    // its own copy of the table and decides what went in.
+    socket.on('shoot', ({ matchId, angle, power, spin }) => {
       const userId = socketUser.get(socket.id);
       const match = getMatch(matchId);
       if (!match || !userId) return;
-      const player = match.players.find(p => p.userId === userId);
-      if (!player) return;
-      const key = `${matchId}:${userId}`;
-      const now = Date.now();
-      if (lastShotAt.get(key) && now - lastShotAt.get(key) < MIN_SHOT_GAP_MS) return;
-      lastShotAt.set(key, now);
-      applyPot(match, player);
-    });
-
-    socket.on('cue_scratch', ({ matchId }) => {
-      const userId = socketUser.get(socket.id);
-      const match = getMatch(matchId);
-      if (!match || !userId) return;
-      const player = match.players.find(p => p.userId === userId);
-      if (player) applyScratch(match, player);
+      applyShot(match, userId, { angle, power, spin });
     });
 
     socket.on('watch_ad_rescue', ({ matchId }) => {

@@ -2,6 +2,10 @@ import { getUser, persist, logMatch, refreshMissionProgress, cueById } from '../
 import { getTable } from '../data/tables.js';
 import { getStar, STARS } from '../data/stars.js';
 import { levelFromXp } from '../util/econ.js';
+// The server runs the very same simulation the client draws. Because the physics
+// is frame-rate independent, replaying a player's shot here yields exactly the
+// state they see - so pots are decided by the server, not claimed by the client.
+import { Table } from '../../public/js/engine/physics.js';
 
 const TICK_MS = 100;
 const START_TIME = 20.0;
@@ -50,6 +54,16 @@ export function createMatch({ id, tableId, mode = 'ranked', entry = 0, xpReward 
     finishedCount: 0,
   };
   matches.set(id, match);
+
+  for (const p of match.players) {
+    if (p.isBot) continue;
+    const cue = cueById(p.cueId) || cueById(1);
+    p.table = new Table(
+      () => applyPot(match, p),
+      () => applyScratch(match, p),
+      cue?.bonuses || {},
+    );
+  }
 
   for (const p of match.players) {
     if (!p.isBot) {
@@ -112,6 +126,7 @@ function serializeMatchFor(match, userId) {
     mode: match.mode,
     entry: match.entry,
     me: { time: me.time, potted: me.potted, totalBalls: TOTAL_BALLS },
+    layout: me.table ? me.table.snapshot() : null,
     opponent: opp ? {
       userId: opp.userId,
       nickname: getUser(opp.userId)?.nickname || 'Bot',
@@ -125,6 +140,18 @@ function serializeMatchFor(match, userId) {
 
 function tick(match) {
   if (match.status !== 'live') return;
+
+  // Advance every player's table on the server's clock. Pot and scratch callbacks
+  // fire from here, which is what actually scores the match.
+  for (const p of match.players) {
+    if (!p.table || p.finished) continue;
+    const wasSettled = p.table.isAllStopped();
+    p.table.step(TICK_MS / 1000);
+    if (!wasSettled && p.table.isAllStopped()) {
+      emitToUser(p.userId, 'table_sync', { matchId: match.id, snapshot: p.table.snapshot() });
+    }
+  }
+
   let anyAlive = false;
   for (const p of match.players) {
     if (p.finished) continue;
@@ -161,6 +188,20 @@ export function applyPot(match, player) {
   }
   broadcastTick(match);
   if (player.finished) checkResolution(match);
+}
+
+// A client sends what it did (angle, power, spin) - never what it scored.
+export function applyShot(match, userId, { angle, power, spin }) {
+  if (match.status !== 'live') return false;
+  const player = findPlayer(match, userId);
+  if (!player || player.finished || !player.table) return false;
+  if (!player.table.isAllStopped()) return false;      // still rolling: ignore
+  const a = Number(angle), p = Number(power);
+  if (!Number.isFinite(a) || !Number.isFinite(p)) return false;
+  return player.table.shootCue(a, Math.max(0, Math.min(1, p)), {
+    x: Math.max(-1, Math.min(1, Number(spin?.x) || 0)),
+    y: Math.max(-1, Math.min(1, Number(spin?.y) || 0)),
+  });
 }
 
 export function applyScratch(match, player) {

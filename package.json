@@ -8,7 +8,8 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "test:physics": "node physics-check.mjs",
-    "test:pvp": "node pvp-check.mjs"
+    "test:pvp": "node pvp-check.mjs",
+    "test:ui": "node ui-check.mjs"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,7 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "socket.io-client": "^4.8.3"
   }
 }

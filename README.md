@@ -21,11 +21,12 @@ physics table). That means the two clients never need to sync ball positions wit
 other; only the timer and pot-count are networked, which keeps the whole thing simple
 and cheat-resistant:
 
-- The **server is the sole authority for time and coins** (per the spec's anti-cheat
-  section). Every 100ms it ticks both players' clocks down and broadcasts the snapshot.
-  A client can never report "I have more time" — it can only tell the server "I potted a
-  ball", and the server decides whether that's plausible (rate-limited) before crediting
-  the +10s bonus.
+- The **server is the sole authority** (per the spec's anti-cheat section). It deals
+  the ball layout, runs the same simulation the client draws, ticks both clocks, and
+  decides what was potted. A client can only report *how it struck the ball* — angle,
+  power and spin — never what it scored. Because the physics is frame-rate
+  independent, the server's replay of a shot lands on exactly the state the player
+  sees, so this costs nothing in feel.
 - Matchmaking queues are **100% isolated per table** (10 separate queues), exactly as
   specified. If nobody else is searching within ~5s, a bot opponent fills in so the game
   is always playable solo for testing/demoing.
@@ -61,9 +62,14 @@ sound setting.
 - `npm run test:physics` — fires 200 shots across the power range and asserts no
   ball tunnels through another, none escape the cushions, none end up stuck
   overlapping, and roll times stay sane for a 20-second clock.
-- `npm run test:pvp` — drives two real socket clients through a full match and
-  asserts both win conditions from the spec, live opponent progress, and that the
-  stake moves whole with no coins created or destroyed. (Start the server first.)
+- `npm run test:pvp` — drives two real socket clients through a full match: it
+  works out potting shots with its own copy of the physics, sends only the shot
+  parameters, and asserts the server independently credits those exact pots. Also
+  covers both win conditions, the coin settlement, account security, and a set of
+  cheat attempts. (Start the server first.)
+- `npm run test:ui` — drives a real browser: captures the layout the server sends,
+  computes a potting shot, aims and strikes it with genuine pointer input, and
+  checks the pot comes back from the server. (Start the server first.)
 
 ## What's implemented from the GDD
 

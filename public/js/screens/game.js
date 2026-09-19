@@ -95,19 +95,16 @@ export function render(root, { matchData }) {
   const tableArea = document.getElementById('table-area');
   const rescueBtn = document.getElementById('rescue-btn');
   const gameTable = new Table(onPot, onScratch, cue?.bonuses || {}, onCollide);
+  // The server owns the balls. We render its layout and replay its physics locally
+  // for smooth animation, but it decides what was actually potted.
+  if (matchData.layout) gameTable.applySnapshot(matchData.layout);
 
   function onPot() {
-    myPotted++;
-    myTime += 10;
-    lastTickAt = performance.now();
     vibrate(60);
     audio.pocket();
-    emit('ball_potted', { matchId });
-    updateBallsUi();
   }
   function onScratch() {
     audio.pocket();
-    emit('cue_scratch', { matchId });
   }
   function onCollide(kind, intensity) {
     if (kind === 'ball') audio.ballHit(intensity);
@@ -216,6 +213,7 @@ export function render(root, { matchData }) {
       stick = { visible: true, angle: pendingShot.angle, pullback: shotAnim.power * PULL_MAX * (1 - eased) - eased * 6 };
       if (k >= 1) {
         gameTable.shootCue(pendingShot.angle, pendingShot.power, spin);
+        emit('shoot', { matchId, angle: pendingShot.angle, power: pendingShot.power, spin: { ...spin } });
         audio.cueStrike(pendingShot.power);
         vibrate(25);
         pendingShot = null;
@@ -267,6 +265,14 @@ export function render(root, { matchData }) {
     updateBallsUi();
   });
 
+  // Safety net: if the local replay ever drifts from the server, snap to the truth
+  // once the balls are at rest (in practice the two agree exactly).
+  const offSync = on('table_sync', (payload) => {
+    if (payload.matchId !== matchId || !payload.snapshot) return;
+    if (!gameTable.isAllStopped()) return;
+    gameTable.applySnapshot(payload.snapshot);
+  });
+
   const offEmoji = on('opponent_emoji', (payload) => {
     const f = document.createElement('div');
     f.className = 'emoji-float';
@@ -285,7 +291,7 @@ export function render(root, { matchData }) {
   function cleanup() {
     cancelAnimationFrame(rafId);
     window.removeEventListener('resize', resize);
-    offTick(); offEmoji(); offEnd();
+    offTick(); offSync(); offEmoji(); offEnd();
   }
   onLeave(cleanup);
 }

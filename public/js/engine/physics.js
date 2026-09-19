@@ -20,6 +20,7 @@ const BALL_RESTITUTION = 0.96;
 const CUE_FOLLOW = 0.16;        // rolling cue ball keeps a little forward momentum
 const MAX_SHOT_SPEED = 1100;
 const SUBSTEP = 1 / 240;        // fixed timestep: fast balls can't tunnel through each other
+const RESPAWN_SUBSTEPS = 108;   // ~0.45s before a scratched cue ball returns
 
 export function pocketPositions() {
   const x0 = CUSHION, x1 = TABLE_W - CUSHION;
@@ -112,8 +113,9 @@ export class Table {
     // forgiving pocket mouth and a shot-speed multiplier.
     this.pocketForgiveness = 1 + (cueBonuses.aimBonus || 0) / 100 * 0.15;
     this.powerMult = 1 + (cueBonuses.powerBonus || 0) / 100 * 0.3;
-    this.cueRespawnAt = 0;
+    this.cueRespawnIn = 0;   // substeps until the cue ball comes back after a scratch
     this.cueSpin = { x: 0, y: 0 };
+    this._acc = 0;
     this.reset();
   }
 
@@ -148,7 +150,7 @@ export class Table {
   }
 
   isAllStopped() {
-    if (this.cueRespawnAt) return false;
+    if (this.cueRespawnIn > 0) return false;
     return this.balls.every(b => !b.active || b.speed === 0);
   }
 
@@ -164,23 +166,49 @@ export class Table {
     return true;
   }
 
+  // Every substep is exactly SUBSTEP long and leftover time is carried, so the same
+  // starting state and the same shot always produce the same result no matter what
+  // frame rate fed the simulation. That is what lets the server replay a client's
+  // shot and get an identical outcome.
   step(dt) {
-    if (this.cueRespawnAt && Date.now() >= this.cueRespawnAt) {
-      this.cueRespawnAt = 0;
+    this._acc += Math.min(Math.max(dt, 0), 0.25);
+    let guard = 0;
+    while (this._acc >= SUBSTEP && guard++ < 800) {
+      this._substep(SUBSTEP);
+      this._acc -= SUBSTEP;
+    }
+  }
+
+  // A snapshot carries raw doubles: JSON round-trips them exactly, so a client
+  // restored from one simulates bit-identically to the server.
+  snapshot() {
+    return {
+      balls: this.balls.map(b => ({
+        n: b.number, cue: b.isCue, active: b.active, x: b.x, y: b.y,
+      })),
+      respawnIn: this.cueRespawnIn,
+    };
+  }
+
+  applySnapshot(snap) {
+    if (!snap?.balls) return;
+    this.balls = snap.balls.map(s => {
+      const ball = new Ball(s.n, s.x, s.y, s.cue);
+      ball.active = s.active;
+      return ball;
+    });
+    this.cue = this.balls.find(b => b.isCue) || this.balls[0];
+    this.cueRespawnIn = snap.respawnIn || 0;
+    this._acc = 0;
+  }
+
+  _substep(h) {
+    if (this.cueRespawnIn > 0 && --this.cueRespawnIn === 0) {
       this.cue.active = true;
       this.cue.x = TABLE_W / 2;
       this.cue.y = TABLE_H - 90;
       this.cue.vx = this.cue.vy = 0;
     }
-    let remaining = Math.min(dt, 0.05);
-    while (remaining > 0) {
-      const h = Math.min(SUBSTEP, remaining);
-      this._substep(h);
-      remaining -= h;
-    }
-  }
-
-  _substep(h) {
     for (const b of this.balls) {
       if (!b.active) continue;
       const sp = b.speed;
@@ -275,7 +303,7 @@ export class Table {
         b.active = false;
         b.vx = b.vy = 0;
         if (b.isCue) {
-          this.cueRespawnAt = Date.now() + 450;
+          this.cueRespawnIn = RESPAWN_SUBSTEPS;
           this.onScratch?.();
         } else {
           this.onPot?.(b.number);
