@@ -1,7 +1,7 @@
 // The leaderboard screen has always shown a Friday countdown and prize amounts.
 // This checks the job behind them: who gets paid, how much, and that the season
 // actually rolls over.
-import { db, createGuestUser, allUsers } from './server/store.js';
+import { db, createAccount, allUsers } from './server/store.js';
 import { payoutAndReset, nextResetAt, runWeeklyResetIfDue } from './server/game/weekly.js';
 import { weeklyPrizes } from './server/data/stars.js';
 
@@ -24,14 +24,14 @@ check('next reset from Friday morning is the following Friday',
 const stamp = Date.now();
 const players = [];
 for (let i = 0; i < 5; i++) {
-  const u = createGuestUser({ nickname: `Weekly${stamp}_${i}`, avatarId: 0, country: 'INT' });
+  const u = createAccount({ nickname: `Weekly${stamp}_${i}`, avatarId: 0, country: 'INT' });
   u.starId = 3;                     // all in the Gold tier
   u.weeklyCoins = (5 - i) * 1000;   // #0 highest, #4 lowest
   u.coins = 0;
   players.push(u);
 }
 // somebody in a different tier, to prove tiers are paid independently
-const other = createGuestUser({ nickname: `WeeklyOther${stamp}`, avatarId: 0, country: 'INT' });
+const other = createAccount({ nickname: `WeeklyOther${stamp}`, avatarId: 0, country: 'INT' });
 other.starId = 7;
 other.weeklyCoins = 50;
 other.coins = 0;

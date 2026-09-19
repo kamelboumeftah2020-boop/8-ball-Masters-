@@ -58,6 +58,26 @@ the strike, the last five seconds, coins and the win/lose stings. A quiet chord
 bed plays in the menus and steps aside during a match. It all follows the
 player's sound setting.
 
+## The look
+
+One palette drives every screen, defined as CSS custom properties at the top of
+`public/css/style.css`:
+
+- A violet night background with three slow-drifting colour blobs behind
+  everything, so no screen is a flat dark rectangle.
+- Cyan, magenta, violet, lime and amber as the accents. Amber is reserved for
+  coins and prizes, where it means money; everything else rotates by hue - the
+  five nav tabs each own a colour, the ten tables each own a colour (that colour
+  is also the piping, pocket rims and diamonds on that table in-game), and the
+  coin packages step through the palette as they get bigger.
+- Glass surfaces: translucent panels with a blur behind them, a light hairline
+  border and a highlight along the top edge.
+- The one thing deliberately left realistic is the table itself - cloth, wood,
+  pockets and balls are drawn to look like a real table, not a neon one.
+
+Changing the whole scheme means editing the tokens in `:root`; nothing else
+hard-codes a colour except the table felts in `server/data/tables.js`.
+
 ## Signing in
 
 There is no password and no third-party login: a player is their username.

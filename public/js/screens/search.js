@@ -10,7 +10,7 @@ export function render(root, { tableId }) {
     <div class="search-screen">
       <div class="radar">
         <div class="ring"></div><div class="ring"></div><div class="ring"></div>
-        <div class="avatar lg" style="background:linear-gradient(135deg, ${table.colors.rail}, ${table.colors.felt})">🎱</div>
+        <div class="avatar lg search-orb" style="--orb:${table.colors.accent}; background:radial-gradient(circle at 34% 26%, color-mix(in srgb, var(--orb) 72%, white), var(--orb) 58%, #1a0d3a 100%)">🎱</div>
       </div>
       <div class="center">
         <h2>${t('searchingOpponent')}</h2>

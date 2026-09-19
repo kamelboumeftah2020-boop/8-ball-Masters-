@@ -133,13 +133,22 @@ export async function render(root, { payload }) {
     const canvas = document.createElement('canvas');
     canvas.width = 600; canvas.height = 800;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0b0b0f'; ctx.fillRect(0, 0, 600, 800);
-    ctx.fillStyle = '#ffd447'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+    // same aurora the app wears, so a shared card still looks like the game
+    const bg = ctx.createLinearGradient(0, 0, 600, 800);
+    bg.addColorStop(0, '#2a1258'); bg.addColorStop(0.55, '#150a2e'); bg.addColorStop(1, '#0a0617');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, 600, 800);
+    const glow = ctx.createRadialGradient(300, 180, 20, 300, 180, 380);
+    glow.addColorStop(0, 'rgba(244,63,142,0.35)'); glow.addColorStop(1, 'rgba(244,63,142,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, 600, 800);
+
+    const title = ctx.createLinearGradient(120, 0, 480, 0);
+    title.addColorStop(0, '#ff4d94'); title.addColorStop(0.5, '#b9a5ff'); title.addColorStop(1, '#8ef0ff');
+    ctx.fillStyle = title; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('8 Ball Masters', 300, 100);
-    ctx.fillStyle = r.won ? '#ffd447' : '#9a97a8';
+    ctx.fillStyle = r.won ? '#ffc93c' : '#ac9fd4';
     ctx.font = 'bold 60px sans-serif';
     ctx.fillText(r.won ? t('youWin') : t('youLose'), 300, 220);
-    ctx.fillStyle = '#f2f0ea'; ctx.font = '28px sans-serif';
+    ctx.fillStyle = '#f7f4ff'; ctx.font = '28px sans-serif';
     ctx.fillText(`${state.user.nickname}`, 300, 300);
     ctx.fillText(`${r.coinsDelta >= 0 ? '+' : ''}${r.coinsDelta} coins`, 300, 350);
     ctx.fillText(`${payload.table?.name || ''}`, 300, 400);
