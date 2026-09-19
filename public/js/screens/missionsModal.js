@@ -36,7 +36,7 @@ export async function openMissionsModal(onChange) {
         root.querySelectorAll('[data-claim]').forEach(btn => {
           btn.onclick = async () => {
             try {
-              const { user, reward } = await api.post('/missions/claim', { userId: state.user.id, missionKey: btn.dataset.claim });
+              const { user, reward } = await api.post('/missions/claim', { missionKey: btn.dataset.claim });
               setUser(user);
               audio.coin();
               toast(`+${reward} 🪙`);

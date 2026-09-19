@@ -15,7 +15,7 @@ const STYLE_ICONS = {
 export async function render(root) {
   draw();
   try {
-    const { tables } = await api.get(`/tables?userId=${state.user.id}`);
+    const { tables } = await api.get('/tables');
     state.tables = tables;
     draw();
   } catch (e) { console.error(e); }
@@ -73,7 +73,7 @@ export async function render(root) {
 
   async function claimDailyBox() {
     try {
-      const { user, reward } = await api.post('/dailybox/claim', { userId: state.user.id });
+      const { user, reward } = await api.post('/dailybox/claim');
       setUser(user);
       audio.coin();
       toast(`+${reward} 🪙`);

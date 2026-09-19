@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   db, getUser, createGuestUser, findByNickname, persist,
   createInvite, addReport, ensureFreshMissions, cueById, avatarById, allUsers,
+  issueToken, userByToken,
 } from '../store.js';
 import { TABLES, getTable } from '../data/tables.js';
 import { CUES } from '../data/cues.js';
@@ -21,12 +22,29 @@ const LANGS = ['en', 'ar', 'fr', 'de', 'es', 'tr'];
 
 export const api = Router();
 
-function requireUser(req, res, idField = 'userId') {
-  const id = req.body?.[idField] || req.params?.[idField] || req.query?.[idField];
-  const user = getUser(id);
-  if (!user) { res.status(404).json({ error: 'user_not_found' }); return null; }
+// Resolves the caller from their bearer token. Anything that reads or changes an
+// account goes through here - a userId in the request body is never trusted.
+api.use((req, res, next) => {
+  const header = req.get('authorization') || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  req.authUser = userByToken(token);
+  if (req.authUser) req.authUser.lastSeenAt = Date.now();
+  next();
+});
+
+function requireUser(req, res) {
+  const user = req.authUser;
+  if (!user) { res.status(401).json({ error: 'unauthenticated' }); return null; }
   if (user.banned) { res.status(403).json({ error: 'banned', reason: user.banReason }); return null; }
-  user.lastSeenAt = Date.now();
+  return user;
+}
+
+// For endpoints that name a user in the path: you may only ask about yourself.
+function requireSelf(req, res) {
+  const user = requireUser(req, res);
+  if (!user) return null;
+  const asked = req.params.userId;
+  if (asked && asked !== user.id) { res.status(403).json({ error: 'forbidden' }); return null; }
   return user;
 }
 
@@ -37,14 +55,14 @@ api.post('/auth/guest', (req, res) => {
   if (!clean || clean.length < 3) return res.status(400).json({ error: 'invalid_nickname' });
   if (findByNickname(clean)) return res.status(409).json({ error: 'nickname_taken' });
   const user = createGuestUser({ nickname: clean, avatarId, country: country || 'INT' });
-  res.json({ user: privateUserDto(user) });
+  res.json({ user: privateUserDto(user), token: issueToken(user) });
 });
 
-api.get('/session/:userId', (req, res) => {
-  const user = getUser(req.params.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+// Resume a stored session. The token is the credential; nothing is looked up by ID.
+api.get('/session', (req, res) => {
+  const user = req.authUser;
+  if (!user) return res.status(401).json({ error: 'unauthenticated' });
   if (user.banned) return res.status(403).json({ error: 'banned', reason: user.banReason });
-  user.lastSeenAt = Date.now();
   ensureFreshMissions(user);
   res.json({ user: privateUserDto(user) });
 });
@@ -88,7 +106,7 @@ api.get('/i18n', (req, res) => res.json({ languages: LANGS }));
 
 // ---------- Catalogs ----------
 api.get('/tables', (req, res) => {
-  const user = req.query.userId ? getUser(req.query.userId) : null;
+  const user = req.authUser;
   res.json({
     tables: TABLES.map(t => ({ ...tableDto(t, user), onlineCount: simulatedOnline(t.id) })),
   });
@@ -109,8 +127,7 @@ api.get('/stars', (req, res) => res.json({ stars: STARS }));
 
 // ---------- Profile ----------
 api.get('/me/:userId', (req, res) => {
-  const user = getUser(req.params.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const user = requireSelf(req, res); if (!user) return;
   res.json({ user: privateUserDto(user) });
 });
 
@@ -194,8 +211,7 @@ api.post('/shop/buy-coins', (req, res) => {
 
 // ---------- Missions / Daily Box / Loss boxes ----------
 api.get('/missions/:userId', (req, res) => {
-  const user = getUser(req.params.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const user = requireSelf(req, res); if (!user) return;
   ensureFreshMissions(user);
   res.json({ missions: user.missions });
 });
@@ -239,7 +255,7 @@ api.post('/lossboxes/claim', (req, res) => {
 
 // ---------- Leaderboard ----------
 api.get('/leaderboard/global', (req, res) => {
-  const user = getUser(req.query.userId);
+  const user = req.authUser;
   const starId = Number(req.query.starId) || user?.starId || 1;
   const rows = allUsers()
     .filter(u => u.starId === starId && !u.banned)
@@ -250,7 +266,7 @@ api.get('/leaderboard/global', (req, res) => {
 });
 
 api.get('/leaderboard/local', (req, res) => {
-  const user = getUser(req.query.userId);
+  const user = req.authUser;
   const country = req.query.country || user?.country || 'INT';
   const rows = allUsers()
     .filter(u => u.country === country && !u.banned)
@@ -261,8 +277,7 @@ api.get('/leaderboard/local', (req, res) => {
 });
 
 api.get('/leaderboard/friends', (req, res) => {
-  const user = getUser(req.query.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const user = requireUser(req, res); if (!user) return;
   const rows = [user, ...user.friends.map(getUser).filter(Boolean)]
     .sort((a, b) => b.careerCoinsWon - a.careerCoinsWon)
     .map((u, i) => ({ rank: i + 1, userId: u.id, nickname: u.nickname, avatarId: u.avatarId, coins: u.careerCoinsWon, isMe: u.id === user.id }));
@@ -280,8 +295,7 @@ function nextFridayMidnight() {
 
 // ---------- Friends ----------
 api.get('/friends/:userId', (req, res) => {
-  const user = getUser(req.params.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const user = requireSelf(req, res); if (!user) return;
   const list = user.friends.map(getUser).filter(Boolean).map(u => ({
     id: u.id, nickname: u.nickname, avatarId: u.avatarId,
     online: Date.now() - u.lastSeenAt < 60_000,
@@ -325,8 +339,7 @@ api.get('/invite/:code', (req, res) => {
 
 // ---------- Notifications ----------
 api.get('/notifications/:userId', (req, res) => {
-  const user = getUser(req.params.userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  const user = requireSelf(req, res); if (!user) return;
   res.json({ notifications: user.notifications || [] });
 });
 

@@ -40,15 +40,15 @@ export async function render(root) {
     const content = document.getElementById('lb-content');
     if (!content) return;
     if (tab === 'global') {
-      const data = await api.get(`/leaderboard/global?userId=${state.user.id}&starId=${starId}`);
+      const data = await api.get(`/leaderboard/global?starId=${starId}`);
       stars = data.stars;
       content.innerHTML = globalHtml(data);
       wireStarChips(content);
     } else if (tab === 'local') {
-      const data = await api.get(`/leaderboard/local?userId=${state.user.id}`);
+      const data = await api.get('/leaderboard/local');
       content.innerHTML = rowsHtml(data.rows);
     } else {
-      const data = await api.get(`/leaderboard/friends?userId=${state.user.id}`);
+      const data = await api.get('/leaderboard/friends');
       content.innerHTML = rowsHtml(data.rows, true);
     }
   }

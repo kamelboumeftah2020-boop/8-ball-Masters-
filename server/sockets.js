@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getUser, persist } from './store.js';
+import { getUser, persist, userByToken } from './store.js';
 import { getTable } from './data/tables.js';
 import { levelFromXp } from './util/econ.js';
 import {
@@ -20,9 +20,10 @@ export function initSockets(io) {
   initMatchEngine(io);
 
   io.on('connection', (socket) => {
-    socket.on('identify', ({ userId }) => {
-      const user = getUser(userId);
-      if (!user || user.banned) return;
+    socket.on('identify', ({ token }) => {
+      const user = userByToken(token);
+      if (!user || user.banned) { socket.emit('auth_error', { error: 'unauthenticated' }); return; }
+      const userId = user.id;
       socketUser.set(socket.id, userId);
       socket.join(`user:${userId}`);
       if (!presence.has(userId)) presence.set(userId, new Set());

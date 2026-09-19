@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, setToken } from '../api.js';
 import { state, setUser } from '../state.js';
 import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
@@ -81,7 +81,8 @@ export function render(root, params = {}) {
 
   async function createAccount() {
     try {
-      const { user } = await api.post('/auth/guest', { nickname, avatarId, country: 'INT' });
+      const { user, token } = await api.post('/auth/guest', { nickname, avatarId, country: 'INT' });
+      setToken(token);
       setUser(user);
       audio.setEnabled(user.settings.sound);
       audio.unlock();
@@ -89,7 +90,7 @@ export function render(root, params = {}) {
       connectSocket();
       identify();
       if (inviteInfo?.fromUserId) {
-        api.post('/friends/add', { userId: user.id, friendId: inviteInfo.fromUserId }).catch(() => {});
+        api.post('/friends/add', { friendId: inviteInfo.fromUserId }).catch(() => {});
       }
       showGift();
     } catch (e) {

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { genNumericId } from './util/econ.js';
 import { CUES } from './data/cues.js';
@@ -33,6 +34,38 @@ export function persist() {
 
 export function getUser(id) {
   return db.users[id];
+}
+
+/* ----------------------------------------------------------------- sessions
+   A player's 8-digit ID is public - it is printed on their profile with a copy
+   button - so it can never be what proves who you are. Every account action is
+   authorised by a secret session token instead. Only the token's hash is stored,
+   so a leaked database still cannot be used to act as anyone.
+*/
+const tokenIndex = new Map(); // sha256(token) -> userId
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+// rebuild the lookup index for accounts loaded from disk
+for (const user of Object.values(db.users)) {
+  if (user.tokenHash) tokenIndex.set(user.tokenHash, user.id);
+}
+
+export function issueToken(user) {
+  if (user.tokenHash) tokenIndex.delete(user.tokenHash);
+  const token = crypto.randomBytes(32).toString('base64url');
+  user.tokenHash = hashToken(token);
+  tokenIndex.set(user.tokenHash, user.id);
+  persist();
+  return token;
+}
+
+export function userByToken(token) {
+  if (!token) return null;
+  const id = tokenIndex.get(hashToken(token));
+  return id ? db.users[id] : null;
 }
 
 export function findByNickname(nick) {

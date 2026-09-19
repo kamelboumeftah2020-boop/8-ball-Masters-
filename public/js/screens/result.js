@@ -81,7 +81,7 @@ export async function render(root, { payload }) {
   async function claimLossBox() {
     const box = state.user.lossBoxes.filter(b => !b.opened).slice(-1)[0];
     try {
-      const { user, reward } = await api.post('/lossboxes/claim', { userId: state.user.id, boxId: box.id });
+      const { user, reward } = await api.post('/lossboxes/claim', { boxId: box.id });
       setUser(user);
       audio.coin();
       toast(`+${reward} 🪙`);

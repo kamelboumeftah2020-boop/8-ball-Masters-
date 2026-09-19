@@ -1,4 +1,5 @@
 import { state } from '../state.js';
+import { getToken } from '../api.js';
 
 export const bus = new EventTarget();
 
@@ -10,7 +11,7 @@ export function connectSocket() {
   state.socket = socket;
 
   socket.on('connect', () => {
-    if (state.user) socket.emit('identify', { userId: state.user.id });
+    if (getToken()) socket.emit('identify', { token: getToken() });
   });
 
   const forward = (event) => socket.on(event, (payload) => {
@@ -26,7 +27,7 @@ export function connectSocket() {
 }
 
 export function identify() {
-  if (socket && state.user) socket.emit('identify', { userId: state.user.id });
+  if (socket && getToken()) socket.emit('identify', { token: getToken() });
 }
 
 export function on(event, handler) {

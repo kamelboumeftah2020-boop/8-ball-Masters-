@@ -75,7 +75,7 @@ export function render(root) {
 
   async function save(patch) {
     try {
-      const { user } = await api.put('/settings', { userId: state.user.id, ...patch });
+      const { user } = await api.put('/settings', patch);
       setUser(user);
     } catch { toast('Could not save setting'); }
   }

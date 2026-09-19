@@ -82,7 +82,7 @@ export async function render(root, params = {}) {
     root.querySelectorAll('[data-buy-coin]').forEach(btn => {
       btn.addEventListener('click', async () => {
         try {
-          const { user, coinsGranted, firstPurchaseBonus } = await api.post('/shop/buy-coins', { userId: state.user.id, packageId: btn.dataset.buyCoin });
+          const { user, coinsGranted, firstPurchaseBonus } = await api.post('/shop/buy-coins', { packageId: btn.dataset.buyCoin });
           setUser(user);
           toast(`+${coinsGranted.toLocaleString()} 🪙${firstPurchaseBonus ? ' (x2!)' : ''}`);
           draw();
@@ -95,7 +95,7 @@ export async function render(root, params = {}) {
         try {
           const path = kind === 'cue' ? '/shop/buy-cue' : '/shop/buy-avatar';
           const field = kind === 'cue' ? 'cueId' : 'avatarId';
-          const { user } = await api.post(path, { userId: state.user.id, [field]: Number(id) });
+          const { user } = await api.post(path, { [field]: Number(id) });
           setUser(user);
           toast('Purchased!');
           draw();
@@ -109,7 +109,7 @@ export async function render(root, params = {}) {
         const [kind, id] = btn.dataset.equip.split(':');
         const path = kind === 'cue' ? '/shop/equip-cue' : '/shop/equip-avatar';
         const field = kind === 'cue' ? 'cueId' : 'avatarId';
-        const { user } = await api.post(path, { userId: state.user.id, [field]: Number(id) });
+        const { user } = await api.post(path, { [field]: Number(id) });
         setUser(user);
         draw();
       });

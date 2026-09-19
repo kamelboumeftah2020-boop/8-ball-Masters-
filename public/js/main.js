@@ -1,5 +1,5 @@
-import { api } from './api.js';
-import { state, setUser, getSavedUserId } from './state.js';
+import { api, getToken, setToken } from './api.js';
+import { state, setUser } from './state.js';
 import { loadLang, preferredLang } from './i18n.js';
 import { registerScreens, navigate } from './router.js';
 import { connectSocket, identify } from './net/socket.js';
@@ -47,10 +47,9 @@ async function boot() {
   await loadLang(preferredLang());
   try { await loadCatalogs(); } catch (e) { console.error('catalog load failed', e); }
 
-  const savedId = getSavedUserId();
-  if (savedId) {
+  if (getToken()) {
     try {
-      const { user } = await api.get(`/session/${savedId}`);
+      const { user } = await api.get('/session');
       setUser(user);
       audio.setEnabled(user.settings.sound);
       await loadLang(user.settings.lang);
@@ -63,7 +62,8 @@ async function boot() {
         navigate('banned', { reason: e.data?.reason });
         return;
       }
-      // fall through to onboarding for 404 / network errors
+      // 401 means the stored token is stale - start fresh
+      if (e.status === 401) setToken(null);
     }
   }
   navigate('onboarding', { invite });

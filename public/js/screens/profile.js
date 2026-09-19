@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, setToken } from '../api.js';
 import { state, setUser } from '../state.js';
 import { t } from '../i18n.js';
 import { navigate } from '../router.js';
@@ -73,6 +73,7 @@ export async function render(root, params = {}) {
       root.querySelector('#edit-nick').onclick = editNickname;
       root.querySelector('#invite-friend').onclick = inviteFriend;
       root.querySelector('#logout').onclick = () => {
+        setToken(null);
         try { localStorage.removeItem('bm_userId'); } catch {}
         location.reload();
       };
@@ -86,7 +87,7 @@ export async function render(root, params = {}) {
     const val = prompt(t('enterNickname'), profile.nickname);
     if (!val || val.trim().length < 3) return;
     try {
-      const { user } = await api.put('/nickname', { userId: state.user.id, nickname: val.trim() });
+      const { user } = await api.put('/nickname', { nickname: val.trim() });
       setUser(user);
       profile = user;
       draw();
@@ -97,7 +98,7 @@ export async function render(root, params = {}) {
 
   async function inviteFriend() {
     try {
-      const { url } = await api.post('/invite/create', { userId: state.user.id });
+      const { url } = await api.post('/invite/create');
       navigator.clipboard?.writeText(url).catch(() => {});
       toast(`${t('copyLink')}: ${url}`);
     } catch { toast('Could not create link'); }
@@ -105,14 +106,14 @@ export async function render(root, params = {}) {
 
   async function addFriend() {
     try {
-      await api.post('/friends/add', { userId: state.user.id, friendId: profile.id });
+      await api.post('/friends/add', { friendId: profile.id });
       toast('Friend added!');
     } catch { toast('Could not add friend'); }
   }
 
   async function reportUser() {
     try {
-      await api.post('/report', { userId: state.user.id, targetId: profile.id, reason: 'reported from profile' });
+      await api.post('/report', { targetId: profile.id, reason: 'reported from profile' });
       toast('Report submitted');
     } catch { toast('Could not report'); }
   }
