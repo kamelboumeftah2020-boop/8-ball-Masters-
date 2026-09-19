@@ -24,7 +24,7 @@ export function render(root, params = {}) {
   function drawLogin() {
     root.innerHTML = `
       <div class="onboarding">
-        <div class="logo-ball"><div class="inner">8</div></div>
+        <div class="logo-ball"><div class="inner"><div class="badge">8</div></div></div>
         <div>
           <div class="app-title">${t('appName')}</div>
           <div class="app-tagline">${t('tagline')}</div>
@@ -43,7 +43,7 @@ export function render(root, params = {}) {
   function drawNickname() {
     root.innerHTML = `
       <div class="onboarding">
-        <div class="logo-ball" style="width:70px;height:70px;"><div class="inner" style="width:32px;height:32px;font-size:15px;">8</div></div>
+        <div class="logo-ball" style="width:74px;height:74px;"><div class="inner"><div class="badge" style="width:34px;height:34px;font-size:16px;">8</div></div></div>
         <h2>${t('enterNickname')}</h2>
         <input class="text-input" id="nick" maxlength="18" placeholder="${t('nicknamePlaceholder')}" value="${nickname}" />
         <button class="btn primary block" id="next" style="max-width:320px;">${t('confirm')}</button>

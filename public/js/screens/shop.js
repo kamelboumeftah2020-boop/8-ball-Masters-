@@ -6,6 +6,13 @@ import { topbarHtml, wireTopbar, bottomNavHtml, wireBottomNav } from './chrome.j
 
 const CAT_ICON = { wood: '🪵', flag: '🏁', dragon: '🐉', galaxy: '🌌', laser: '⚡', gold: '🥇', special: '✨' };
 
+function avatarRarity(price) {
+  if (price >= 80000) return 'legendary';
+  if (price >= 25000) return 'epic';
+  if (price >= 8000) return 'rare';
+  return 'common';
+}
+
 export async function render(root, params = {}) {
   let tab = params.tab || 'coins';
   let packages = [];
@@ -61,8 +68,9 @@ export async function render(root, params = {}) {
       else if (owned) btnHtml = `<button class="btn sm gold price-btn" data-equip="${kind}:${item.id}">${t('equip')}</button>`;
       else if (!lvlOk) btnHtml = `<button class="btn sm ghost price-btn" disabled>LVL ${item.unlockLvl}</button>`;
       else btnHtml = `<button class="btn sm gold price-btn" data-buy="${kind}:${item.id}">🪙 ${item.price === 0 ? t('claim') : formatCoins(item.price)}</button>`;
+      const rarity = kind === 'cue' ? item.rarity : avatarRarity(item.price);
       return `
-        <div class="item-card" style="${item.gradient ? `background:linear-gradient(135deg, ${item.gradient[0]}22, ${item.gradient[1]}22);` : ''}">
+        <div class="item-card rarity-${rarity}" style="${item.gradient ? `background-image:linear-gradient(135deg, ${item.gradient[0]}30, ${item.gradient[1]}30), linear-gradient(160deg, var(--card-2), var(--card));` : ''}">
           <div class="glyph">${glyph}</div>
           <div class="nm">${item.name || ''}</div>
           ${kind === 'cue' ? `<div class="stats">+${item.bonuses.startBonus}s · 🎯+${item.bonuses.aimBonus}% · 💪+${item.bonuses.powerBonus}%</div>` : ''}

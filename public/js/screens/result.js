@@ -18,7 +18,7 @@ export async function render(root, { payload }) {
 
   function draw() {
     root.innerHTML = `
-      <div class="result-screen">
+      <div class="result-screen ${r.won ? 'win-bg' : ''}">
         <div class="result-title ${r.won ? 'win' : 'lose'}">${r.won ? '🏆 ' + t('youWin') : t('youLose')}</div>
         ${!r.won && r.nearMiss ? `
           <div class="card" style="max-width:320px;">

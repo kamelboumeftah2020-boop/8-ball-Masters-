@@ -53,16 +53,18 @@ export async function render(root) {
   function tableCard(table) {
     const g = table.colors;
     return `
-      <div class="table-card ${table.locked ? 'locked' : ''}" style="background:linear-gradient(135deg, ${g.felt}, ${g.rail}); border-color:${g.accent}55;">
-        <div class="thumb" style="background:${g.accent};">${STYLE_ICONS[table.style] || '🎱'}</div>
+      <div class="table-card ${table.locked ? 'locked' : ''}" style="--tc-felt:${g.felt}; --tc-rail:${g.rail}; --tc-accent:${g.accent};">
+        <div class="thumb">${STYLE_ICONS[table.style] || '🎱'}</div>
         <div class="meta">
           <div class="name">${table.name}</div>
-          <div class="sub">${t('entryFee')}: 🪙 ${formatCoins(table.entry)} · XP ${formatCoins(table.xp)}</div>
-          <div class="online">● ${table.onlineCount.toLocaleString()} ${t('online')}</div>
+          ${table.locked ? '' : `
+            <div class="sub">${t('entryFee')}: 🪙 ${formatCoins(table.entry)} · XP ${formatCoins(table.xp)}</div>
+            <div class="online"><span class="dot"></span> ${table.onlineCount.toLocaleString()} ${t('online')}</div>
+          `}
         </div>
         ${table.locked
-          ? `<div class="lock-badge">🔒 ${t('unlockAtLevel', { lvl: table.unlockLvl })}</div>`
-          : `<button class="btn sm gold" data-play="${table.id}">${t('playNow')}</button>`}
+          ? `<div class="lock-badge"><span class="lock-ic">🔒</span>${t('unlockAtLevel', { lvl: table.unlockLvl })}</div>`
+          : `<button class="play-btn" data-play="${table.id}">▶</button>`}
       </div>`;
   }
 
