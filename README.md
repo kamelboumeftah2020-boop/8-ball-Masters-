@@ -8,7 +8,7 @@ Built from the full GDD (`8 BALL MASTERS V4.1 FINAL` + the V0.5 vertical-layout 
 npm install
 npm start
 # open http://localhost:3000
-# admin dashboard: http://localhost:3000/admin  (token: admin123, override with ADMIN_TOKEN env var)
+# admin dashboard: http://localhost:3000/admin  (token: set ADMIN_TOKEN, or copy the random one the server prints at startup)
 ```
 
 No build step. Plain ES modules on both client and server, Socket.IO for realtime,
@@ -109,7 +109,15 @@ on the sign-in screen clears the PIN, signs you in, and burns the code. It has i
 own lockout, so an attacker hammering the PIN cannot lock out the person who
 actually holds the code.
 
-One more limit: names are unique and permanent, so bulk registration is the cheap
+Two more limits guard the things that get an account taken away. Five reports
+temp-ban an account and three temp-bans ban it for good, so the report button
+would be a weapon if one person could pull it five times: only the first report
+one player files against a target counts, nobody can report themselves, and each
+player gets five reports a day. And the admin dashboard bans and unbans accounts,
+so it never ships with a token anyone could guess - without `ADMIN_TOKEN` the
+server mints a random one at startup and prints it once.
+
+Names are unique and permanent, so bulk registration is the cheap
 way to ruin the namespace. One address may open 20 accounts an hour
 (`SIGNUP_LIMIT_PER_HOUR`); loopback is exempt, so the dev server and the test
 suites are never throttled.
@@ -134,7 +142,8 @@ suites are never throttled.
   case and stray spaces), that a known name returns you to your own account with
   your progress, that an unknown one cannot sign in, the whole optional-PIN
   behaviour, the guessing lockout, recovery codes (issued once, usable once, and
-  still usable while the PIN is locked), and the signup rate limiter.
+  still usable while the PIN is locked), the signup rate limiter, the report-abuse
+  guards, and that the admin dashboard refuses a guessable token.
   (Start the server first.)
 - `npm run test:signin` — walks the sign-in screen itself in a real browser: a new
   name opens an account, the same name from a clean browser comes back to it, a PIN
@@ -165,6 +174,8 @@ All six run on every push and pull request via `.github/workflows/ci.yml`.
 | Anti-cheat: server deals the layout, simulates every shot, and owns time, coins and queue length | ✅ |
 | Session tokens (a public profile ID can't act on an account) | ✅ |
 | PIN guessing lockout, one-time recovery codes, signup rate limit | ✅ |
+| Report abuse guards: unique reporters only, daily cap, no self-reports | ✅ |
+| Admin dashboard token is random per run unless `ADMIN_TOKEN` is set | ✅ |
 | Reconnect into a match after dropping out | ✅ |
 | Auto temp-ban at 5 reports, permanent ban after 3 temp-bans | ✅ |
 

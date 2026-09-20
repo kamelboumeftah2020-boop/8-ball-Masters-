@@ -1,14 +1,23 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { db, getUser, allUsers, persist } from '../store.js';
 import { levelFromXp } from '../util/econ.js';
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin123';
+// This dashboard bans and unbans accounts, so it must never ship with a token
+// anyone could guess - a deployment that forgets to set one would hand it to the
+// first person who tries. Without ADMIN_TOKEN a random one is minted at startup
+// and printed to the console once, which keeps local development a copy-paste
+// away while leaving nothing to guess.
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || crypto.randomBytes(16).toString('base64url');
+export const generatedAdminToken = process.env.ADMIN_TOKEN ? null : ADMIN_TOKEN;
 
 export const admin = Router();
 
 function checkAuth(req, res, next) {
-  const token = req.headers['x-admin-token'] || req.query.token;
-  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  const given = Buffer.from(String(req.headers['x-admin-token'] || req.query.token || ''));
+  const known = Buffer.from(ADMIN_TOKEN);
+  const ok = given.length === known.length && crypto.timingSafeEqual(given, known);
+  if (!ok) return res.status(401).json({ error: 'unauthorized' });
   next();
 }
 

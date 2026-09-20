@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   db, getUser, createAccount, findByNickname, persist,
-  createInvite, addReport, ensureFreshMissions, cueById, avatarById, allUsers,
+  createInvite, addReport, reportStatus, ensureFreshMissions, cueById, avatarById, allUsers,
   issueToken, userByToken, setPin, hasPin, checkPin,
   checkRecoveryCode, issueRecoveryCode, lockRemaining, noteFailure, clearFailures,
 } from '../store.js';
@@ -249,6 +249,13 @@ api.post('/report', (req, res) => {
   const { targetId, reason } = req.body || {};
   const target = getUser(targetId);
   if (!target) return res.status(404).json({ error: 'target_not_found' });
+
+  // Reports get people banned, so one person cannot stack them.
+  const status = reportStatus(user, targetId);
+  if (status === 'self') return res.status(400).json({ error: 'cannot_report_self' });
+  if (status === 'duplicate') return res.json({ ok: true, alreadyReported: true });
+  if (status === 'rate_limited') return res.status(429).json({ error: 'too_many_reports' });
+
   addReport(targetId, user.id, reason || 'unspecified');
   res.json({ ok: true });
 });

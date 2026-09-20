@@ -150,5 +150,43 @@ clock = 1001;
 check('the window rolls over', limiter.take('a').allowed === true);
 check('the operator\'s own machine is never throttled', isLoopback('127.0.0.1') && isLoopback('::1'));
 
+// --- five reports ban an account, so it must take five different people ---
+const victim = await api('POST', '/auth/signup', { username: 'Victim' + (Date.now() % 100000) });
+const victimId = victim.body.user.id;
+const accuser = await api('POST', '/auth/signup', { username: 'Accuser' + (Date.now() % 100000) });
+
+const first = await api('POST', '/report', { targetId: victimId, reason: 'test' }, accuser.body.token);
+check('a report is accepted', first.status === 200 && !first.body.alreadyReported);
+const again = await api('POST', '/report', { targetId: victimId, reason: 'test' }, accuser.body.token);
+check('the same person reporting again does not count twice', again.body.alreadyReported === true);
+
+for (let i = 0; i < 4; i++) {
+  await api('POST', '/report', { targetId: victimId, reason: 'test' }, accuser.body.token);
+}
+const victimNow = await api('GET', `/me/${victimId}`, null, victim.body.token);
+check('one person cannot ban another on their own', victimNow.status === 200);
+check('and the account is still usable',
+  (await api('GET', '/session', null, victim.body.token)).status === 200);
+
+check('you cannot report yourself',
+  (await api('POST', '/report', { targetId: accuser.body.user.id }, accuser.body.token)).status === 400);
+
+// the daily cap: this account has one report on record, so four more reach it
+let capped = false;
+for (let i = 0; i < 8; i++) {
+  const other = await api('POST', '/auth/signup', { username: `Target${Date.now() % 100000}_${i}` });
+  const r = await api('POST', '/report', { targetId: other.body.user.id }, accuser.body.token);
+  if (r.status === 429) { capped = true; break; }
+}
+check('one account cannot file unlimited reports in a day', capped);
+
+// --- the ban/unban dashboard must not ship with a guessable token ---
+async function adminStatus(token) {
+  const res = await fetch(`${BASE}/api/admin/players${token ? `?token=${token}` : ''}`);
+  return res.status;
+}
+check('the admin dashboard refuses the old default token', await adminStatus('admin123') === 401);
+check('and refuses no token at all', await adminStatus() === 401);
+
 console.log(fails === 0 ? '\nAUTH OK' : `\n${fails} CHECK(S) FAILED`);
 process.exit(fails === 0 ? 0 : 1);

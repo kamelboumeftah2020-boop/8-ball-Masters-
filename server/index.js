@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 
 import { api } from './routes/api.js';
-import { admin } from './routes/admin.js';
+import { admin, generatedAdminToken } from './routes/admin.js';
 import { initSockets } from './sockets.js';
 import { allUsers, persist } from './store.js';
 import { runWeeklyResetIfDue } from './game/weekly.js';
@@ -60,5 +60,8 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   console.log(`8 Ball Masters server listening on http://localhost:${PORT}`);
-  console.log(`Admin dashboard at http://localhost:${PORT}/admin (token via ADMIN_TOKEN, default admin123)`);
+  console.log(`Admin dashboard at http://localhost:${PORT}/admin`);
+  if (generatedAdminToken) {
+    console.log(`  admin token for this run: ${generatedAdminToken}  (set ADMIN_TOKEN to keep one)`);
+  }
 });

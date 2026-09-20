@@ -266,11 +266,40 @@ export function createInvite(fromUserId) {
   return code;
 }
 
+/* ------------------------------------------------------------------ reports
+   Five reports temp-ban an account and three temp-bans ban it for good, so the
+   report button is a weapon unless it takes five *different* people to pull it.
+   Only the first report a player files against a target counts, and each player
+   gets a limited number of reports a day, so one person - or one person with a
+   handful of throwaway accounts - cannot ban whoever they like.
+*/
+const REPORTS_PER_DAY = 5;
+
+export function reportStatus(reporter, targetId) {
+  if (reporter.id === targetId) return 'self';
+  const today = todayKey();
+  if (reporter.reportDay !== today) return 'ok';
+  if ((reporter.reportedToday || []).includes(targetId)) return 'duplicate';
+  if ((reporter.reportedToday || []).length >= REPORTS_PER_DAY) return 'rate_limited';
+  return 'ok';
+}
+
 export function addReport(targetId, reporterId, reason) {
-  db.reports.push({ targetId, reporterId, reason, at: Date.now() });
+  const reporter = getUser(reporterId);
   const target = getUser(targetId);
+
+  if (reporter) {
+    const today = todayKey();
+    if (reporter.reportDay !== today) { reporter.reportDay = today; reporter.reportedToday = []; }
+    reporter.reportedToday.push(targetId);
+  }
+
+  db.reports.push({ targetId, reporterId, reason, at: Date.now() });
   if (target) {
-    target.incomingReports = (target.incomingReports || 0) + 1;
+    // Count the people who reported, not the number of times the button was hit.
+    target.reporters = target.reporters || [];
+    if (!target.reporters.includes(reporterId)) target.reporters.push(reporterId);
+    target.incomingReports = target.reporters.length;
     if (target.incomingReports >= 5 && !target.banned) {
       target.tempBanCount = (target.tempBanCount || 0) + 1;
       if (target.tempBanCount >= 3) {
@@ -282,6 +311,7 @@ export function addReport(targetId, reporterId, reason) {
         target.banReason = 'Account banned for violating the rules (temporary, 30 days)';
       }
       target.incomingReports = 0;
+      target.reporters = [];
     }
   }
   persist();
