@@ -1,7 +1,7 @@
 // End-to-end proof through the real UI: capture the layout the server sends, work
 // out a shot that pots a ball, aim and strike it with actual pointer input, and
 // confirm the server credits the pot back into the UI.
-import { chromium } from 'playwright';
+import { launchBrowser } from './browser.mjs';
 import { Table, TABLE_W, TABLE_H } from './public/js/engine/physics.js';
 
 const OUT = '/tmp/claude-0/-home-user-8-ball-Masters-/e015f5c8-e4c3-5c14-9783-0070dfa2f24f/scratchpad';
@@ -25,7 +25,7 @@ function findPottingShot(layout, bonuses) {
   return null;
 }
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: 2 });
 const errs = [];
 page.on('pageerror', e => errs.push('EXC: ' + e.message));

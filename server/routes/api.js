@@ -6,6 +6,7 @@ import {
   db, getUser, createAccount, findByNickname, persist,
   createInvite, addReport, ensureFreshMissions, cueById, avatarById, allUsers,
   issueToken, userByToken, setPin, hasPin, checkPin,
+  checkRecoveryCode, issueRecoveryCode, lockRemaining, noteFailure, clearFailures,
 } from '../store.js';
 import { TABLES, getTable } from '../data/tables.js';
 import { CUES } from '../data/cues.js';
@@ -15,7 +16,9 @@ import { STARS, weeklyPrizes } from '../data/stars.js';
 import { levelFromXp } from '../util/econ.js';
 import { privateUserDto, publicUserDto, tableDto } from '../util/dto.js';
 import { queueLength } from '../game/matchQueue.js';
+import { playersOnTable } from '../game/matchEngine.js';
 import { nextResetAt } from '../game/weekly.js';
+import { createRateLimiter, callerKey, isLoopback } from '../util/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const I18N_DIR = path.join(__dirname, '..', 'data', 'i18n');
@@ -67,14 +70,26 @@ api.post('/auth/check', (req, res) => {
   res.json({ exists: !!existing, needsPin: hasPin(existing) });
 });
 
+// Names are unique and permanent, so bulk registration is how you would ruin the
+// namespace. One address gets a generous but finite number of accounts per hour.
+const SIGNUP_LIMIT = Number(process.env.SIGNUP_LIMIT_PER_HOUR) || 20;
+const signupLimiter = createRateLimiter({ limit: SIGNUP_LIMIT, windowMs: 60 * 60 * 1000 });
+
 api.post('/auth/signup', (req, res) => {
   const name = cleanName(req.body?.username);
   const { avatarId, country, pin } = req.body || {};
   if (name.length < NAME_MIN) return res.status(400).json({ error: 'invalid_username' });
   if (findByNickname(name)) return res.status(409).json({ error: 'username_taken' });
+
+  const key = callerKey(req);
+  if (!isLoopback(key)) {
+    const { allowed, retryAfterMs } = signupLimiter.take(key);
+    if (!allowed) return res.status(429).json({ error: 'too_many_accounts', retryAfterMs });
+  }
+
   const user = createAccount({ nickname: name, avatarId, country: country || 'INT' });
-  if (pin) setPin(user, String(pin));
-  res.json({ user: privateUserDto(user), token: issueToken(user) });
+  const recoveryCode = pin ? setPin(user, String(pin)) : null;
+  res.json({ user: privateUserDto(user), token: issueToken(user), recoveryCode });
 });
 
 api.post('/auth/login', (req, res) => {
@@ -82,21 +97,73 @@ api.post('/auth/login', (req, res) => {
   const user = findByNickname(name);
   if (!user) return res.status(404).json({ error: 'no_such_username' });
   if (user.banned) return res.status(403).json({ error: 'banned', reason: user.banReason });
-  if (!checkPin(user, req.body?.pin)) return res.status(401).json({ error: 'wrong_pin' });
+
+  const locked = lockRemaining(user, 'pin');
+  if (locked > 0) return res.status(429).json({ error: 'too_many_tries', retryAfterMs: locked });
+
+  if (!checkPin(user, req.body?.pin)) {
+    const triesLeft = noteFailure(user, 'pin');
+    return res.status(401).json({ error: 'wrong_pin', triesLeft });
+  }
+  clearFailures(user, 'pin');
   ensureFreshMissions(user);
   res.json({ user: privateUserDto(user), token: issueToken(user) });
 });
 
 // Setting a PIN is how a player stops anyone else signing in as them, since a
-// username on its own is public.
+// username on its own is public. The reply carries the recovery code once and
+// never again - the server only keeps its hash.
 api.put('/auth/pin', (req, res) => {
   const user = requireUser(req, res); if (!user) return;
   const { pin, currentPin } = req.body || {};
-  if (!checkPin(user, currentPin)) return res.status(401).json({ error: 'wrong_pin' });
+
+  const locked = lockRemaining(user, 'pin');
+  if (locked > 0) return res.status(429).json({ error: 'too_many_tries', retryAfterMs: locked });
+  if (!checkPin(user, currentPin)) {
+    const triesLeft = noteFailure(user, 'pin');
+    return res.status(401).json({ error: 'wrong_pin', triesLeft });
+  }
+
   const next = pin === null || pin === '' ? null : String(pin);
   if (next && !/^\d{4,8}$/.test(next)) return res.status(400).json({ error: 'invalid_pin' });
-  setPin(user, next);
-  res.json({ ok: true, hasPin: hasPin(user) });
+  const recoveryCode = setPin(user, next);
+  res.json({ ok: true, hasPin: hasPin(user), recoveryCode });
+});
+
+// A new recovery code for a player who has lost theirs but still knows the PIN.
+api.post('/auth/recovery-code', (req, res) => {
+  const user = requireUser(req, res); if (!user) return;
+  if (!hasPin(user)) return res.status(400).json({ error: 'no_pin' });
+
+  const locked = lockRemaining(user, 'pin');
+  if (locked > 0) return res.status(429).json({ error: 'too_many_tries', retryAfterMs: locked });
+  if (!checkPin(user, req.body?.currentPin)) {
+    const triesLeft = noteFailure(user, 'pin');
+    return res.status(401).json({ error: 'wrong_pin', triesLeft });
+  }
+  clearFailures(user, 'pin');
+  res.json({ recoveryCode: issueRecoveryCode(user) });
+});
+
+// The way back in when the PIN is forgotten: the code clears the PIN and signs
+// you in, and is spent doing so. It has its own lockout, so a PIN locked by
+// guessing does not also block the person who actually holds the code.
+api.post('/auth/recover', (req, res) => {
+  const name = cleanName(req.body?.username);
+  const user = findByNickname(name);
+  if (!user) return res.status(404).json({ error: 'no_such_username' });
+  if (user.banned) return res.status(403).json({ error: 'banned', reason: user.banReason });
+
+  const locked = lockRemaining(user, 'recovery');
+  if (locked > 0) return res.status(429).json({ error: 'too_many_tries', retryAfterMs: locked });
+
+  if (!checkRecoveryCode(user, req.body?.code)) {
+    noteFailure(user, 'recovery');
+    return res.status(401).json({ error: 'wrong_code' });
+  }
+  setPin(user, null);                       // burns the code and clears both lockouts
+  ensureFreshMissions(user);
+  res.json({ user: privateUserDto(user), token: issueToken(user) });
 });
 
 // Resume a stored session. The token is the credential; nothing is looked up by ID.
@@ -149,16 +216,15 @@ api.get('/i18n', (req, res) => res.json({ languages: LANGS }));
 api.get('/tables', (req, res) => {
   const user = req.authUser;
   res.json({
-    tables: TABLES.map(t => ({ ...tableDto(t, user), onlineCount: simulatedOnline(t.id) })),
+    tables: TABLES.map(t => ({ ...tableDto(t, user), onlineCount: onlineOnTable(t.id) })),
   });
 });
 
-function simulatedOnline(tableId) {
-  // Demo population: a stable per-table baseline plus real queue size plus slow time-based drift,
-  // so the lobby feels alive without pretending to have real production traffic.
-  const base = [1243, 3110, 2087, 940, 512, 388, 240, 133, 71, 19][tableId - 1] || 50;
-  const drift = Math.round(Math.sin(Date.now() / 60000 + tableId) * base * 0.08);
-  return Math.max(1, base + drift + queueLength(tableId));
+// The real number: everyone waiting in this table's queue plus every human
+// currently playing a match on it. It reads 0 on a quiet table, which is the
+// truth - nothing here invents a crowd.
+function onlineOnTable(tableId) {
+  return queueLength(tableId) + playersOnTable(tableId);
 }
 
 api.get('/cues', (req, res) => res.json({ cues: CUES }));

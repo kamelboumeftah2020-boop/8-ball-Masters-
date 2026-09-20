@@ -377,6 +377,9 @@ input.text-input:focus {
 .table-card .sub { font-size: 15px; color: rgba(255, 255, 255, 0.86); margin-top: 5px; font-weight: 600; }
 .table-card .online { font-size: 13px; color: var(--green); margin-top: 6px; display: flex; align-items: center; gap: 6px; font-weight: 800; }
 .table-card .online .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: dotPulse 1.6s ease-in-out infinite; }
+/* nobody on this table yet: no green light, no invented crowd */
+.table-card .online.empty { color: var(--text-dim); }
+.table-card .online.empty .dot { background: rgba(255, 255, 255, 0.28); box-shadow: none; animation: none; }
 @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .table-card.locked { filter: brightness(0.6) saturate(0.9); }
 .table-card .locked-sub { color: #ffd98a; font-weight: 800; }
@@ -697,6 +700,17 @@ input[type=range] { accent-color: var(--pink); height: 34px; }
   display: flex; flex-direction: column; gap: 16px; text-align: center;
   box-shadow: var(--shadow-2), 0 0 60px -20px var(--violet);
 }
+/* the recovery code: meant to be read off the screen and written down */
+.recovery-code {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 26px; font-weight: 900; letter-spacing: 3px;
+  padding: 18px 12px; border-radius: var(--r-md);
+  background: rgba(8, 4, 20, 0.75);
+  border: 1.5px dashed var(--cyan);
+  color: #8ef0ff; text-shadow: 0 0 18px rgba(34, 211, 238, 0.6);
+  user-select: all; word-break: break-all;
+}
+
 #toast-root { position: absolute; top: calc(14px + var(--safe-top)); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 60; pointer-events: none; }
 .toast {
   background: linear-gradient(165deg, rgba(72, 38, 136, 0.96), rgba(18, 9, 40, 0.96));

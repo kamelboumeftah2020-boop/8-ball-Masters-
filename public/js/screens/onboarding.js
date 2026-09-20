@@ -3,7 +3,7 @@ import { state, setUser } from '../state.js';
 import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
 import { connectSocket, identify } from '../net/socket.js';
-import { toast } from '../ui.js';
+import { toast, formatWait } from '../ui.js';
 import * as audio from '../engine/audio.js';
 
 // Sign-in is a username and nothing else. Names are unique, so one name is one
@@ -22,6 +22,7 @@ export function render(root, params = {}) {
   function draw() {
     if (step === 'username') return drawUsername();
     if (step === 'pin') return drawPin();
+    if (step === 'recover') return drawRecover();
     if (step === 'avatar') return drawAvatar();
   }
 
@@ -75,6 +76,7 @@ export function render(root, params = {}) {
         <input class="text-input" id="pin" type="password" inputmode="numeric"
                maxlength="8" autocomplete="current-password" placeholder="••••" />
         <button class="btn primary block" id="go" style="max-width:360px;">${t('continueBtn')}</button>
+        <button class="btn ghost block" id="forgot" style="max-width:360px;">${t('forgotPin')}</button>
         <button class="btn ghost block" id="back" style="max-width:360px;">${t('back')}</button>
       </div>`;
     const input = root.querySelector('#pin');
@@ -82,6 +84,7 @@ export function render(root, params = {}) {
     const submit = () => signIn(input.value);
     root.querySelector('#go').onclick = submit;
     input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    root.querySelector('#forgot').onclick = () => { step = 'recover'; draw(); };
     root.querySelector('#back').onclick = () => { step = 'username'; draw(); };
   }
 
@@ -92,7 +95,44 @@ export function render(root, params = {}) {
       await enterGame(user);
       navigate('home');
     } catch (e) {
-      if (e.status === 401) toast(t('wrongPin'));
+      if (e.status === 429) toast(t('pinLocked', { time: formatWait(e.data?.retryAfterMs) }));
+      else if (e.status === 401) toast(t('wrongPin'));
+      else if (e.status === 403) navigate('banned', { reason: e.data?.reason });
+      else toast(t('somethingWrong'));
+    }
+  }
+
+  // The way back in for someone who set a PIN and forgot it. The code clears the
+  // PIN and signs them in; they can set a new one from settings.
+  function drawRecover() {
+    root.innerHTML = `
+      <div class="onboarding">
+        ${logoHtml(true)}
+        <h2>${t('recoveryTitle')}</h2>
+        <p class="muted" style="max-width:340px;">${t('enterRecoveryCode')}</p>
+        <input class="text-input" id="code" maxlength="14" autocomplete="one-time-code"
+               placeholder="${t('recoveryPlaceholder')}" style="letter-spacing:2px;" />
+        <button class="btn primary block" id="go" style="max-width:360px;">${t('continueBtn')}</button>
+        <button class="btn ghost block" id="back" style="max-width:360px;">${t('back')}</button>
+      </div>`;
+    const input = root.querySelector('#code');
+    input.focus();
+    const submit = () => recover(input.value);
+    root.querySelector('#go').onclick = submit;
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    root.querySelector('#back').onclick = () => { step = 'pin'; draw(); };
+  }
+
+  async function recover(code) {
+    try {
+      const { user, token } = await api.post('/auth/recover', { username, code });
+      setToken(token);
+      await enterGame(user);
+      navigate('home');
+      toast(t('pinClearedByRecovery'), 5000);
+    } catch (e) {
+      if (e.status === 429) toast(t('pinLocked', { time: formatWait(e.data?.retryAfterMs) }));
+      else if (e.status === 401) toast(t('wrongRecoveryCode'));
       else if (e.status === 403) navigate('banned', { reason: e.data?.reason });
       else toast(t('somethingWrong'));
     }
@@ -131,6 +171,7 @@ export function render(root, params = {}) {
       showGift();
     } catch (e) {
       if (e.status === 409) { toast(t('usernameTaken')); step = 'username'; draw(); }
+      else if (e.status === 429) toast(t('tooManyAccounts'));
       else toast(t('somethingWrong'));
     }
   }

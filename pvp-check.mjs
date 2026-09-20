@@ -105,6 +105,14 @@ async function main() {
   fails += check('same match id on both sides', a.match.matchId === b.match.matchId);
   fails += check('entry fee is the table stake (200)', a.match.entry === 200);
 
+  // The lobby's "online" number is the real count, so with these two playing
+  // table 1 it has to have gone up - and an untouched table has to stay at zero.
+  const lobby = await api('GET', '/tables', null, a.token);
+  const t1 = lobby.body.tables.find(x => x.id === 1);
+  const quiet = lobby.body.tables.find(x => x.id === 7);
+  fails += check('the lobby counts the two of them on this table', t1.onlineCount >= 2);
+  fails += check('a table nobody is on reports nobody', quiet.onlineCount === 0);
+
   // Both play real shots. The server simulates each one and decides what dropped.
   fails += check('the server sent an authoritative ball layout', !!a.layout?.balls?.length);
   const bPotted = await potBalls(b, 2);

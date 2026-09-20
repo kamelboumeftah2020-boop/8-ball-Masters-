@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { t } from './i18n.js';
 
 export function formatCoins(n) {
   n = Number(n) || 0;
@@ -33,6 +34,12 @@ export function toast(msg, ms = 2600) {
   el.textContent = msg;
   root.appendChild(el);
   setTimeout(() => el.remove(), ms);
+}
+
+// A lockout countdown, in whichever unit reads better.
+export function formatWait(ms) {
+  const secs = Math.ceil(Math.max(0, Number(ms) || 0) / 1000);
+  return secs >= 60 ? t('minutesShort', { n: Math.ceil(secs / 60) }) : t('secondsShort', { n: secs });
 }
 
 export function closeModal() {

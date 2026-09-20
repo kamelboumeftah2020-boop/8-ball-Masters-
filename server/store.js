@@ -82,12 +82,20 @@ export function issueToken(user) {
 }
 
 // A PIN is optional account protection. Like the session token it is only ever
-// stored as a salted hash.
+// stored as a salted hash. Setting one also mints a recovery code, since a PIN
+// nobody can reset is a way to lose an account for good.
 export function setPin(user, pin) {
-  if (!pin) { delete user.pinHash; delete user.pinSalt; persist(); return; }
+  if (!pin) {
+    delete user.pinHash; delete user.pinSalt;
+    delete user.recoveryHash; delete user.recoverySalt;   // nothing left to recover
+    clearFailures(user, 'pin'); clearFailures(user, 'recovery');
+    persist();
+    return null;
+  }
   user.pinSalt = crypto.randomBytes(12).toString('hex');
-  user.pinHash = hashPin(pin, user.pinSalt);
-  persist();
+  user.pinHash = hashSecret(pin, user.pinSalt);
+  clearFailures(user, 'pin');
+  return issueRecoveryCode(user);
 }
 
 export function hasPin(user) { return !!user?.pinHash; }
@@ -95,13 +103,73 @@ export function hasPin(user) { return !!user?.pinHash; }
 export function checkPin(user, pin) {
   if (!user?.pinHash) return true;           // no PIN set: the name is enough
   if (!pin) return false;
-  const given = Buffer.from(hashPin(String(pin), user.pinSalt));
-  const known = Buffer.from(user.pinHash);
-  return given.length === known.length && crypto.timingSafeEqual(given, known);
+  return sameSecret(hashSecret(String(pin), user.pinSalt), user.pinHash);
 }
 
-function hashPin(pin, salt) {
-  return crypto.createHash('sha256').update(`${salt}:${pin}`).digest('hex');
+/* --------------------------------------------------------- recovery codes
+   Twelve characters from a 32-symbol alphabet with no look-alikes: 2^60
+   combinations, so it cannot be guessed, and it can be read off paper without
+   confusing O for 0. Only its hash is kept, and using it burns it.
+*/
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function normalizeCode(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export function issueRecoveryCode(user) {
+  const bytes = crypto.randomBytes(12);
+  let plain = '';
+  for (let i = 0; i < 12; i++) plain += CODE_ALPHABET[bytes[i] % 32];   // 256 % 32 === 0, so no bias
+  user.recoverySalt = crypto.randomBytes(12).toString('hex');
+  user.recoveryHash = hashSecret(plain, user.recoverySalt);
+  persist();
+  return `${plain.slice(0, 4)}-${plain.slice(4, 8)}-${plain.slice(8, 12)}`;
+}
+
+export function checkRecoveryCode(user, code) {
+  if (!user?.recoveryHash) return false;
+  const norm = normalizeCode(code);
+  if (norm.length !== 12) return false;
+  return sameSecret(hashSecret(norm, user.recoverySalt), user.recoveryHash);
+}
+
+function hashSecret(secret, salt) {
+  return crypto.createHash('sha256').update(`${salt}:${secret}`).digest('hex');
+}
+
+function sameSecret(given, known) {
+  const a = Buffer.from(given);
+  const b = Buffer.from(String(known));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/* ------------------------------------------------------- guessing lockout
+   A four-digit PIN is only 10,000 guesses, so unlimited tries would make it
+   decoration. After a few misses each further miss locks the account for
+   longer, and the counters live on the account so a restart does not wipe them.
+*/
+const LOCK_STEPS = [30e3, 120e3, 600e3, 3600e3];
+
+export function lockRemaining(user, kind) {
+  const until = user?.gates?.[kind]?.until || 0;
+  return Math.max(0, until - Date.now());
+}
+
+export function noteFailure(user, kind, freeTries = 5) {
+  user.gates ||= {};
+  const gate = (user.gates[kind] ||= { fails: 0, until: 0 });
+  gate.fails += 1;
+  const over = gate.fails - freeTries;
+  if (over >= 0) gate.until = Date.now() + LOCK_STEPS[Math.min(over, LOCK_STEPS.length - 1)];
+  persist();
+  return Math.max(0, freeTries - gate.fails);
+}
+
+export function clearFailures(user, kind) {
+  if (!user?.gates?.[kind]) return;
+  delete user.gates[kind];
+  persist();
 }
 
 export function userByToken(token) {

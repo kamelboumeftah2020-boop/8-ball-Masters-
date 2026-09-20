@@ -97,6 +97,23 @@ nothing else; it is there because without it a name is not a credential.
 PINs are stored only as a salted SHA-256 hash and compared in constant time, and
 signing in issues a fresh session token that retires the previous one.
 
+A four-digit PIN is only 10,000 guesses, so guessing is made expensive: after
+five misses each further miss locks the account for longer (30s, 2m, 10m, then
+an hour), and the counters live on the account so restarting the server does not
+clear them. A correct PIN resets them.
+
+Because a PIN nobody can reset is a way to lose an account for good, setting one
+also mints a **recovery code** — twelve characters from a 32-symbol alphabet with
+no look-alikes (no O/0, no I/1), shown once and stored only as a hash. Entering it
+on the sign-in screen clears the PIN, signs you in, and burns the code. It has its
+own lockout, so an attacker hammering the PIN cannot lock out the person who
+actually holds the code.
+
+One more limit: names are unique and permanent, so bulk registration is the cheap
+way to ruin the namespace. One address may open 20 accounts an hour
+(`SIGNUP_LIMIT_PER_HOUR`); loopback is exempt, so the dev server and the test
+suites are never throttled.
+
 ## Tests
 
 - `npm run test:physics` — fires 200 shots across the power range and asserts no
@@ -115,18 +132,23 @@ signing in issues a fresh session token that retires the previous one.
   that a season never pays out twice.
 - `npm run test:auth` — covers username sign-in: that a name is unique (ignoring
   case and stray spaces), that a known name returns you to your own account with
-  your progress, that an unknown one cannot sign in, and the whole optional-PIN
-  behaviour. (Start the server first.)
+  your progress, that an unknown one cannot sign in, the whole optional-PIN
+  behaviour, the guessing lockout, recovery codes (issued once, usable once, and
+  still usable while the PIN is locked), and the signup rate limiter.
+  (Start the server first.)
 - `npm run test:signin` — walks the sign-in screen itself in a real browser: a new
-  name opens an account, the same name from a clean browser comes back to it, and a
-  PIN set in settings is then asked for. (Start the server first.)
+  name opens an account, the same name from a clean browser comes back to it, a PIN
+  set in settings is then asked for, and the recovery code shown when that PIN was
+  set gets a locked-out player back in. (Start the server first.)
+
+All six run on every push and pull request via `.github/workflows/ci.yml`.
 
 ## What's implemented from the GDD
 
 | Section | Status |
 |---|---|
 | Onboarding (username sign-in with unique names, 6 starter avatars, 5,000 coin + cue gift, 10s tutorial) | ✅ |
-| Home lobby (top bar, 10 tables, online counts, bottom nav) | ✅ |
+| Home lobby (top bar, 10 tables, real online counts, bottom nav) | ✅ |
 | Per-table isolated matchmaking + searching animation | ✅ |
 | Vertical 8%/72%/20% gameplay layout, one-thumb controls (see below) | ✅ |
 | Hand-rolled 2D billiard physics (cushions, ball-ball collisions, 6 pockets) | ✅ |
@@ -142,6 +164,7 @@ signing in issues a fresh session token that retires the previous one.
 | Admin dashboard: player list (active/inactive/banned), reports, ban/unban, analytics | ✅ |
 | Anti-cheat: server deals the layout, simulates every shot, and owns time, coins and queue length | ✅ |
 | Session tokens (a public profile ID can't act on an account) | ✅ |
+| PIN guessing lockout, one-time recovery codes, signup rate limit | ✅ |
 | Reconnect into a match after dropping out | ✅ |
 | Auto temp-ban at 5 reports, permanent ban after 3 temp-bans | ✅ |
 
@@ -163,6 +186,10 @@ real third-party credentials/services in production:
 - **10-second gameplay clip** — the table is recorded with MediaRecorder and the last
   ~12 seconds are offered as a real `.webm` after a match. Browsers without
   MediaRecorder fall back to a shareable result-card PNG.
+- **A player base** — the lobby's online count is the real number of people queued
+  or playing on that table, which on a fresh install is zero. Matchmaking waits
+  ~5s for a human and then fills the seat with a bot, so a solo install is always
+  playable — but most matches will be against a bot until real players show up.
 - **50/30+ unique art assets** — cues/avatars are data-driven (name, category, rarity,
   stat bonuses) and rendered with CSS gradients + emoji rather than bespoke art.
 

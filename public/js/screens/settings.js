@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { state, setUser } from '../state.js';
 import { t, loadLang } from '../i18n.js';
 import { navigate } from '../router.js';
-import { toast, openModal, closeModal } from '../ui.js';
+import { toast, openModal, closeModal, formatWait } from '../ui.js';
 import * as audio from '../engine/audio.js';
 
 const LANGS = [
@@ -95,6 +95,7 @@ export function render(root) {
       ${has ? `<input class="text-input" id="cur-pin" type="password" inputmode="numeric" maxlength="8" placeholder="${t('currentPin')}" />` : ''}
       <input class="text-input" id="new-pin" type="password" inputmode="numeric" maxlength="8" placeholder="${t('newPin')}" />
       <button class="btn gold block" id="save-pin">${has ? t('changePin') : t('setPin')}</button>
+      ${has ? `<button class="btn ghost block" id="new-code">${t('newRecoveryCode')}</button>` : ''}
       ${has ? `<button class="btn ghost block" id="clear-pin">${t('removePin')}</button>` : ''}
     `, {
       onMount: (m) => {
@@ -105,21 +106,53 @@ export function render(root) {
           await savePin(pin, currentPin(), t('pinSaved'));
         };
         m.querySelector('#clear-pin')?.addEventListener('click', () => savePin('', currentPin(), t('pinRemoved')));
+        m.querySelector('#new-code')?.addEventListener('click', async () => {
+          try {
+            const { recoveryCode } = await api.post('/auth/recovery-code', { currentPin: currentPin() });
+            showRecoveryCode(recoveryCode);
+          } catch (e) { toast(pinError(e)); }
+        });
       },
     });
   }
 
   async function savePin(pin, currentPin, okMessage) {
     try {
-      await api.put('/auth/pin', { pin, currentPin });
+      const { recoveryCode } = await api.put('/auth/pin', { pin, currentPin });
       const { user } = await api.get('/session');
       setUser(user);
-      closeModal();
-      toast(okMessage);
       draw();
+      // Setting a PIN hands back a recovery code once. Showing it is the whole
+      // point of it existing, so it replaces the confirmation toast.
+      if (recoveryCode) showRecoveryCode(recoveryCode);
+      else { closeModal(); toast(okMessage); }
     } catch (e) {
-      toast(e.status === 401 ? t('wrongPin') : t('invalidPin'));
+      toast(pinError(e));
     }
+  }
+
+  function pinError(e) {
+    if (e.status === 429) return t('pinLocked', { time: formatWait(e.data?.retryAfterMs) });
+    if (e.status === 401) return t('wrongPin');
+    return t('invalidPin');
+  }
+
+  function showRecoveryCode(code) {
+    openModal(`
+      <h3>🔑 ${t('recoveryIssuedTitle')}</h3>
+      <p class="muted" style="font-size:15px;line-height:1.5;margin:0;">${t('recoveryIssuedDesc')}</p>
+      <div class="recovery-code" id="code">${code}</div>
+      <button class="btn ghost block" id="copy-code">📋 ${t('copyCode')}</button>
+      <button class="btn gold block" id="done-code">${t('gotIt2')}</button>
+    `, {
+      onMount: (m) => {
+        m.querySelector('#copy-code').onclick = () => {
+          navigator.clipboard?.writeText(code).catch(() => {});
+          toast(t('codeCopied'));
+        };
+        m.querySelector('#done-code').onclick = () => { closeModal(); draw(); };
+      },
+    });
   }
 
   function reportProblem() {

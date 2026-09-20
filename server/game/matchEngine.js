@@ -105,6 +105,18 @@ function scheduleBotShot(match, botPlayer) {
   }, delay);
 }
 
+// How many real people are playing this table right now. Feeds the lobby's
+// online count, which reports what is actually happening rather than a number
+// invented to look busy.
+export function playersOnTable(tableId) {
+  let n = 0;
+  for (const match of matches.values()) {
+    if (match.status !== 'live' || match.tableId !== tableId) continue;
+    for (const p of match.players) if (!p.isBot) n++;
+  }
+  return n;
+}
+
 export function getMatch(id) {
   return matches.get(id);
 }

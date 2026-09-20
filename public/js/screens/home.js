@@ -62,7 +62,9 @@ export async function render(root) {
             <div class="sub locked-sub">🔒 ${t('unlockAtLevel', { lvl: table.unlockLvl })}</div>
           ` : `
             <div class="sub">${t('entryFee')}: 🪙 ${formatCoins(table.entry)} · XP ${formatCoins(table.xp)}</div>
-            <div class="online"><span class="dot"></span> ${table.onlineCount.toLocaleString()} ${t('online')}</div>
+            ${table.onlineCount > 0
+              ? `<div class="online"><span class="dot"></span> ${table.onlineCount.toLocaleString()} ${t('online')}</div>`
+              : `<div class="online empty"><span class="dot"></span> ${t('beTheFirst')}</div>`}
           `}
         </div>
         ${table.locked
