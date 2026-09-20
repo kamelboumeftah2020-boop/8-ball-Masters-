@@ -23,10 +23,10 @@ async function makePlayer(name) {
   const socket = io(BASE, { transports: ['websocket'] });
   await new Promise(r => socket.on('connect', r));
   socket.emit('identify', { token });
-  const p = { user, token, socket, match: null, result: null, sawOpponentProgress: false };
+  const p = { user, token, socket, match: null, result: null, sawOpponentProgress: false, syncs: 0 };
   socket.on('match_start', (m) => { p.match = m; p.layout = m.layout; });
   socket.on('match_resume', (m) => { p.resumed = m; p.match = m; p.layout = m.layout; });
-  socket.on('table_sync', (m) => { p.layout = m.snapshot; });
+  socket.on('table_sync', (m) => { p.layout = m.snapshot; p.syncs++; });
   socket.on('match_tick', (m) => {
     if (m.opponent && m.opponent.potted > 0) p.sawOpponentProgress = true;
     p.lastTick = m;
@@ -56,14 +56,28 @@ function findPottingShot(layout) {
 }
 
 // Play real shots until the server has credited `target` pots to this player.
+//
+// Two things make this harder than it looks. Every tick carries the player's
+// current layout, and that - not the last settle snapshot - is what the search
+// must aim from, because after a scratch the cue ball spends a moment off the
+// table and the server refuses shots until it is back. And on some layouts the
+// search finds nothing at all, which is a reason to break the cluster up, not a
+// reason to stop playing: abandoning the match there is what left a player
+// stranded one ball short with a minute still on their clock.
 async function potBalls(player, target) {
   let guard = 0;
-  while ((player.lastTick?.me.potted ?? 0) < target && !player.result && guard++ < 40) {
-    const shot = findPottingShot(player.layout);
-    if (!shot) return false;
-    const before = player.lastTick?.me.potted ?? 0;
+  while ((player.lastTick?.me.potted ?? 0) < target && !player.result && guard++ < 60) {
+    const layout = player.lastTick?.layout || player.layout;
+    const cue = layout?.balls?.find(b => b.cue);
+    if (!cue?.active || layout.respawnIn > 0) { await wait(300); continue; }
+
+    const shot = findPottingShot(layout)
+      || { angle: Math.random() * Math.PI * 2, power: 0.85 };   // scatter and look again
+    const syncsBefore = player.syncs;
     player.socket.emit('shoot', { matchId: player.match.matchId, ...shot, spin: { x: 0, y: 0 } });
-    await until(() => (player.lastTick?.me.potted ?? 0) > before || player.result, 8000);
+    // `table_sync` lands the moment the server's table settles: that is both "your
+    // shot is over" and "here is where the balls ended up".
+    await until(() => player.syncs > syncsBefore || player.result, 8000);
   }
   return (player.lastTick?.me.potted ?? 0) >= target || !!player.result;
 }
@@ -121,7 +135,12 @@ async function main() {
 
   const ended = await until(() => a.result && b.result);
   fails += check('both players received the result', ended);
-  if (!ended) process.exit(1);
+  if (!ended) {
+    // Say why, so a failure here is diagnosable from a CI log alone.
+    console.log('  A tick:', JSON.stringify(a.lastTick), 'result:', !!a.result);
+    console.log('  B tick:', JSON.stringify(b.lastTick), 'result:', !!b.result);
+    process.exit(1);
+  }
 
   fails += check('A won, B lost', a.result.you.won === true && b.result.you.won === false);
   fails += check('B saw A\'s live progress during play', b.sawOpponentProgress);
