@@ -45,6 +45,7 @@ class App {
     const unlock = () => { audio.init(); audio.setEnabled(this.settings.sound); audio.setVolume(this.settings.volume); audio.commentary = this.settings.commentary; };
     window.addEventListener('pointerdown', unlock, { once: false });
     window.addEventListener('keydown', unlock, { once: false });
+    document.addEventListener('click', (e) => { if (e.target.closest('button, .char, .stad')) audio.click(); });
   }
 
   // ---------- الإعدادات ----------

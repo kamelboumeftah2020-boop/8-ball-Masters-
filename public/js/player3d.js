@@ -212,7 +212,7 @@ export class Player3D {
       ring.position.y = 0.025;
       this.root.add(ring);
     }
-    if (!opts.preview) {
+    if (!opts.preview && (info.human || opts.local)) {
       const label = makeLabel(opts.local ? `⭐ ${info.name}` : info.name, opts.local ? '#fff27a' : info.human ? '#ffffff' : '#dfe6ee', info.human ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.3)');
       label.position.y = 2.1 * h;
       if (!info.human && !opts.local) label.scale.multiplyScalar(0.8);

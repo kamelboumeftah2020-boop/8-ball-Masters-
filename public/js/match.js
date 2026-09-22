@@ -141,8 +141,14 @@ export class Match {
     aimWrap.add(this.aim);
     this.aimWrap = aimWrap;
     this.scene.add(aimWrap);
+    // مؤشر مستلم التمريرة
+    this.passRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.78, 32), new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.85, depthWrite: false }));
+    this.passRing.rotation.x = -PI / 2;
+    this.passRing.visible = false;
+    this.scene.add(this.passRing);
 
     audio.stadiumMood = this.stadium.crowd;
+    audio.drums = true;
     this.setupHUD();
     this.onResize();
   }
@@ -222,6 +228,7 @@ export class Match {
 
   // ---------- الإطار ----------
   frame(dt, input) {
+    this.frameDt = dt;
     const now = performance.now() / 1000;
     if (this.local && this.transport.update) this.transport.update(dt);
     if (!this.latest) { this.app.renderer.render(this.scene, this.camera); return; }
@@ -307,6 +314,7 @@ export class Match {
 
     // سهم التصويب
     this.updateAim(state, inp, meRender);
+    this.updatePassTarget(state, inp, meRender);
     this.fx.syncZones(state.z);
 
     // الحماس
@@ -344,7 +352,53 @@ export class Match {
     const l = Math.hypot(fx, fy) || 1;
     fx /= l; fy /= l;
     const rx = fy, ry = -fx;
-    return { mx: input.mx * rx + input.my * fx, my: input.mx * ry + input.my * fy, b: input.b };
+    const out = { mx: input.mx * rx + input.my * fx, my: input.mx * ry + input.my * fy, b: input.b };
+    this.applyTouch(out, input);
+    return out;
+  }
+
+  // أزرار ذكية للجوال: تتغير حسب الموقف (هجوم / دفاع)
+  applyTouch(out, raw) {
+    const dt = this.frameDt || 0.016;
+    const st = this.latest;
+    const you = this.you;
+    if (!st || you < 0) return;
+    const b = st.b, me = st.p[you];
+    const myTeam = this.roster[you].team;
+    const ownerTeam = b[6] >= 0 && this.roster[b[6]] ? this.roster[b[6]].team : -1;
+    if (!raw.tMain) {
+      const ctx = ownerTeam >= 0 && ownerTeam !== myTeam ? 'def' : 'att';
+      const gk = this.roster[you].slot === 0 && Math.abs(me[0] - (myTeam === 0 ? -HL : HL)) < 9;
+      const key = ctx + (gk ? 'gk' : '');
+      if (key !== this.touchCtx) { this.touchCtx = key; this.setTouchLabels(ctx, gk); }
+    }
+    const att = this.touchCtx && this.touchCtx.startsWith('att');
+    if (att) {
+      if (raw.tMain) out.b |= BTN.SHOOT;
+      if (raw.tSec) {
+        this.secT = (this.secT || 0) + dt;
+        if (this.secT > 0.28) { out.b |= BTN.LOB; if (!this.lobShown) { this.lobShown = true; document.querySelector('#touch .t-sec')?.classList.add('lob'); } }
+      } else {
+        if (this.secT > 0 && this.secT <= 0.28) this.passPulse = 0.12;
+        this.secT = 0;
+        if (this.lobShown) { this.lobShown = false; document.querySelector('#touch .t-sec')?.classList.remove('lob'); }
+      }
+      if (this.passPulse > 0) { out.b |= BTN.PASS; this.passPulse -= dt; }
+    } else {
+      if (raw.tMain) out.b |= BTN.TACKLE;
+      if (raw.tSec) out.b |= BTN.SPRINT;
+      this.secT = 0; this.passPulse = 0;
+    }
+    if (raw.tMain) out.b |= BTN.SKIP;
+  }
+
+  setTouchLabels(ctx, gk) {
+    const main = document.querySelector('#touch .t-main'), sec = document.querySelector('#touch .t-sec');
+    if (!main) return;
+    const att = ctx === 'att';
+    main.classList.toggle('def', !att); sec.classList.toggle('def', !att);
+    main.innerHTML = att ? '<span class="i">🦶</span><small>تسديد</small>' : gk ? '<span class="i">🧤</span><small>ارتماء</small>' : '<span class="i">🦵</span><small>افتكاك</small>';
+    sec.innerHTML = att ? '<span class="i">➡️</span><small>تمرير</small>' : '<span class="i">⚡</span><small>ركض</small>';
   }
 
   sendInput(inp, dt) {
@@ -400,6 +454,37 @@ export class Match {
     return p;
   }
 
+  updatePassTarget(state, inp, meRender) {
+    const you = this.you;
+    const ring = this.passRing;
+    ring.visible = false;
+    if (you < 0 || this.replay || state.b[6] !== you) return;
+    const me = state.p[you];
+    const x = meRender ? meRender.x : me[0], y = meRender ? meRender.y : me[1];
+    const ml = Math.hypot(inp.mx, inp.my);
+    const a = ml > 0.2 ? Math.atan2(inp.my, inp.mx) : (meRender ? meRender.face : me[4]);
+    const dx0 = Math.cos(a), dy0 = Math.sin(a);
+    const team = this.roster[you].team;
+    let best = null, bestS = Infinity;
+    state.p.forEach((q, i) => {
+      const r = this.roster[i];
+      if (!r || i === you || r.team !== team || q[5] === STATE.DOWN) return;
+      const dx = q[0] - x, dy = q[1] - y, d = Math.hypot(dx, dy);
+      if (d < 2.5 || d > 45) return;
+      const ang = Math.acos(clamp((dx0 * dx + dy0 * dy) / d, -1, 1));
+      if (ang > 0.85) return;
+      let open = 20;
+      state.p.forEach((o, j) => { if (this.roster[j] && this.roster[j].team !== team) open = Math.min(open, Math.hypot(o[0] - q[0], o[1] - q[1])); });
+      const sc = ang * 12 + d * 0.1 - open * 0.4;
+      if (sc < bestS) { bestS = sc; best = q; }
+    });
+    if (!best) return;
+    ring.visible = true;
+    toV(best[0], best[1], 0.05, ring.position);
+    const k = 1 + Math.sin(this.world.time * 8) * 0.12;
+    ring.scale.set(k, k, k);
+  }
+
   updateAim(state, inp, meRender) {
     const you = this.you;
     if (you < 0 || this.replay) { this.aim.visible = false; return; }
@@ -451,7 +536,7 @@ export class Match {
       smooth = 1.5;
     } else {
       let fx = b[0], fy = b[1];
-      if (me) { fx = lerp(b[0], mx, 0.3); fy = lerp(b[1], my, 0.3); }
+      if (me) { fx = lerp(b[0], mx, 0.45); fy = lerp(b[1], my, 0.45); }
       if (this.camMode === 'behind' && me) {
         const team = this.roster[you].team;
         const d = team === 0 ? 1 : -1;
@@ -461,10 +546,11 @@ export class Match {
         look.copy(toV(clamp(fx, -HL + 10, HL - 10), fy * 0.5, 0));
         pos.set(look.x, portrait ? 48 : 36, look.z + 9);
       } else {
-        const cx = clamp(fx, -HL + (portrait ? 6 : 12), HL - (portrait ? 6 : 12));
-        look.copy(toV(cx, fy * 0.55 + (portrait ? 0 : 1.5), 0));
-        const h = portrait ? 30 : 15, dz = portrait ? HW + 30 : HW + 11.5;
-        pos.set(cx * 0.96, h, dz + look.z * 0.25);
+        const cx = clamp(fx, -HL + (portrait ? 6 : 8), HL - (portrait ? 6 : 8));
+        look.copy(toV(cx, fy * 0.75 + (portrait ? 0 : 0.5), 0));
+        const touch = document.body.classList.contains('touch');
+        const h = portrait ? 30 : touch ? 10.5 : 12.5, dz = portrait ? HW + 30 : touch ? HW + 5 : HW + 8;
+        pos.set(cx * 0.96, h, dz + look.z * 0.55);
       }
     }
     // ارتجاج
@@ -479,7 +565,7 @@ export class Match {
     this.camLook.lerp(look, Math.min(1, k * 1.4));
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);
-    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 70 : this.camMode === 'behind' ? 60 : 40;
+    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 70 : this.camMode === 'behind' ? 60 : 44;
     if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }
   }
 
@@ -502,6 +588,9 @@ export class Match {
         const throwIn = st && st.spk === 'throw' && st.sp === e.p;
         P[e.p] && P[e.p].triggerKick(!!e.h, throwIn);
         audio.kick(e.pw, !!e.h);
+        if (e.k !== 'pass' && e.pw > 0.45) audio.whoosh(e.pw);
+        if (!replay && e.p === this.you) this.vibrate(e.k === 'shot' ? 25 : 12);
+        if (!replay && e.s) audio.cheer(0.5 + e.pw * 0.4);
         const p = pos(e.p);
         this.fx.kickDust(p.x, p.y, e.pw, !!e.h);
         if (!replay && e.s) { this.excite = Math.max(this.excite, 0.75); this.world.excite = Math.max(this.world.excite, 0.5); }
@@ -530,7 +619,8 @@ export class Match {
         const sub = e.own ? `هدف عكسي — ${scorer}` : `${scorer}${e.a >= 0 ? ` • صناعة ${name(e.a)}` : ''}${e.d > 20 ? ` • من ${Math.round(e.d)} م!` : ''}`;
         this.banner('هـــدف!', sub, 'goal', team.color);
         audio.roar(6, 1);
-        audio.horn(null, 1.4);
+        audio.goalParty();
+        this.vibrate([80, 60, 160]);
         setTimeout(() => audio.chant(0), 2600);
         audio.say(`${pick(SAY.goal)} ${e.own ? '' : scorer.replace(/[^\p{L} ]/gu, '')}`, true);
         this.fx.confetti(e.team, [team.color, team.color2, '#ffffff', '#ffd23f']);
@@ -552,6 +642,7 @@ export class Match {
         if (!replay) {
           this.banner(e.k === 'burn' ? 'صدّ الكرة النارية!' : 'تصدٍّ رائع!', name(e.p), 'save');
           audio.ooh();
+          setTimeout(() => audio.applause(2.5, 1), 700);
           audio.say(pick(SAY.save), true);
           this.addFeed(`🧤 ${name(e.p)}`, '#ffffff');
         }
@@ -570,6 +661,7 @@ export class Match {
         if (replay) break;
         if (e.k === 'start') {
           audio.whistle('short');
+          audio.applause(2, 0.8);
           this.banner('انطلق!', '', 'small');
           if (!this.saidStart) { this.saidStart = true; audio.say(pick(SAY.start)); setTimeout(() => audio.chant(1), 3000); }
         } else if (e.k === 'end') audio.whistle('end');
@@ -584,14 +676,13 @@ export class Match {
         audio.ability(e.k);
         if (!replay) {
           const c = charOf(this.roster[e.p].char);
-          this.addFeed(`${c.icon} ${name(e.p)}: ${c.ability.name}`, TEAMS[this.roster[e.p].team].color);
-          if (e.p === this.you) this.pulseAbility();
+          if (e.p === this.you) { this.pulseAbility(); this.addFeed(`${c.icon} ${c.ability.name}`, TEAMS[this.roster[e.p].team].color); this.vibrate(30); }
         }
         break;
       }
-      case 'tackle': if (e.ok) audio.ability('tackle'); break;
+      case 'tackle': if (e.ok) { audio.ability('tackle'); if (!replay && e.p === this.you) { audio.applause(1.5, 0.6); this.vibrate(20); } } break;
       case 'slide': audio.ability('slide'); break;
-      case 'foul': audio.ability('tackle'); if (!replay) audio.ooh(); break;
+      case 'foul': audio.ability('tackle'); if (!replay) { audio.ooh(); if (e.v === this.you) this.vibrate(70); } break;
       case 'wallhit': this.fx.wallHit(e.x, e.y); audio.ability('wallhit'); break;
       case 'dive': audio.ability('slide'); break;
       case 'emote': break;
@@ -634,6 +725,9 @@ export class Match {
     this.mm = $('minimap').getContext('2d');
     this.hudCache = {};
     this.hudReady = true;
+    const hint = document.querySelector('#touch .t-hint');
+    if (hint) { hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 8000); }
+    this.touchCtx = null;
     this.updateCard(true);
   }
 
@@ -648,7 +742,7 @@ export class Match {
     $('pc-ab-name').textContent = c.ability.name;
     $('pc-ab-icon').textContent = c.icon;
     const tb = document.querySelector('#touch [data-btn="ABILITY"]');
-    if (tb) tb.innerHTML = `${c.icon}<small>مهارة</small>`;
+    if (tb) tb.textContent = c.icon;
   }
 
   pulseAbility() {
@@ -771,6 +865,8 @@ export class Match {
 
   toast(t) { this.app.toast(t); }
 
+  vibrate(ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch { /* ignore */ } }
+
   emote(n) {
     this.transport.sendEmote(n);
   }
@@ -780,6 +876,7 @@ export class Match {
   }
 
   destroy() {
+    audio.drums = false;
     for (const p of this.players3d) p.dispose();
     this.world.dispose();
     $('hud').classList.add('hidden');

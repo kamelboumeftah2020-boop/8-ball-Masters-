@@ -69,7 +69,7 @@ export class Input {
       knob.style.transform = `translate(${dx}px, ${dy}px)`;
       this.touch.mx = dx / R; this.touch.my = -dy / R;
       // الركض التلقائي عند دفع العصا للنهاية
-      if (l > R * 1.35) this.touch.autoSprint = true; else if (l < R * 0.9) this.touch.autoSprint = false;
+      if (l > R * 1.2) this.touch.autoSprint = true; else if (l < R * 0.9) this.touch.autoSprint = false;
     });
     const end = (e) => {
       if (e.pointerId !== sid) return;
@@ -78,10 +78,18 @@ export class Input {
     };
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);
-    for (const btn of root.querySelectorAll('[data-btn]')) {
-      const bit = BTN[btn.dataset.btn];
-      const down = (e) => { e.preventDefault(); this.touch.b |= bit; btn.classList.add('on'); btn.setPointerCapture && btn.setPointerCapture(e.pointerId); };
-      const up = (e) => { e.preventDefault(); this.touch.b &= ~bit; btn.classList.remove('on'); };
+    this.touch.t = { main: false, second: false };
+    for (const btn of root.querySelectorAll('[data-t]')) {
+      const key = btn.dataset.t;
+      const bit = btn.dataset.btn ? BTN[btn.dataset.btn] : 0;
+      const down = (e) => {
+        e.preventDefault();
+        if (bit) this.touch.b |= bit; else this.touch.t[key] = true;
+        btn.classList.add('on');
+        btn.setPointerCapture && btn.setPointerCapture(e.pointerId);
+        if (navigator.vibrate) try { navigator.vibrate(8); } catch { /* ignore */ }
+      };
+      const up = (e) => { e.preventDefault(); if (bit) this.touch.b &= ~bit; else this.touch.t[key] = false; btn.classList.remove('on'); };
       btn.addEventListener('pointerdown', down);
       btn.addEventListener('pointerup', up);
       btn.addEventListener('pointercancel', up);
@@ -114,7 +122,7 @@ export class Input {
     if (this.touch.mx || this.touch.my) { mx = this.touch.mx; my = this.touch.my; }
     b |= this.touch.b;
     if (this.touch.autoSprint) b |= BTN.SPRINT;
-    if (this.touch.b & BTN.SHOOT) b |= BTN.SKIP;
+    const t = this.touch.t || {};
     // يد التحكم
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const gp of pads) {
@@ -135,6 +143,6 @@ export class Input {
     }
     const l = Math.hypot(mx, my);
     if (l > 1) { mx /= l; my /= l; }
-    return { mx: Math.round(mx * 100) / 100, my: Math.round(my * 100) / 100, b };
+    return { mx: Math.round(mx * 100) / 100, my: Math.round(my * 100) / 100, b, tMain: !!t.main, tSec: !!t.second };
   }
 }

@@ -10,7 +10,10 @@ export class AudioEngine {
     this.volume = 0.8;
     this.commentary = true;
     this.excite = 0;
-    this.chantTimer = 12;
+    this.chantTimer = 6;
+    this.drums = false;
+    this.beatIdx = 0;
+    this.nextBeat = 0;
     this.chantBusy = 0;
     this.stadiumMood = 1;
   }
@@ -25,8 +28,8 @@ export class AudioEngine {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 4;
     this.master.connect(comp).connect(ctx.destination);
-    this.sfx = ctx.createGain(); this.sfx.gain.value = 0.9; this.sfx.connect(this.master);
-    this.crowdBus = ctx.createGain(); this.crowdBus.gain.value = 0.7; this.crowdBus.connect(this.master);
+    this.sfx = ctx.createGain(); this.sfx.gain.value = 1.15; this.sfx.connect(this.master);
+    this.crowdBus = ctx.createGain(); this.crowdBus.gain.value = 1.0; this.crowdBus.connect(this.master);
     // مخزن ضوضاء
     const len = ctx.sampleRate * 3;
     const buf = ctx.createBuffer(2, len, ctx.sampleRate);
@@ -85,14 +88,27 @@ export class AudioEngine {
     this.excite += (excite - this.excite) * Math.min(1, dt * 1.5);
     const e = clamp(this.excite, 0, 1);
     const t = this.ctx.currentTime;
-    this.amb.g.gain.setTargetAtTime((0.28 + e * 0.55) * this.stadiumMood, t, 0.2);
+    this.amb.g.gain.setTargetAtTime((0.42 + e * 0.65) * this.stadiumMood, t, 0.2);
     this.amb.bp.frequency.setTargetAtTime(600 + e * 700, t, 0.3);
     this.amb.lp.frequency.setTargetAtTime(1800 + e * 2500, t, 0.3);
     this.chantBusy -= dt;
     this.chantTimer -= dt;
-    if (this.chantTimer <= 0 && this.chantBusy <= 0) {
-      this.chantTimer = 22 + Math.random() * 20;
+    if (this.drums && this.chantTimer <= 0 && this.chantBusy <= 0) {
+      this.chantTimer = 12 + Math.random() * 10;
       this.chant();
+    }
+    // طبول المدرجات المستمرة (تتسارع مع الحماس)
+    if (this.drums && this.enabled) {
+      if (this.nextBeat < t) this.nextBeat = t + 0.05;
+      const pat = [1, 0, 0, 1, 1, 0, 1, 0];
+      while (this.nextBeat < t + 0.25) {
+        const i = this.beatIdx++ % 8;
+        if (this.chantBusy <= 0) {
+          if (pat[i]) this.drum(this.nextBeat, 0.12 + e * 0.3, i === 0 ? 60 : 75);
+          if (e > 0.45 && i % 2 === 1) this.clap(this.nextBeat, 0.08 + e * 0.18);
+        }
+        this.nextBeat += 0.31 - e * 0.07;
+      }
     }
   }
 
@@ -266,6 +282,58 @@ export class AudioEngine {
     g.gain.setValueAtTime(0.13, t + dur - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(lp); o2.connect(lp); lp.connect(g).connect(this.crowdBus);
     o.start(t); o2.start(t); o.stop(t + dur); o2.stop(t + dur);
+  }
+
+  // تصفيق جماعي
+  applause(dur = 2.5, amt = 1) {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    const n = Math.floor(dur * 26 * amt);
+    for (let i = 0; i < n; i++) {
+      const tt = t0 + Math.random() * dur;
+      const fade = 1 - (tt - t0) / dur;
+      this.clap(tt, (0.05 + Math.random() * 0.12) * fade * amt);
+    }
+  }
+
+  // صوت الكرة وهي تطير
+  whoosh(power = 0.7) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const n = this.noise(true);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 2;
+    bp.frequency.setValueAtTime(2400 + power * 1500, t); bp.frequency.exponentialRampToValueAtTime(500, t + 0.45);
+    const g = ctx.createGain(); this.env(g, t, 0.02, 0.18 + power * 0.25, 0.45);
+    n.connect(bp).connect(g).connect(this.sfx); n.start(t); n.stop(t + 0.5);
+  }
+
+  // اندفاع الجمهور عند الهجمة الخطيرة
+  cheer(amt = 0.6) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const n = this.noise();
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7;
+    bp.frequency.setValueAtTime(500, t); bp.frequency.linearRampToValueAtTime(1100, t + 0.8);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.7 * amt, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    n.connect(bp).connect(g).connect(this.crowdBus); n.start(t); n.stop(t + 1.9);
+  }
+
+  click() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(500, t + 0.06);
+    const g = ctx.createGain(); this.env(g, t, 0.002, 0.15, 0.07);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.1);
+  }
+
+  // احتفال الهدف: أبواق وطبول سريعة
+  goalParty() {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    for (let i = 0; i < 3; i++) this.horn(t0 + 0.2 + i * 0.5 + Math.random() * 0.2, 1.0 + Math.random() * 0.6);
+    for (let b = 0; b < 24; b++) this.drum(t0 + 0.5 + b * 0.18, 0.5, b % 4 === 0 ? 55 : 80);
+    this.applause(5, 1.3);
   }
 
   // ---------- الأهازيج ----------

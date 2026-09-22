@@ -225,15 +225,9 @@ table.keys td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
 #touch .stick { position: absolute; left: 90px; top: 75%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.07); pointer-events: none; opacity: 0.5; }
 #touch .stick.on { opacity: 1; }
 #touch .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
-#touch .tbtns { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 66px); grid-template-rows: repeat(2, 66px); gap: 10px; direction: ltr; pointer-events: auto; }
 #touch .tb { --cd: 0%; width: 66px; height: 66px; border-radius: 50%; padding: 0; font-size: 22px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10, 16, 30, 0.6); border: 2px solid rgba(255, 255, 255, 0.3); touch-action: none; }
 #touch .tb small { font-size: 10px; margin-top: 2px; }
 #touch .tb.on { background: rgba(255, 210, 63, 0.5); transform: scale(0.92); }
-#touch .tb.shoot { background: rgba(215, 38, 61, 0.55); width: 76px; height: 76px; margin: -5px; }
-#touch .tb.pass { background: rgba(34, 197, 94, 0.5); }
-#touch .tb.ability { background: conic-gradient(rgba(0, 0, 0, 0.6) var(--cd), rgba(255, 210, 63, 0.45) 0); }
-#touch .tb.ability.ready { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 210, 63, 0.8); }
-#touch .tb-menu { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; width: 42px; height: 42px; padding: 0; pointer-events: auto; opacity: 0; }
 body.touch #topbtns { left: auto; right: 10px; }
 body.touch #minimap { display: none; }
 body.touch #pcard { right: auto; left: 50%; transform: translateX(-50%); bottom: 8px; padding: 4px 10px; }
@@ -261,8 +255,7 @@ body.touch #emotebar { bottom: 170px; }
   #scr-main { flex-direction: row; overflow-y: auto; }
   .brand .logo { display: none; }
   .brand h1 { font-size: 24px; }
-  #touch .tbtns { grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); }
-  #touch .tb { width: 58px; height: 58px; }
+    #touch .tb { width: 58px; height: 58px; }
   #touch .tb.shoot { width: 68px; height: 68px; }
 }
 @media (max-width: 1150px) and (min-width: 861px) {
@@ -291,3 +284,34 @@ body.touch #emotebar { bottom: 170px; }
 #rotate b { font-size: 22px; } #rotate span { color: var(--muted); }
 @keyframes rot { 50% { transform: rotate(-90deg); } }
 @media (orientation: portrait) { body.touch.inmatch #rotate:not(.hidden) { display: flex; } }
+
+/* ---------- تحكم الجوال المبسط ---------- */
+#touch .stick-zone { top: 18%; width: 50%; }
+#touch .stick { left: 110px; top: 72%; }
+#touch .tctl { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); width: 230px; height: 200px; pointer-events: none; }
+#touch .tctl .tb { position: absolute; pointer-events: auto; border-width: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+#touch .tb .i { font-size: 30px; line-height: 1; }
+#touch .tb small { font-size: 12px; font-weight: 900; margin-top: 3px; text-shadow: 0 1px 3px #000; }
+#touch .t-main { right: 0; bottom: 0; width: 104px; height: 104px; background: radial-gradient(circle at 35% 30%, #ff6b6b, #c81d3a); border-color: #ffd0d6; }
+#touch .t-main.def { background: radial-gradient(circle at 35% 30%, #ffb44a, #d9731a); border-color: #ffe2b8; }
+#touch .t-sec { right: 118px; bottom: 6px; width: 84px; height: 84px; background: radial-gradient(circle at 35% 30%, #4ade80, #15803d); border-color: #c9f7d9; }
+#touch .t-sec.def { background: radial-gradient(circle at 35% 30%, #60a5fa, #1d4ed8); border-color: #cfe1ff; }
+#touch .t-sec.lob { background: radial-gradient(circle at 35% 30%, #c084fc, #7e22ce); }
+#touch .t-ab { --cd: 0%; right: 70px; bottom: 118px; width: 64px; height: 64px; font-size: 28px;
+  background: conic-gradient(rgba(0,0,0,0.65) var(--cd), rgba(255,210,63,0.55) 0); border-color: rgba(255,255,255,0.35); }
+#touch .t-ab.ready { border-color: var(--gold); box-shadow: 0 0 18px rgba(255,210,63,0.9); animation: glow 1s infinite alternate; }
+#touch .tb.on { transform: scale(0.9); filter: brightness(1.25); }
+#touch .t-hint { position: absolute; right: 20px; bottom: max(226px, calc(env(safe-area-inset-bottom) + 226px)); font-size: 11px; color: rgba(255,255,255,0.7); text-shadow: 0 1px 3px #000; pointer-events: none; transition: opacity 1s; }
+#touch .t-hint.gone { opacity: 0; }
+body.touch #topbtns #hb-cam, body.touch #topbtns #hb-sound, body.touch #topbtns #hb-full { display: none; }
+body.touch #feed { top: 60px; right: auto; left: 10px; align-items: flex-start; }
+body.touch #feed .feed-item { font-size: 11px; padding: 2px 8px; }
+body.touch #pcard { background: rgba(10,16,30,0.55); border: none; }
+body.touch .pc-info { min-width: 120px; }
+body.touch #pc-ab-name { display: none; }
+body.touch #scoreboard { transform: translateX(-50%) scale(0.85); transform-origin: top center; }
+body.touch .banner.small #banner-text { font-size: 22px; }
+@media (max-height: 420px) {
+  #touch .tctl { transform: scale(0.85); transform-origin: bottom right; }
+  #touch .stick { left: 95px; }
+}
