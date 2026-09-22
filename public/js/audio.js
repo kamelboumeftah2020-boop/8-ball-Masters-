@@ -152,6 +152,20 @@ export class AudioEngine {
     o.connect(g).connect(this.sfx); o.start(t); o.stop(t + 0.12);
   }
 
+  // ارتطام الكرة باللوحات الإعلانية
+  board(v) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const amp = clamp(v / 20, 0.15, 0.7);
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+    const g = ctx.createGain(); this.env(g, t, 0.002, amp, 0.16);
+    o.connect(g).connect(this.sfx); o.start(t); o.stop(t + 0.2);
+    const n = this.noise(true);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 3;
+    const ng = ctx.createGain(); this.env(ng, t, 0.001, amp * 0.6, 0.25);
+    n.connect(bp).connect(ng).connect(this.sfx); n.start(t); n.stop(t + 0.3);
+  }
+
   whistle(kind = 'short') {
     if (!this.ctx) return;
     const ctx = this.ctx;

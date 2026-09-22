@@ -5,14 +5,15 @@ export const SNAPSHOT_EVERY = 2; // 30 لقطة/ثانية للشبكة
 
 // أبعاد الملعب بالمتر (x = الطول, y = العرض, z = الارتفاع)
 export const FIELD = {
-  L: 56,
-  W: 34,
-  GW: 6.4,   // عرض المرمى
+  L: 46,
+  W: 28,
+  GW: 6.8,   // عرض المرمى
   GH: 2.4,   // ارتفاع العارضة
   GD: 1.9,   // عمق الشباك
-  BOX_R: 8,  // نصف قطر منطقة الجزاء (شكل قوس)
-  CIRCLE_R: 5,
+  BOX_R: 7,  // نصف قطر منطقة الجزاء (شكل قوس)
+  CIRCLE_R: 4.5,
   POST_R: 0.07,
+  WALL: 0.7, // جدران الملعب الداخلي (بعد خط التماس)
 };
 
 export const BALL_R = 0.2;
@@ -58,9 +59,9 @@ export const TEAMS = [
 ];
 
 export const DIFFICULTY = {
-  easy:   { think: 0.32, speed: 0.9,  aim: 0.55, tackle: 0.35, reach: 0.85, label: 'سهل' },
-  normal: { think: 0.2,  speed: 0.97, aim: 0.75, tackle: 0.55, reach: 0.95,  label: 'متوسط' },
-  hard:   { think: 0.1,  speed: 1.03, aim: 0.9,  tackle: 0.75, reach: 1.12, label: 'صعب' },
+  easy:   { think: 0.22, speed: 0.9,  aim: 0.55, tackle: 0.35, reach: 0.8, label: 'سهل' },
+  normal: { think: 0.13, speed: 0.97, aim: 0.75, tackle: 0.55, reach: 0.9,  label: 'متوسط' },
+  hard:   { think: 0.08, speed: 1.03, aim: 0.88, tackle: 0.75, reach: 1.05, label: 'صعب' },
 };
 
 export const EMOTES = [

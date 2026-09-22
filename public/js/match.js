@@ -601,6 +601,7 @@ export class Match {
       case 'touch': case 'control': case 'steal': audio.touch(); break;
       case 'block': audio.kick(0.3); break;
       case 'bounce': audio.bounce(e.v); break;
+      case 'board': audio.board(e.v); if (e.v > 14) this.world.shake = Math.max(this.world.shake || 0, 0.15); break;
       case 'post':
         audio.post();
         if (!replay) { this.banner('القائم!', '', 'warn'); audio.say(pick(SAY.post), true); this.excite = 0.9; }

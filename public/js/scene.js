@@ -6,7 +6,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 let ENV_TEX = null;
 import { FIELD, BALL_R, TEAMS } from '/shared/constants.js';
 
-const { L, W, GW, GH, GD, BOX_R, CIRCLE_R, POST_R } = FIELD;
+const { L, W, GW, GH, GD, BOX_R, CIRCLE_R, POST_R, WALL } = FIELD;
 const HL = L / 2, HW = W / 2;
 const PI = Math.PI;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -470,10 +470,32 @@ export class World {
       m.castShadow = this.q === 'high';
       this.scene.add(m);
     };
-    addBoard(L + 6, 0, HW + 2.4, PI);
-    addBoard(L + 6, 0, -HW - 2.4, 0);
-    addBoard(W + 5, HL + 3.4, 0, PI / 2);
-    addBoard(W + 5, -HL - 3.4, 0, -PI / 2);
+    const E = WALL + 0.06;
+    addBoard(L + 2 * E, 0, HW + E, PI);
+    addBoard(L + 2 * E, 0, -HW - E, 0);
+    const endLen = HW + E - (GW / 2 + 0.1);
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) addBoard(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
+    // زجاج شفاف فوق اللوحات (ملعب داخلي)
+    const glassM = new THREE.MeshPhysicalMaterial({ color: '#dff4ff', transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0, depthWrite: false, side: THREE.DoubleSide });
+    const frameM = new THREE.MeshStandardMaterial({ color: '#e8eef5', roughness: 0.4, metalness: 0.5 });
+    const addGlass = (len, x, y, rotY) => {
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.8), glassM);
+      toV(x, y, 0.9 + 0.9, g.position); g.rotation.y = rotY;
+      this.scene.add(g);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.06), frameM);
+      toV(x, y, 2.7, rail.position); rail.rotation.y = rotY;
+      this.scene.add(rail);
+      for (let i = 0; i <= Math.floor(len / 4); i++) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.8, 0.05), frameM);
+        const off = -len / 2 + i * (len / Math.floor(len / 4));
+        post.position.set(off, 0, 0);
+        const holder = new THREE.Group(); toV(x, y, 1.8, holder.position); holder.rotation.y = rotY; holder.add(post);
+        this.scene.add(holder);
+      }
+    };
+    addGlass(L + 2 * E, 0, HW + E, PI);
+    addGlass(L + 2 * E, 0, -HW - E, 0);
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) addGlass(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
   }
 
   // ---------------- المدرجات والجمهور ----------------

@@ -4,7 +4,7 @@ import { FIELD, BALL_R, PLAYER_R, GRAVITY, TEAM_SIZE, BTN, PHASE, STATE, DIFFICU
 import { charOf, CHARACTERS } from './characters.js';
 import { stadiumOf } from './stadiums.js';
 
-const { L, W, GW, GH, GD, BOX_R, CIRCLE_R, POST_R } = FIELD;
+const { L, W, GW, GH, GD, BOX_R, CIRCLE_R, POST_R, WALL } = FIELD;
 const HL = L / 2, HW = W / 2;
 const PI = Math.PI, TAU = PI * 2;
 
@@ -37,18 +37,18 @@ export function integrateMovement(p, mx, my, sprint, dt, mul = 1) {
   const len = hyp(mx, my);
   if (len > 1) { mx /= len; my /= len; }
   const spd = hyp(p.vx, p.vy);
-  const maxSp = 5.7 * mul * (sprint ? 1.42 : 1);
+  const maxSp = 7.0 * mul * (sprint ? 1.33 : 1);
   const dvx = mx * maxSp - p.vx, dvy = my * maxSp - p.vy;
   // زخم واقعي: الانعطاف الحاد أثناء الجري السريع أصعب
-  let accel = sprint ? 13 : 16;
+  let accel = sprint ? 22 : 26;
   if (spd > 3 && len > 0.1) {
     const dot = (p.vx * mx + p.vy * my) / (spd * Math.min(1, len));
-    if (dot < 0.3) accel *= 0.55 + 0.25 * (dot + 1);
+    if (dot < 0.3) accel *= 0.75 + 0.15 * (dot + 1);
   }
-  if (len < 0.1) accel = 19; // التوقف
+  if (len < 0.1) accel = 26; // التوقف
   const dvl = hyp(dvx, dvy);
   const maxStep = accel * dt;
-  let k = Math.min(1, 9 * dt);
+  let k = Math.min(1, 14 * dt);
   let sx = dvx * k, sy = dvy * k;
   const sl = hyp(sx, sy);
   if (sl > maxStep) { sx *= maxStep / sl; sy *= maxStep / sl; }
@@ -174,8 +174,8 @@ export class Game {
     const d = this.attackDir(p.team);
     const kicking = p.team === kickTeam;
     const table = kicking
-      ? [[-HL + 1.3, 0], [-14, -6.5], [-14, 6.5], [-0.45, 0.1], [-2.5, 8]]
-      : [[-HL + 1.3, 0], [-14, -6.5], [-14, 6.5], [-CIRCLE_R - 1, -3.5], [-CIRCLE_R - 1.5, 5]];
+      ? [[-HL + 1.3, 0], [-11, -5.5], [-11, 5.5], [-0.45, 0.1], [-2.5, 7]]
+      : [[-HL + 1.3, 0], [-11, -5.5], [-11, 5.5], [-CIRCLE_R - 1, -3.5], [-CIRCLE_R - 1.5, 5]];
     const [xr, y] = table[p.slot];
     return { x: xr * d, y: y * d };
   }
@@ -207,7 +207,7 @@ export class Game {
     this.phaseT += dt;
     switch (this.phase) {
       case PHASE.KICKOFF:
-        if (this.phaseT >= 2.0) { this.phase = PHASE.PLAY; this.phaseT = 0; this.ev({ e: 'whistle', k: 'start' }); }
+        if (this.phaseT >= 1.2) { this.phase = PHASE.PLAY; this.phaseT = 0; this.ev({ e: 'whistle', k: 'start' }); }
         break;
       case PHASE.PLAY:
       case PHASE.SETPIECE:
@@ -221,15 +221,15 @@ export class Game {
         }
         break;
       case PHASE.OUT:
-        if (this.phaseT >= 1.1) this.setupSetPiece();
+        if (this.phaseT >= 0.6) this.setupSetPiece();
         break;
       case PHASE.GOAL:
-        if (this.phaseT >= 4.8) { this.phase = PHASE.REPLAY; this.phaseT = 0; this.skipVotes.clear(); this.ev({ e: 'replay', gt: this.goalInfo ? this.goalInfo.t : this.time }); }
+        if (this.phaseT >= 3.6) { this.phase = PHASE.REPLAY; this.phaseT = 0; this.skipVotes.clear(); this.ev({ e: 'replay', gt: this.goalInfo ? this.goalInfo.t : this.time }); }
         break;
       case PHASE.REPLAY: {
         const humans = this.players.filter((p) => p.human);
         const allSkip = humans.length > 0 && humans.every((p) => this.skipVotes.has(p.id));
-        if (this.phaseT >= 6.2 || (allSkip && this.phaseT > 0.6)) {
+        if (this.phaseT >= 4.6 || (allSkip && this.phaseT > 0.4)) {
           if (this.golden) return this.endMatch();
           this.resetKickoff(this.goalInfo ? 1 - this.goalInfo.team : 0);
         }
@@ -314,7 +314,7 @@ export class Game {
     let sprint = !!(b & BTN.SPRINT) && mlen > 0.2;
     if (p.buff.dash > 0) { sprint = mlen > 0.2; p.stamina = Math.min(1, p.stamina + dt * 0.2); }
     else if (sprint) {
-      if (p.stamina > 0.02) p.stamina = Math.max(0, p.stamina - dt * 0.15 / p.c.stats.stamina);
+      if (p.stamina > 0.02) p.stamina = Math.max(0, p.stamina - dt * 0.075 / p.c.stats.stamina);
       else sprint = false;
     } else p.stamina = Math.min(1, p.stamina + dt * (mlen > 0.2 ? 0.07 : 0.12));
     p.sprinting = sprint;
@@ -345,7 +345,7 @@ export class Game {
     // التسديد (اضغط مطولاً للقوة)
     if (b & BTN.SHOOT) p.hold.shoot = Math.min(1.2, p.hold.shoot + dt);
     if (released & BTN.SHOOT) {
-      const pw = clamp(p.hold.shoot / 0.9, 0.2, 1);
+      const pw = p.human ? clamp(0.72 + (p.hold.shoot / 0.9) * 0.28, 0.72, 1) : clamp(p.hold.shoot / 0.9, 0.2, 1);
       p.hold.shoot = 0;
       this.tryKick(p, isTaker && this.sp.kind === 'throw' ? 'lob' : 'shot', pw, { dir: this.inputDir(p, inp) });
     }
@@ -358,7 +358,7 @@ export class Game {
     if (pressed & BTN.PASS) this.tryKick(p, 'pass', 0.6, { dir: this.inputDir(p, inp) });
     if (isTaker) {
       // تنفيذ تلقائي إذا تأخر اللاعب
-      if (this.phaseT > (p.human ? 7 : 1.3)) this.aiSetPiece(p);
+      if (this.phaseT > (p.human ? 4 : 0.6)) this.aiSetPiece(p);
       return;
     }
     if (pressed & BTN.TACKLE) this.tackle(p, inp);
@@ -372,8 +372,9 @@ export class Game {
   }
 
   clampPlayer(p) {
-    p.x = clamp(p.x, -HL - 3, HL + 3);
-    p.y = clamp(p.y, -HW - 3, HW + 3);
+    const inMouth = Math.abs(p.y) < GW / 2;
+    p.x = clamp(p.x, -HL - (inMouth ? GD : WALL - 0.3), HL + (inMouth ? GD : WALL - 0.3));
+    p.y = clamp(p.y, -HW - WALL + 0.3, HW + WALL - 0.3);
     // لا يدخل اللاعب عمق الشباك كثيراً
     if (Math.abs(p.x) > HL && Math.abs(p.y) < GW / 2 + PLAYER_R) {
       const lim = HL + GD - PLAYER_R;
@@ -448,7 +449,7 @@ export class Game {
     if (owner && owner.team !== p.team && !b.gk && db < 1.7) {
       // قطع واقف
       const behind = Math.cos(angDiff(owner.face, Math.atan2(p.y - owner.y, p.x - owner.x))) < -0.3;
-      let chance = 0.55 + 0.4 * (p.c.stats.tackle - owner.c.stats.dribble) - (behind ? 0.25 : 0);
+      let chance = 0.55 + 0.4 * (p.c.stats.tackle - owner.c.stats.dribble) - (behind ? 0.25 : 0) + (p.human ? 0.25 : 0);
       if (!owner.human) chance += 0.08;
       p.tackleCD = 0.8;
       if (this.rand() < chance) {
@@ -599,7 +600,7 @@ export class Game {
     b.lastTouch = p.id; b.lastTeam = p.team;
     p.pickupCD = 0.3; p.kickAnim = 0.4; p.hold.shoot = p.hold.lob = 0; p.kickBuf = null;
     if (isThrow) { b.z = 2.0; }
-    const acc = p.human ? 0.8 + 0.1 * st.shot : this.diff.aim;
+    const acc = p.human ? 0.93 : this.diff.aim;
     const dA = this.attackDir(p.team), goalX = dA * HL;
     const gdx = goalX - b.x, gdy = -b.y, gd = hyp(gdx, gdy);
     const cosToGoal = (dir.x * gdx + dir.y * gdy) / (gd || 1);
@@ -607,11 +608,18 @@ export class Game {
     let isShot = false;
 
     if (kind === 'shot') {
-      let spd = header ? (10 + 8 * power) * st.shot : (14 + 16 * power) * st.shot;
+      let spd = header ? (12 + 9 * power) * st.shot : (17 + 19 * power) * st.shot;
       const fire = p.buff.fire > 0, curve = p.buff.curve > 0;
       if (fire) spd *= 1.4;
       if (curve) spd *= 1.1;
       let target = opt.point || null;
+      if (!target && p.human && cosToGoal > 0.15 && gd < 36 && Math.sign(gdx) === dA) {
+        // تصويب ذكي: الزاوية البعيدة عن الحارس مع احترام اتجاه اللاعب
+        const gk = this.players.find((o) => o.team !== p.team && this.isGK(o));
+        let ys = Math.abs(dir.y) >= 0.25 ? Math.sign(dir.y) : gk ? (gk.y > 0 ? -1 : 1) : 1;
+        if (gk && Math.abs(dir.y) < 0.5 && Math.abs(gk.y - ys * (GW / 2 - 0.6)) < 1.0) ys = -ys;
+        target = { x: goalX, y: ys * (GW / 2 - 0.6) };
+      }
       if (!target && cosToGoal > 0.5 && gd < 48 && Math.sign(gdx) === dA) {
         let ty = 0;
         if (Math.abs(dir.x) > 0.08 && Math.sign(dir.x) === Math.sign(gdx)) ty = b.y + dir.y * (gdx / dir.x);
@@ -645,12 +653,12 @@ export class Game {
       else if (curve) { b.fx = 'curve'; b.fxT = 2.5; p.buff.curve = 0; }
       if (isShot) { p.st.sh++; this.lastShot = { team: p.team, t: this.time, p: p.id }; }
     } else if (kind === 'pass') {
-      const mate = opt.mate || this.findPassTarget(p, dir);
+      const mate = opt.mate || this.findPassTarget(p, dir, p.human ? 1.25 : 0.85) || (p.human ? this.findPassTarget(p, dir, 3.2) : null);
       if (mate) {
         let tx = mate.x, ty = mate.y, spd = 12;
         for (let i = 0; i < 3; i++) {
           const d = hyp(tx - b.x, ty - b.y);
-          spd = clamp(7.5 + d * 0.72, 9, 25) * Math.sqrt(st.pass);
+          spd = clamp(10 + d * 0.85, 12, 30) * Math.sqrt(st.pass);
           const t = (d / spd) * 1.2;
           tx = mate.x + mate.vx * t * 0.9; ty = mate.y + mate.vy * t * 0.9;
         }
@@ -814,6 +822,7 @@ export class Game {
 
     this.collideGoal(b);
     this.collideWalls(b);
+    this.collideBoards(b);
     if (this.phase === PHASE.PLAY || this.phase === PHASE.SETPIECE || this.phase === PHASE.OUT || this.phase === PHASE.KICKOFF) this.ballPlayers(dt);
     this.checkBounds();
   }
@@ -1022,9 +1031,26 @@ export class Game {
     }
   }
 
+  // جدران الملعب الداخلي: الكرة ترتد ولا تخرج أبداً
+  collideBoards(b) {
+    const ym = HW + WALL - BALL_R;
+    if (Math.abs(b.y) > ym) {
+      b.y = Math.sign(b.y) * ym;
+      if (b.vy * Math.sign(b.y) > 0) { const v = Math.abs(b.vy); b.vy = -b.vy * 0.72; b.vx *= 0.9; b.spin *= 0.5; if (v > 5) this.ev({ e: 'board', v: r1(v) }); }
+    }
+    const inMouth = Math.abs(b.y) < GW / 2 - BALL_R * 0.5 && b.z < GH;
+    const xm = HL + WALL - BALL_R;
+    if (!inMouth && !b.inNet && Math.abs(b.x) > xm && Math.abs(b.prevX) <= xm + 0.05) {
+      b.x = Math.sign(b.x) * xm;
+      if (b.vx * Math.sign(b.x) > 0) { const v = Math.abs(b.vx); b.vx = -b.vx * 0.72; b.vy *= 0.9; if (v > 5) this.ev({ e: 'board', v: r1(v) }); }
+    }
+  }
+
   checkBounds() {
     if (this.phase !== PHASE.PLAY) return;
     const b = this.ball;
+    if (Math.abs(b.x) > HL + BALL_R && Math.abs(b.y) < GW / 2 && b.z < GH && !b.gk) return this.goalScored(b.x > 0 ? 0 : 1);
+    return;
     const ax = Math.abs(b.x);
     if (ax > HL + BALL_R) {
       const s = Math.sign(b.x);
@@ -1211,7 +1237,7 @@ export class Game {
   formationPos(p, attacking) {
     const dA = this.attackDir(p.team);
     const b = this.ball;
-    const base = [[0, 0], [-17, -7], [-17, 7], [-5, -8.5], [-5, 8.5]][p.slot];
+    const base = [[0, 0], [-13, -6], [-13, 6], [-4, -7], [-4, 7]][p.slot];
     const bx = b.x * dA;
     let xr = base[0] + bx * 0.62 + (attacking ? 8 : -2.5);
     if (p.slot >= 3 && attacking) xr += 3;
@@ -1267,11 +1293,14 @@ export class Game {
     }
     // الدفاع أو الكرة الحرة: من يطارد؟
     const mates = this.players.filter((m) => m.team === p.team && !this.isGK(m) && m.state !== STATE.DOWN);
-    const times = mates.map((m) => ({ m, t: hyp(b.x - m.x, b.y - m.y) / (m.c.stats.speed) - (m.human ? 1.5 : 0) }));
-    times.sort((a, c) => a.t - c.t);
-    const rank = times.findIndex((e) => e.m === p);
-    const humanFirst = times[0] && times[0].m.human;
-    const chaser = rank === 0 || (rank === 1 && humanFirst && owner && owner.team !== p.team && false);
+    const bots = mates.filter((m) => !m.human).map((m) => ({ m, t: hyp(b.x - m.x, b.y - m.y) / m.c.stats.speed }));
+    bots.sort((a, c) => a.t - c.t);
+    const rank = bots.findIndex((e) => e.m === p);
+    // اللاعب البشري القريب جداً من الكرة يتكفل بها، وإلا يطارد أقرب بوت دائماً
+    const myD = hyp(b.x - p.x, b.y - p.y);
+    const humanOnIt = mates.some((m) => m.human && hyp(b.x - m.x, b.y - m.y) < Math.min(4, myD - 1.5));
+    const humanFirst = humanOnIt;
+    const chaser = rank === 0 && !humanOnIt;
     const ownGoalX = -this.attackDir(p.team) * HL;
     if (chaser) {
       const ip = this.interceptPoint(p);
@@ -1290,7 +1319,7 @@ export class Game {
       else if (!owner && db > 10 && p.c.ability.id === 'dash' && p.cd <= 0 && R() < 0.08) this.useAbility(p, { mx: 0, my: 0 });
       return;
     }
-    if (rank === 1 || (rank === 2 && humanFirst)) {
+    if (rank === 1 || (rank === 0 && humanFirst)) {
       // تغطية بين الكرة والمرمى
       const gx = ownGoalX - b.x, gy = -b.y, gl = hyp(gx, gy) || 1;
       const dd = Math.min(6, gl * 0.4);
@@ -1337,7 +1366,7 @@ export class Game {
     }
     // التسديد
     const angleOK = Math.abs(p.y) < 11 || gd < 12;
-    const inRange = (p.x * dA) > HL - 23;
+    const inRange = (p.x * dA) > HL - 19;
     if (angleOK && inRange && (gd < 11 || R() < 0.33 + (pd < 2.5 ? 0.25 : 0))) {
       const gk = this.players.find((o) => o.team !== p.team && this.isGK(o));
       let ty = (GW / 2 - 0.55) * (R() < 0.5 ? 1 : -1);
@@ -1392,7 +1421,7 @@ export class Game {
         if (hyp(o.x - cx, o.y - cy) < 1.1 && t > 0.1 && t < 0.95) { blocked = true; break; }
       }
       const gain = (m.x - p.x) * dA;
-      const s = open * 1.2 + gain * 0.5 - d * 0.08 - (blocked ? 4 : 0) - (this.isGK(m) ? 8 : 0);
+      const s = open * 1.2 + gain * 0.5 - d * 0.08 - (blocked ? 4 : 0) - (this.isGK(m) ? 8 : 0) + (m.human ? 6 : 0);
       if (!best || s > best.s) best = { m, s, gain, blocked, open };
     }
     return best && best.open > 1.5 ? best : null;
