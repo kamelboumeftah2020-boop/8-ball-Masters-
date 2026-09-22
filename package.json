@@ -1,0 +1,16 @@
+{
+  "name": "football-legends-5v5",
+  "version": "1.0.0",
+  "description": "لعبة كرة قدم أونلاين 5 ضد 5 بشخصيات ذات قدرات خاصة",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "three": "^0.180.0",
+    "ws": "^8.18.0"
+  }
+}
