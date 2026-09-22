@@ -280,6 +280,7 @@ export class Match {
         x, y, vx, vy, face, state: q[5], emote: q[6], hold: q[10] || 0,
         gkHold: owner && state.b[8] === 1,
         throwIn: state.ph === PHASE.SETPIECE && state.sp === i && state.spk === 'throw',
+        ballX: state.b[0], ballY: state.b[1],
       }, tNow);
       if ((q[9] & 32) && Math.hypot(vx, vy) > 6) this.fx.sprintDust(x, y);
       if (q[9] & 31) this.fx.playerBuffs(p3, q[9], x, y);

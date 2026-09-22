@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { STATE, TEAMS } from '/shared/constants.js';
 import { charOf } from '/shared/characters.js';
+import { kitFor, jerseyTexture, bandTexture } from './skins.js';
 
 const PI = Math.PI;
 const matCache = new Map();
@@ -20,21 +21,28 @@ const sphere = (r, w = 16, h = 12) => geo(`sph${r}_${w}`, () => new THREE.Sphere
 const box = (x, y, z) => geo(`box${x}_${y}_${z}`, () => new THREE.BoxGeometry(x, y, z));
 
 function shade(m) { m.castShadow = true; m.receiveShadow = false; return m; }
-
-function numberTexture(num, name, color, textColor) {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = color; g.fillRect(0, 0, 128, 128);
-  g.fillStyle = textColor;
-  g.textAlign = 'center';
-  g.font = 'bold 22px sans-serif';
-  g.fillText(name.replace(/[^\p{L}\p{N} ]/gu, '').trim().slice(0, 10), 64, 30);
-  g.font = 'bold 78px Arial Black, sans-serif';
-  g.fillText(String(num), 64, 108);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+const lathe = (key, pts, seg = 18) => geo(`lathe_${key}_${seg}_${pts.join()}`, () => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg));
+function clothMat(map) {
+  return new THREE.MeshPhysicalMaterial({ map, roughness: 0.72, sheen: 0.8, sheenRoughness: 0.55, sheenColor: new THREE.Color('#ffffff').multiplyScalar(0.35) });
+}
+function skinMat(color) {
+  const k = 'skin' + color;
+  if (!matCache.has(k)) matCache.set(k, new THREE.MeshPhysicalMaterial({ color, roughness: 0.52, sheen: 0.35, sheenRoughness: 0.5, sheenColor: new THREE.Color('#ff8a70') }));
+  return matCache.get(k);
+}
+// حذاء كرة قدم: مقطع جانبي مبثوق بحواف ناعمة
+function bootGeo() {
+  return geo('boot', () => {
+    const sh = new THREE.Shape();
+    sh.moveTo(-0.05, 0); sh.lineTo(0.17, 0);
+    sh.quadraticCurveTo(0.215, 0.002, 0.212, 0.03);
+    sh.quadraticCurveTo(0.2, 0.058, 0.13, 0.066);
+    sh.lineTo(0.04, 0.095); sh.lineTo(-0.045, 0.1);
+    sh.quadraticCurveTo(-0.066, 0.05, -0.05, 0);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.066, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.01, bevelSegments: 3, curveSegments: 10 });
+    g.translate(0, 0, -0.033);
+    return g;
+  });
 }
 
 export function makeLabel(text, color = '#ffffff', bg = 'rgba(0,0,0,0.45)', big = false) {
@@ -64,7 +72,6 @@ export class Player3D {
     const look = this.c.look;
     const team = TEAMS[info.team] || TEAMS[0];
     const gk = info.slot === 0 && !opts.preview;
-    const jersey = gk ? team.gk : team.color;
     const h = look.height, b = look.build;
     this.h = h;
     this.root = new THREE.Group();
@@ -73,116 +80,141 @@ export class Player3D {
     this.hipY = 0.92 * h;
     this.body.position.y = this.hipY;
 
-    const skinM = mat(look.skin, 0.6);
-    const jerseyM = mat(jersey, 0.8);
-    const shortsM = mat(gk ? '#222222' : team.shorts, 0.8);
-    const socksM = mat(gk ? jersey : team.socks, 0.85);
-    const bootsM = mat(look.boots, 0.35);
-    const hairM = mat(look.hairColor, 0.9);
+    const kit = kitFor(info.team, gk ? 0 : 1, opts.skin);
+    const number = info.slot === 0 ? 1 : [0, 4, 5, 10, 9][info.slot] || 7;
+    const skinM = skinMat(look.skin);
+    const jerseyM = clothMat(jerseyTexture(kit, number, info.name || ''));
+    const sleeveM = clothMat(bandTexture(kit.base, kit.trim, 'bottom', kit.pattern === 'pinstripes'));
+    const shortsM = clothMat(bandTexture(kit.shorts, kit.shortsTrim, 'none', true));
+    const socksM = clothMat(bandTexture(kit.socks, kit.sockBand, 'top'));
+    const bootsM = mat(look.boots, 0.3, { metalness: 0.1 });
+    const soleM = mat('#1a1a1a', 0.6);
+    const hairM = mat(look.hairColor, 0.85);
+    const B = b;
 
-    // الجذع
+    // الحوض (الشورت) — مثبت على الورك
+    const shortsTop = shade(new THREE.Mesh(lathe('shorts', [[0.168, -0.2], [0.176, -0.12], [0.172, -0.02], [0.162, 0.07]], 22), shortsM));
+    shortsTop.scale.set(0.68 * B, 1, B);
+    this.body.add(shortsTop);
+
+    // الجذع (القميص بخامة كاملة)
     this.torso = new THREE.Group();
     this.body.add(this.torso);
-    const pelvis = shade(new THREE.Mesh(box(0.24 * b, 0.2, 0.36 * b), shortsM));
-    pelvis.position.y = 0.02;
-    this.torso.add(pelvis);
-    const chest = shade(new THREE.Mesh(capsule(0.17, 0.3), jerseyM));
-    chest.scale.set(0.78 * b, 1, 1.18 * b);
-    chest.position.y = 0.3;
+    const chest = shade(new THREE.Mesh(lathe('torso', [[0.158, -0.03], [0.152, 0.08], [0.148, 0.17], [0.165, 0.27], [0.188, 0.36], [0.2, 0.43], [0.205, 0.49], [0.185, 0.545], [0.12, 0.585], [0.055, 0.605]], 28), jerseyM));
+    chest.scale.set(0.66 * B, 1, B);
     this.torso.add(chest);
-    // رقم على الظهر
-    const numTex = numberTexture(info.slot === 0 ? 1 : [0, 4, 5, 10, 9][info.slot] || 7, info.name || '', jersey, team.color2);
-    const numM = new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.8 });
-    const back = new THREE.Mesh(geo('numplane', () => new THREE.PlaneGeometry(0.3, 0.3)), numM);
-    back.position.set(-0.135 * b - 0.01, 0.32, 0);
-    back.rotation.y = -PI / 2;
-    this.torso.add(back);
-    // شعار على الصدر
-    const crest = new THREE.Mesh(geo('crest', () => new THREE.CircleGeometry(0.04, 12)), mat(team.color2, 0.5));
-    crest.position.set(0.135 * b + 0.005, 0.42, -0.08);
-    crest.rotation.y = PI / 2;
-    this.torso.add(crest);
 
-    // الرأس
+    // الرقبة والرأس
     this.neck = new THREE.Group();
-    this.neck.position.y = 0.58;
+    this.neck.position.y = 0.57;
     this.torso.add(this.neck);
-    const neckM = shade(new THREE.Mesh(capsule(0.055, 0.06), skinM));
-    neckM.position.y = 0.02;
-    this.neck.add(neckM);
+    this.neck.add(shade(new THREE.Mesh(lathe('neck', [[0.05, -0.02], [0.046, 0.06], [0.05, 0.12]], 14), skinM)));
     this.head = new THREE.Group();
-    this.head.position.y = 0.17;
+    this.head.position.y = 0.2;
     this.neck.add(this.head);
-    const headM = shade(new THREE.Mesh(sphere(0.125), skinM));
-    headM.scale.set(1, 1.1, 0.92);
-    this.head.add(headM);
-    const eyeM = mat('#111111', 0.3);
-    for (const s of [-1, 1]) {
-      const eye = new THREE.Mesh(sphere(0.018, 8, 6), eyeM);
-      eye.position.set(0.112, 0.02, s * 0.045);
-      this.head.add(eye);
-      const ear = new THREE.Mesh(sphere(0.03, 8, 6), skinM);
-      ear.position.set(0, 0, s * 0.118);
-      ear.scale.set(0.6, 1, 0.5);
-      this.head.add(ear);
-    }
-    const nose = new THREE.Mesh(box(0.03, 0.04, 0.03), skinM);
-    nose.position.set(0.125, -0.005, 0);
+    const skull = shade(new THREE.Mesh(sphere(0.105, 28, 20), skinM));
+    skull.scale.set(1.1, 1.2, 0.97); skull.position.set(-0.005, 0.015, 0);
+    this.head.add(skull);
+    const jaw = shade(new THREE.Mesh(sphere(0.082, 20, 14), skinM));
+    jaw.scale.set(1.05, 0.85, 0.96); jaw.position.set(0.022, -0.05, 0);
+    this.head.add(jaw);
+    const chin = new THREE.Mesh(sphere(0.03, 12, 10), skinM);
+    chin.position.set(0.085, -0.095, 0); chin.scale.set(0.9, 0.8, 1.2);
+    this.head.add(chin);
+    const nose = new THREE.Mesh(sphere(0.02, 12, 10), skinM);
+    nose.scale.set(0.9, 1.6, 0.8); nose.position.set(0.114, -0.005, 0);
     this.head.add(nose);
+    const eyeW = mat('#f4f1ea', 0.25), iris = mat('#2b1a10', 0.2), brow = mat(look.hairColor === '#f5f5f5' || look.hairColor === '#dff6ff' ? '#8a8a8a' : look.hairColor, 0.9), lip = mat('#8a4a3c', 0.5);
+    for (const sd of [-1, 1]) {
+      const ew = new THREE.Mesh(sphere(0.017, 12, 10), eyeW);
+      ew.scale.set(0.55, 0.75, 1); ew.position.set(0.1, 0.018, sd * 0.04);
+      this.head.add(ew);
+      const ir = new THREE.Mesh(sphere(0.0085, 10, 8), iris);
+      ir.position.set(0.108, 0.018, sd * 0.04);
+      this.head.add(ir);
+      const bw = new THREE.Mesh(box(0.012, 0.009, 0.038), brow);
+      bw.position.set(0.106, 0.045, sd * 0.041); bw.rotation.x = sd * -0.12;
+      this.head.add(bw);
+      const ear = shade(new THREE.Mesh(sphere(0.028, 10, 8), skinM));
+      ear.scale.set(0.55, 1, 0.45); ear.position.set(-0.005, 0.0, sd * 0.104);
+      this.head.add(ear);
+      const cheek = new THREE.Mesh(sphere(0.03, 10, 8), skinM);
+      cheek.position.set(0.07, -0.02, sd * 0.05);
+      this.head.add(cheek);
+    }
+    const mouth = new THREE.Mesh(box(0.008, 0.009, 0.042), lip);
+    mouth.position.set(0.103, -0.058, 0);
+    this.head.add(mouth);
     this.addHair(look, hairM, skinM);
 
     // الذراعان
     this.arms = [];
-    for (const s of [-1, 1]) {
+    const gloveM = gk || look.acc === 'gloves' ? mat(gk ? '#f2f2f2' : look.accColor, 0.55) : null;
+    for (const sd of [-1, 1]) {
       const sh = new THREE.Group();
-      sh.position.set(0, 0.47, s * 0.21 * b);
+      sh.position.set(0, 0.49, sd * 0.215 * B);
       this.torso.add(sh);
-      const sleeve = shade(new THREE.Mesh(capsule(0.06 * b, 0.1), jerseyM));
-      sleeve.position.y = -0.08;
+      const delt = shade(new THREE.Mesh(sphere(0.07 * B, 16, 12), sleeveM));
+      delt.scale.set(1, 0.9, 1); delt.position.y = -0.01;
+      sh.add(delt);
+      const sleeve = shade(new THREE.Mesh(lathe('sleeve', [[0.058, -0.17], [0.063, -0.08], [0.066, 0.0]], 16), sleeveM));
+      sleeve.scale.set(B, 1, B);
       sh.add(sleeve);
-      const upper = shade(new THREE.Mesh(capsule(0.048 * b, 0.16), skinM));
-      upper.position.y = -0.14;
+      const upper = shade(new THREE.Mesh(lathe('uarm', [[0.038, -0.28], [0.046, -0.21], [0.052, -0.13], [0.05, -0.04]], 14), kit.longSleeves ? sleeveM : skinM));
+      upper.scale.set(B, 1, B);
       sh.add(upper);
       const el = new THREE.Group();
       el.position.y = -0.27;
       sh.add(el);
-      const fore = shade(new THREE.Mesh(capsule(0.042 * b, 0.18), gk ? mat(jersey, 0.8) : skinM));
-      fore.position.y = -0.12;
+      const fore = shade(new THREE.Mesh(lathe('farm', [[0.029, -0.235], [0.036, -0.16], [0.043, -0.06], [0.04, 0.02]], 14), kit.longSleeves ? sleeveM : skinM));
+      fore.scale.set(B, 1, B);
       el.add(fore);
-      const glove = look.acc === 'gloves' || gk;
-      const hand = shade(new THREE.Mesh(sphere(glove ? 0.065 : 0.048, 10, 8), glove ? mat(gk ? '#f5f5f5' : look.accColor, 0.5) : skinM));
-      hand.position.y = -0.26;
+      const hand = shade(new THREE.Mesh(sphere(0.045, 14, 10), gloveM || skinM));
+      hand.scale.set(gloveM ? 0.75 : 0.55, 1.15, gloveM ? 1.25 : 1);
+      hand.position.y = -0.285;
       el.add(hand);
+      const thumb = new THREE.Mesh(capsule(0.012, 0.03), gloveM || skinM);
+      thumb.position.set(0.02, -0.265, sd * -0.02); thumb.rotation.z = 0.5;
+      el.add(thumb);
       if (look.acc === 'wristbands') {
-        const wb = new THREE.Mesh(geo('wb', () => new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10)), mat(look.accColor, 0.6));
-        wb.position.y = -0.2;
+        const wb = new THREE.Mesh(geo('wb', () => new THREE.CylinderGeometry(0.036, 0.036, 0.045, 14)), mat(look.accColor, 0.7));
+        wb.position.y = -0.21;
         el.add(wb);
       }
-      this.arms.push({ sh, el, s });
+      this.arms.push({ sh, el, s: sd });
     }
 
     // الساقان
     this.legs = [];
-    for (const s of [-1, 1]) {
+    for (const sd of [-1, 1]) {
       const hip = new THREE.Group();
-      hip.position.set(0, 0, s * 0.1 * b);
+      hip.position.set(0, 0, sd * 0.095 * B);
       this.body.add(hip);
-      const shortLeg = shade(new THREE.Mesh(capsule(0.085 * b, 0.12), shortsM));
-      shortLeg.position.y = -0.1;
+      const shortLeg = shade(new THREE.Mesh(lathe('sleg', [[0.088, -0.22], [0.094, -0.12], [0.092, 0.02]], 18), shortsM));
+      shortLeg.scale.set(B, 1, B);
       hip.add(shortLeg);
-      const thigh = shade(new THREE.Mesh(capsule(0.07 * b, 0.22), skinM));
-      thigh.position.y = -0.24;
+      const thigh = shade(new THREE.Mesh(lathe('thigh', [[0.052, -0.44 * h], [0.064, -0.36], [0.078, -0.24], [0.084, -0.12]], 16), skinM));
+      thigh.scale.set(B, 1, B);
       hip.add(thigh);
       const knee = new THREE.Group();
       knee.position.y = -0.44 * h;
       hip.add(knee);
-      const shin = shade(new THREE.Mesh(capsule(0.058 * b, 0.28), socksM));
-      shin.position.y = -0.2;
+      const kc = new THREE.Mesh(sphere(0.05, 12, 10), skinM);
+      kc.scale.set(1.05, 1, 1);
+      knee.add(kc);
+      const shin = shade(new THREE.Mesh(lathe('shin', [[0.046, -0.1], [0.05, -0.04], [0.049, 0.01]], 14), skinM));
+      shin.scale.set(B, 1, B);
       knee.add(shin);
-      const boot = shade(new THREE.Mesh(box(0.24, 0.075, 0.1), bootsM));
-      boot.position.set(0.05, -0.43 * h, 0);
+      const sock = shade(new THREE.Mesh(lathe('sock', [[0.034, -0.43 * h], [0.037, -0.36], [0.05, -0.26], [0.058, -0.17], [0.054, -0.09], [0.052, -0.06]], 16), socksM));
+      sock.scale.set(B, 1, B);
+      knee.add(sock);
+      const boot = shade(new THREE.Mesh(bootGeo(), bootsM));
+      boot.position.set(0, -0.475 * h, 0);
       knee.add(boot);
-      this.legs.push({ hip, knee, s });
+      const sole = new THREE.Mesh(box(0.25, 0.018, 0.085), soleM);
+      sole.position.set(0.075, -0.475 * h + 0.004, 0);
+      knee.add(sole);
+      this.legs.push({ hip, knee, s: sd });
     }
 
     this.scale = 1;
@@ -467,6 +499,15 @@ export class Player3D {
         }
         break;
       }
+    }
+
+    // النظر نحو الكرة
+    if (s.ballX != null && (s.state === STATE.NORMAL || s.state === STATE.STUMBLE)) {
+      let rel = Math.atan2(s.ballY - s.y, s.ballX - s.x) - s.face;
+      rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+      const target = Math.max(-1.1, Math.min(1.1, rel)) * 0.75;
+      this.headYaw = (this.headYaw || 0) + (target - (this.headYaw || 0)) * Math.min(1, dt * 6);
+      this.head.rotation.y = this.headYaw;
     }
 
     // الركلة
