@@ -284,3 +284,10 @@ body.touch #emotebar { bottom: 170px; }
   body.touch #feed { top: 110px; }
   body.touch #emotebar { bottom: 200px; }
 }
+
+#rotate { position: fixed; inset: 0; z-index: 25; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(5, 8, 16, 0.92); text-align: center; padding: 20px; }
+#rotate .rot-ic { font-size: 56px; animation: rot 1.6s ease-in-out infinite; }
+#rotate b { font-size: 22px; } #rotate span { color: var(--muted); }
+@keyframes rot { 50% { transform: rotate(-90deg); } }
+@media (orientation: portrait) { body.touch.inmatch #rotate:not(.hidden) { display: flex; } }

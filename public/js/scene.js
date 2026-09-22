@@ -1,6 +1,9 @@
 // بناء الملعب ثلاثي الأبعاد بالكامل إجرائياً: عشب، خطوط، مدرجات، جمهور متحرك، أضواء، شباك، طقس
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+let ENV_TEX = null;
 import { FIELD, BALL_R, TEAMS } from '/shared/constants.js';
 
 const { L, W, GW, GH, GD, BOX_R, CIRCLE_R, POST_R } = FIELD;
@@ -49,6 +52,14 @@ export class World {
     const s = this.scene;
     s.background = new THREE.Color(stadium.skyBottom);
     s.fog = new THREE.FogExp2(stadium.fog, stadium.fogDensity * (quality === 'low' ? 0.8 : 1));
+    // إضاءة بيئية (انعكاسات ناعمة على اللاعبين والكرة)
+    if (!ENV_TEX) {
+      const pm = new THREE.PMREMGenerator(renderer);
+      ENV_TEX = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      pm.dispose();
+    }
+    s.environment = ENV_TEX;
+    s.environmentIntensity = { day: 0.45, sunset: 0.4, snow: 0.5, night: 0.3, storm: 0.3 }[stadium.time] ?? 0.4;
     this.buildSky();
     this.buildLights();
     this.buildPitch();
@@ -155,88 +166,167 @@ export class World {
   // ---------------- أرضية الملعب ----------------
   buildPitch() {
     const st = this.st;
+    const P = st.pitch;
     const M = 5; // الهامش حول الملعب
     const PW = L + M * 2, PH = W + M * 2;
-    const ppm = this.q === 'high' ? 36 : this.q === 'medium' ? 26 : 16;
+    const ppm = this.q === 'high' ? 36 : this.q === 'medium' ? 28 : 18;
     const cw = Math.round(PW * ppm), ch = Math.round(PH * ppm);
+    const X = (x) => (x + PW / 2) * ppm, Y = (y) => (PH / 2 - y) * ppm;
+    const blob = (g, x, y, r, col) => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    const puddles = [];
+    if (P.puddles) for (let i = 0; i < 26; i++) puddles.push([rnd(-HL, HL), rnd(-HW, HW), rnd(0.6, 2.2), rnd(0.5, 1)]);
     const tex = canvasTex(cw, ch, (g, w, h) => {
-      const X = (x) => (x + PW / 2) * ppm, Y = (y) => (PH / 2 - y) * ppm;
-      // خطوط القص
-      const stripe = 4;
-      for (let i = 0; i * stripe < PW; i++) {
-        g.fillStyle = st.grass[i % 2];
-        g.fillRect(i * stripe * ppm, 0, stripe * ppm + 1, h);
+      const [c0, c1] = P.colors;
+      g.fillStyle = c0; g.fillRect(0, 0, w, h);
+      // نمط القص حسب الملعب
+      g.save();
+      g.fillStyle = c1;
+      if (P.pattern === 'stripes' || P.pattern === 'snow') {
+        for (let i = 0; i * 4 < PW; i += 2) g.fillRect(i * 4 * ppm, 0, 4 * ppm, h);
+      } else if (P.pattern === 'checker') {
+        for (let i = 0; i * 4 < PW; i++) for (let j = 0; j * 4 < PH; j++) if ((i + j) % 2) g.fillRect(i * 4 * ppm, j * 4 * ppm, 4 * ppm + 1, 4 * ppm + 1);
+      } else if (P.pattern === 'diagonal') {
+        g.translate(w / 2, h / 2); g.rotate(PI / 4);
+        const d = Math.hypot(w, h);
+        for (let x = -d; x < d; x += 7 * ppm) { g.fillRect(x, -d, 3.5 * ppm, d * 2); }
+        g.rotate(-PI / 2);
+        g.globalAlpha = 0.35;
+        for (let x = -d; x < d; x += 7 * ppm) { g.fillRect(x, -d, 3.5 * ppm, d * 2); }
+      } else if (P.pattern === 'circles') {
+        for (let r = 40; r > 0; r -= 3) { g.fillStyle = (r / 3) % 2 < 1 ? c1 : c0; g.beginPath(); g.arc(X(0), Y(0), r * ppm, 0, PI * 2); g.fill(); }
       }
-      g.globalAlpha = 0.05;
-      for (let j = 0; j * stripe < PH; j++) {
-        if (j % 2) { g.fillStyle = '#000'; g.fillRect(0, j * stripe * ppm, w, stripe * ppm); }
-      }
-      g.globalAlpha = 1;
-      // حبيبات العشب
-      const n = Math.floor(w * h * 0.06);
+      g.restore();
+      // تدرج خفيف في الإضاءة
+      const vg = g.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, w * 0.7);
+      vg.addColorStop(0, 'rgba(255,255,220,0.06)'); vg.addColorStop(1, 'rgba(0,0,0,0.16)');
+      g.fillStyle = vg; g.fillRect(0, 0, w, h);
+      // تبقّع طبيعي للعشب
+      for (let i = 0; i < 260; i++) blob(g, rnd(0, w), rnd(0, h), rnd(1, 4) * ppm, Math.random() < 0.5 ? 'rgba(0,30,0,0.07)' : 'rgba(210,230,120,0.06)');
+      const n = Math.floor(w * h * 0.05);
       for (let i = 0; i < n; i++) {
-        const l = Math.random();
-        g.fillStyle = l < 0.5 ? `rgba(0,0,0,${0.05 + Math.random() * 0.08})` : `rgba(255,255,160,${0.03 + Math.random() * 0.06})`;
-        g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 1.5, 1 + Math.random() * 2);
+        g.fillStyle = Math.random() < 0.55 ? `rgba(0,20,0,${0.05 + Math.random() * 0.09})` : `rgba(230,255,170,${0.03 + Math.random() * 0.06})`;
+        g.fillRect(Math.random() * w, Math.random() * h, 1, 1 + Math.random() * 2.5);
       }
-      // تآكل أمام المرميين
-      for (const s of [-1, 1]) {
-        for (let i = 0; i < 70; i++) {
-          const x = X(s * (HL - rnd(0, 4))), y = Y(rnd(-3, 3));
-          const r = rnd(0.3, 1.2) * ppm;
-          const gr = g.createRadialGradient(x, y, 0, x, y, r);
-          gr.addColorStop(0, st.snowy ? 'rgba(240,248,255,0.35)' : 'rgba(120,95,55,0.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-          g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
-        }
+      // جفاف (صحراء)
+      if (P.dry) {
+        for (let i = 0; i < 180; i++) blob(g, rnd(0, w), rnd(0, h), rnd(0.8, 3.5) * ppm, `rgba(${170 + rnd(0, 40)},${140 + rnd(0, 30)},80,${rnd(0.15, 0.35)})`);
       }
-      if (st.snowy) {
-        for (let i = 0; i < 1400; i++) {
-          const edge = Math.random() < 0.7;
+      // تآكل أمام المرميين ومنطقة الوسط
+      for (const sx of [-1, 1]) {
+        for (let i = 0; i < 90; i++) blob(g, X(sx * (HL - rnd(0, 4.5))), Y(rnd(-3.5, 3.5)), rnd(0.3, 1.3) * ppm, P.pattern === 'snow' ? 'rgba(120,100,70,0.25)' : 'rgba(115,90,50,0.28)');
+      }
+      for (let i = 0; i < 40; i++) blob(g, X(rnd(-1.5, 1.5)), Y(rnd(-1.5, 1.5)), rnd(0.3, 1) * ppm, 'rgba(115,90,50,0.18)');
+      // الثلج يغطي الملعب مع آثار أقدام اللاعبين
+      if (P.pattern === 'snow') {
+        for (let i = 0; i < 700; i++) {
+          const edge = Math.random() < 0.4;
           let x = rnd(-PW / 2, PW / 2), y = rnd(-PH / 2, PH / 2);
           if (edge) { if (Math.random() < 0.5) y = (Math.random() < 0.5 ? -1 : 1) * rnd(HW - 1, PH / 2); else x = (Math.random() < 0.5 ? -1 : 1) * rnd(HL - 1, PW / 2); }
-          const r = rnd(0.2, edge ? 1.6 : 0.6) * ppm;
-          const gr = g.createRadialGradient(X(x), Y(y), 0, X(x), Y(y), r);
-          gr.addColorStop(0, `rgba(250,252,255,${edge ? 0.7 : 0.25})`); gr.addColorStop(1, 'rgba(250,252,255,0)');
-          g.fillStyle = gr; g.fillRect(X(x) - r, Y(y) - r, r * 2, r * 2);
+          blob(g, X(x), Y(y), rnd(1.5, edge ? 5 : 4) * ppm, `rgba(246,250,255,${edge ? rnd(0.4, 0.7) : rnd(0.12, 0.3)})`);
+        }
+        const sn = Math.floor(w * h * 0.04);
+        for (let i = 0; i < sn; i++) { g.fillStyle = `rgba(255,255,255,${rnd(0.15, 0.45)})`; g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); }
+        // مسارات مكشوفة حيث يركض اللاعبون
+        for (let k = 0; k < 14; k++) {
+          let x = rnd(-HL, HL), y = rnd(-HW, HW), a = rnd(0, PI * 2);
+          for (let i = 0; i < 40; i++) { blob(g, X(x), Y(y), 0.5 * ppm, 'rgba(90,130,85,0.35)'); x += Math.cos(a) * 0.6; y += Math.sin(a) * 0.6; a += rnd(-0.3, 0.3); }
         }
       }
-      // الخطوط البيضاء
-      g.strokeStyle = 'rgba(255,255,255,0.92)';
-      g.fillStyle = 'rgba(255,255,255,0.92)';
-      g.lineWidth = 0.12 * ppm;
-      g.strokeRect(X(-HL), Y(HW), L * ppm, W * ppm);
-      g.beginPath(); g.moveTo(X(0), Y(HW)); g.lineTo(X(0), Y(-HW)); g.stroke();
-      g.beginPath(); g.arc(X(0), Y(0), CIRCLE_R * ppm, 0, PI * 2); g.stroke();
-      g.beginPath(); g.arc(X(0), Y(0), 0.2 * ppm, 0, PI * 2); g.fill();
-      for (const s of [-1, 1]) {
-        const cx = X(s * HL);
-        // منطقة الجزاء (قوس)
+      // برك الماء
+      for (const [x, y, r, k] of puddles) blob(g, X(x), Y(y), r * ppm, `rgba(40,60,70,${0.35 * k})`);
+      // الخطوط
+      const drawLines = () => {
         g.beginPath();
-        if (s > 0) g.arc(cx, Y(0), BOX_R * ppm, PI / 2, PI * 1.5); else g.arc(cx, Y(0), BOX_R * ppm, -PI / 2, PI / 2);
-        g.stroke();
-        // منطقة المرمى
-        g.beginPath();
-        if (s > 0) g.arc(cx, Y(0), 3.2 * ppm, PI / 2, PI * 1.5); else g.arc(cx, Y(0), 3.2 * ppm, -PI / 2, PI / 2);
-        g.stroke();
-        g.beginPath(); g.arc(X(s * (HL - 6)), Y(0), 0.16 * ppm, 0, PI * 2); g.fill();
-        // أقواس الركنيات
-        for (const t of [-1, 1]) {
-          g.beginPath();
-          const a0 = s > 0 ? (t > 0 ? PI / 2 : PI) : t > 0 ? 0 : -PI / 2;
-          g.arc(X(s * HL), Y(t * HW), 0.8 * ppm, a0, a0 + PI / 2);
-          g.stroke();
+        g.rect(X(-HL), Y(HW), L * ppm, W * ppm);
+        g.moveTo(X(0), Y(HW)); g.lineTo(X(0), Y(-HW));
+        g.moveTo(X(CIRCLE_R), Y(0)); g.arc(X(0), Y(0), CIRCLE_R * ppm, 0, PI * 2);
+        for (const sx of [-1, 1]) {
+          const cx = X(sx * HL);
+          for (const r of [BOX_R, 3.2]) {
+            if (sx > 0) { g.moveTo(cx, Y(0) + r * ppm); g.arc(cx, Y(0), r * ppm, PI / 2, PI * 1.5); }
+            else { g.moveTo(cx, Y(0) - r * ppm); g.arc(cx, Y(0), r * ppm, -PI / 2, PI / 2); }
+          }
+          for (const t of [-1, 1]) {
+            const a0 = sx > 0 ? (t > 0 ? PI / 2 : PI) : t > 0 ? 0 : -PI / 2;
+            g.moveTo(X(sx * HL) + Math.cos(a0) * 0.8 * ppm, Y(t * HW) + Math.sin(a0) * 0.8 * ppm);
+            g.arc(X(sx * HL), Y(t * HW), 0.8 * ppm, a0, a0 + PI / 2);
+          }
         }
+        g.stroke();
+        g.beginPath(); g.arc(X(0), Y(0), 0.2 * ppm, 0, PI * 2);
+        for (const sx of [-1, 1]) { g.moveTo(X(sx * (HL - 6)) + 0.16 * ppm, Y(0)); g.arc(X(sx * (HL - 6)), Y(0), 0.16 * ppm, 0, PI * 2); }
+        g.fill();
+      };
+      g.lineJoin = 'round';
+      if (P.glow) {
+        // خطوط نيون متوهجة
+        g.save();
+        g.shadowBlur = 0.9 * ppm; g.shadowColor = P.glow[0];
+        g.strokeStyle = P.glow[0]; g.fillStyle = P.glow[0]; g.lineWidth = 0.22 * ppm; g.globalAlpha = 0.55;
+        drawLines();
+        g.restore();
+      }
+      g.strokeStyle = P.lines; g.fillStyle = P.lines; g.globalAlpha = 0.93;
+      g.lineWidth = 0.12 * ppm;
+      drawLines();
+      g.globalAlpha = 1;
+      if (P.glow) {
+        // شعار في الدائرة
+        g.save(); g.globalAlpha = 0.18; g.fillStyle = P.glow[1];
+        g.beginPath(); g.arc(X(0), Y(0), (CIRCLE_R - 0.3) * ppm, 0, PI * 2); g.fill(); g.restore();
       }
     }, { aniso: this.renderer.capabilities.getMaxAnisotropy() });
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: st.wet ? 0.42 : 0.95, metalness: st.wet ? 0.08 : 0 });
+
+    // خريطة الخشونة (البرك لامعة)
+    let roughMap = null;
+    if (P.puddles || P.pattern === 'snow') {
+      roughMap = canvasTex(512, 340, (g, w, h) => {
+        const s2 = w / PW;
+        g.fillStyle = P.puddles ? '#b8b8b8' : '#f0f0f0'; g.fillRect(0, 0, w, h);
+        for (const [x, y, r] of puddles) blob(g, (x + PW / 2) * s2, (PH / 2 - y) * s2, r * s2 * 1.1, 'rgba(0,0,0,0.95)');
+      }, { linear: true });
+    }
+    // تفاصيل العشب الدقيقة (تتكرر)
+    const detail = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 5000; i++) {
+        const v = Math.floor(rnd(70, 190));
+        g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = rnd(0.6, 1.4);
+        const x = rnd(0, w), y = rnd(0, h), a = rnd(-0.5, 0.5) - PI / 2, l = rnd(2, 6);
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+      }
+    }, { repeat: true, linear: true });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: st.wet ? 0.55 : P.pattern === 'snow' ? 0.8 : 0.95, metalness: 0, roughnessMap: roughMap, envMapIntensity: 0.25 });
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uDetail = { value: detail };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform sampler2D uDetail;')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          float dt = texture2D(uDetail, vMapUv * vec2(${(PW / 1.6).toFixed(1)}, ${(PH / 1.6).toFixed(1)})).r;
+          float dt2 = texture2D(uDetail, vMapUv * vec2(${(PW / 7).toFixed(1)}, ${(PH / 7).toFixed(1)})).r;
+          diffuseColor.rgb *= 0.72 + dt * 0.4 + (dt2 - 0.5) * 0.25;`);
+    };
     const pitch = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
     pitch.rotation.x = -PI / 2;
     pitch.receiveShadow = this.q !== 'low';
     this.scene.add(pitch);
-    // الأرض المحيطة
+    // المضمار حول الملعب
+    const ringTex = canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = P.ring; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${rnd(0.02, 0.08)})`; g.fillRect(rnd(0, w), rnd(0, h), 2, 2); }
+    }, { repeat: true });
+    ringTex.repeat.set(10, 8);
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(PW + 14, PH + 14), new THREE.MeshStandardMaterial({ map: ringTex, roughness: st.wet ? 0.35 : 0.95 }));
+    ring.rotation.x = -PI / 2; ring.position.y = -0.01;
+    ring.receiveShadow = this.q !== 'low';
+    this.scene.add(ring);
     const around = new THREE.Mesh(
       new THREE.PlaneGeometry(260, 220),
-      new THREE.MeshStandardMaterial({ color: st.snowy ? '#e9f0f5' : st.time === 'sunset' ? '#b88a5a' : '#3d5c35', roughness: 1 }),
+      new THREE.MeshStandardMaterial({ color: P.around, roughness: 1 }),
     );
     around.rotation.x = -PI / 2;
     around.position.y = -0.02;
@@ -393,30 +483,66 @@ export class World {
     const roofMat = new THREE.MeshStandardMaterial({ color: st.roof, roughness: 0.6, metalness: 0.3, side: THREE.DoubleSide });
     const wallMat = new THREE.MeshStandardMaterial({ color: shadeHex(st.standColor, -0.1), roughness: 0.9 });
     this.crowdU = { uTime: { value: 0 }, uExcite: { value: 0 }, uTeam0: { value: 0 }, uTeam1: { value: 0 }, uWave: { value: -10 } };
-    const crowdGeo = this.makeCrowdGeo();
-    const crowdMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+    const crowdGeo = new THREE.PlaneGeometry(0.66, 1.32);
+    crowdGeo.translate(0, 0.5, 0);
+    const atlas = this.makeCrowdAtlas();
     const U = this.crowdU;
-    crowdMat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', `#include <common>
-          uniform float uTime; uniform float uExcite; uniform float uTeam0; uniform float uTeam1; uniform float uWave;
-          attribute float aPhase; attribute float aFan; attribute float aAng; attribute float aArm; attribute float aHead;`)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+    const lt = st.light || [1, 1, 1];
+    const crowdMat = new THREE.ShaderMaterial({
+      fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+        uMap: { value: null }, uMask: { value: null }, uLight: { value: new THREE.Vector3(lt[0], lt[1], lt[2]) },
+      }]),
+      vertexShader: `
+        uniform float uTime; uniform float uExcite; uniform float uTeam0; uniform float uTeam1; uniform float uWave;
+        attribute float aPhase; attribute float aFan; attribute float aAng;
+        varying vec2 vUv; varying vec3 vCol; varying float vShade;
+        #include <fog_pars_vertex>
+        void main() {
+          vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          float sc = length(instanceMatrix[0].xyz);
           float fanEx = aFan < 0.5 ? uTeam0 : (aFan < 1.5 ? uTeam1 : max(uTeam0, uTeam1) * 0.6);
-          float ex = max(uExcite * 0.5, fanEx);
+          float ex = max(uExcite * 0.45, fanEx);
           float wd = mod(aAng - uWave + 3.14159, 6.28318) - 3.14159;
           float wave = exp(-wd * wd * 18.0);
-          float bounce = abs(sin(uTime * (5.0 + fract(aPhase * 13.0) * 3.0) + aPhase * 6.28)) * (0.05 + ex * 0.32) + wave * 0.55;
-          float sway = sin(uTime * 1.3 + aPhase * 6.28) * 0.03;
-          float raise = clamp(ex * 1.6 * step(0.35, fract(aPhase * 7.0)) + wave, 0.0, 1.0);
-          if (aArm > 0.5) { transformed.y = mix(transformed.y, 1.25 - transformed.y + sin(uTime * 9.0 + aPhase * 20.0) * 0.08 * ex, raise); }
-          transformed.y += bounce; transformed.x += sway;`)
-        .replace('#include <color_vertex>', `#include <color_vertex>
+          float sp = 5.0 + fract(aPhase * 13.0) * 3.0;
+          float jump = abs(sin(uTime * sp + aPhase * 6.28));
+          float bounce = jump * (0.02 + ex * 0.3) + wave * 0.5;
+          float raise = max(step(0.5, ex * (0.6 + fract(aPhase * 7.0))) * step(0.3, jump), step(0.4, wave));
+          vec3 toCam = cameraPosition - base; toCam.y = 0.0; toCam = normalize(toCam);
+          vec3 right = vec3(toCam.z, 0.0, -toCam.x);
+          float sway = sin(uTime * 1.3 + aPhase * 6.28) * 0.04 * position.y;
+          vec3 wpos = base + right * (position.x * sc + sway) + vec3(0.0, position.y * sc + bounce, 0.0);
+          float variant = floor(fract(aPhase * 17.0) * 6.0);
+          vUv = vec2((uv.x + variant) / 6.0, (uv.y + raise) / 2.0);
           #ifdef USE_INSTANCING_COLOR
-          vColor.rgb = mix(vColor.rgb, vec3(0.86, 0.66, 0.5) * (0.55 + 0.45 * fract(aPhase * 31.0)), aHead);
-          #endif`);
-    };
+          vCol = instanceColor;
+          #else
+          vCol = vec3(1.0);
+          #endif
+          vShade = 0.82 + 0.18 * fract(aPhase * 29.0);
+          vec4 mvPosition = viewMatrix * vec4(wpos, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        uniform sampler2D uMap; uniform sampler2D uMask; uniform vec3 uLight;
+        varying vec2 vUv; varying vec3 vCol; varying float vShade;
+        #include <fog_pars_fragment>
+        void main() {
+          vec4 t = texture2D(uMap, vUv);
+          if (t.a < 0.5) discard;
+          float m = texture2D(uMask, vUv).r;
+          vec3 c = mix(t.rgb, t.rgb * vCol * 1.35, m) * uLight * vShade;
+          gl_FragColor = vec4(c, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+        }`,
+    });
+    crowdMat.uniforms.uMap.value = atlas.map;
+    crowdMat.uniforms.uMask.value = atlas.mask;
+    for (const k in U) crowdMat.uniforms[k] = U[k];
     this.crowdMat = crowdMat;
     const fill = (this.q === 'low' ? 0.45 : this.q === 'medium' ? 0.8 : 0.92) * st.crowd;
 
@@ -521,9 +647,9 @@ export class World {
       for (let i = 0; i < n; i++) {
         const [x, y, zz] = seats[i];
         tmpP.set(x, y, zz);
-        tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd(-0.25, 0.25));
+        tmpQ.identity();
         const sc = rnd(0.9, 1.1);
-        tmpS.set(sc, sc * rnd(0.92, 1.08), sc);
+        tmpS.set(sc, sc, sc);
         tmpM.compose(tmpP, tmpQ, tmpS);
         inst.setMatrixAt(i, tmpM);
         let fan;
@@ -572,22 +698,73 @@ export class World {
     this.flashSizes = fsize;
   }
 
-  makeCrowdGeo() {
-    const parts = [];
-    const add = (g, arm, head) => {
-      const n = g.attributes.position.count;
-      g.setAttribute('aArm', new THREE.BufferAttribute(new Float32Array(n).fill(arm), 1));
-      g.setAttribute('aHead', new THREE.BufferAttribute(new Float32Array(n).fill(head), 1));
-      g.deleteAttribute('uv');
-      parts.push(g);
-    };
-    const torso = new THREE.BoxGeometry(0.42, 0.5, 0.28); torso.translate(0, 0.32, 0); add(torso, 0, 0);
-    const head = new THREE.BoxGeometry(0.22, 0.24, 0.22); head.translate(0, 0.72, -0.02); add(head, 0, 1);
-    const legs = new THREE.BoxGeometry(0.38, 0.14, 0.4); legs.translate(0, 0.07, -0.18); add(legs, 0, 0);
-    for (const s of [-1, 1]) {
-      const arm = new THREE.BoxGeometry(0.1, 0.42, 0.1); arm.translate(s * 0.26, 0.38, 0); add(arm, 1, 0);
+  // أطلس رسومات المشجعين: 6 أشكال × وضعيتان (أيدٍ للأسفل / مرفوعة)
+  makeCrowdAtlas() {
+    const CW = 80, CH = 160, cols = 6;
+    const mk = () => { const c = document.createElement('canvas'); c.width = CW * cols; c.height = CH * 2; return c; };
+    const cm = mk(), cmask = mk();
+    const g = cm.getContext('2d'), gm = cmask.getContext('2d');
+    gm.fillStyle = '#000'; gm.fillRect(0, 0, cmask.width, cmask.height);
+    const skins = ['#f1c9a5', '#d9a47a', '#b97c50', '#8d5524', '#e8b890', '#6b3f22'];
+    const hairs = ['#2b1a10', '#111111', '#5a3b1c', '#c9a15a', '#1b1b1b', '#7a4a22'];
+    const styles = ['short', 'cap', 'long', 'bald', 'short', 'scarf'];
+    const shirt = (ctx, fill) => ctx.fillStyle = fill;
+    for (let v = 0; v < cols; v++) {
+      for (let pose = 0; pose < 2; pose++) {
+        const ox = v * CW, oy = (1 - pose) * CH; // الصف العلوي = مرفوعة (uv.y كبير)
+        const cx = ox + CW / 2;
+        const draw = (ctx, isMask) => {
+          const S = (c) => (isMask ? '#000' : c);
+          const T = (c) => (isMask ? '#fff' : c);
+          // الذراعان
+          ctx.lineCap = 'round';
+          if (pose === 1) {
+            for (const s of [-1, 1]) {
+              ctx.strokeStyle = T('#dcdcdc'); ctx.lineWidth = 11;
+              ctx.beginPath(); ctx.moveTo(cx + s * 17, oy + 72); ctx.lineTo(cx + s * 25, oy + 38); ctx.stroke();
+              ctx.strokeStyle = S(skins[v]); ctx.lineWidth = 9;
+              ctx.beginPath(); ctx.moveTo(cx + s * 25, oy + 40); ctx.lineTo(cx + s * 29, oy + 16); ctx.stroke();
+              ctx.fillStyle = S(skins[v]); ctx.beginPath(); ctx.arc(cx + s * 29, oy + 14, 5.5, 0, PI * 2); ctx.fill();
+            }
+          }
+          // الجذع
+          const gr = isMask ? '#fff' : (() => { const q = ctx.createLinearGradient(cx - 22, 0, cx + 22, 0); q.addColorStop(0, '#9a9a9a'); q.addColorStop(0.45, '#f2f2f2'); q.addColorStop(1, '#8a8a8a'); return q; })();
+          ctx.fillStyle = gr;
+          ctx.beginPath(); ctx.moveTo(cx - 21, oy + 160); ctx.lineTo(cx - 22, oy + 88); ctx.quadraticCurveTo(cx - 21, oy + 70, cx - 8, oy + 68);
+          ctx.lineTo(cx + 8, oy + 68); ctx.quadraticCurveTo(cx + 21, oy + 70, cx + 22, oy + 88); ctx.lineTo(cx + 21, oy + 160); ctx.closePath(); ctx.fill();
+          if (!isMask) {
+            // خطوط القميص وظلال
+            ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(cx - 21, oy + 125, 42, 35);
+            ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(cx - 3, oy + 70, 6, 5);
+          }
+          if (pose === 0) {
+            for (const s of [-1, 1]) {
+              ctx.strokeStyle = T('#c8c8c8'); ctx.lineWidth = 10;
+              ctx.beginPath(); ctx.moveTo(cx + s * 21, oy + 76); ctx.lineTo(cx + s * 23, oy + 108); ctx.stroke();
+              ctx.strokeStyle = S(skins[v]); ctx.lineWidth = 8;
+              ctx.beginPath(); ctx.moveTo(cx + s * 23, oy + 108); ctx.lineTo(cx + s * 16, oy + 128); ctx.stroke();
+            }
+          }
+          // الرقبة والرأس
+          ctx.fillStyle = S(skins[v]); ctx.fillRect(cx - 5, oy + 58, 10, 12);
+          const hg = isMask ? '#000' : (() => { const q = ctx.createRadialGradient(cx - 4, oy + 42, 2, cx, oy + 46, 15); q.addColorStop(0, skins[v]); q.addColorStop(1, '#00000000'); return q; })();
+          ctx.fillStyle = S(skins[v]); ctx.beginPath(); ctx.ellipse(cx, oy + 46, 12, 14, 0, 0, PI * 2); ctx.fill();
+          if (!isMask) { ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(cx + 5, oy + 48, 6, 12, 0, 0, PI * 2); ctx.fill(); }
+          ctx.fillStyle = S(hairs[v]);
+          const st2 = styles[v];
+          if (st2 === 'short') { ctx.beginPath(); ctx.ellipse(cx, oy + 38, 13, 8, 0, PI, 0); ctx.fill(); }
+          else if (st2 === 'long') { ctx.beginPath(); ctx.ellipse(cx, oy + 40, 14, 9, 0, PI, 0); ctx.fill(); ctx.fillRect(cx - 14, oy + 38, 5, 26); ctx.fillRect(cx + 9, oy + 38, 5, 26); }
+          else if (st2 === 'cap') { ctx.fillStyle = T('#dddddd'); ctx.beginPath(); ctx.ellipse(cx, oy + 37, 14, 9, 0, PI, 0); ctx.fill(); ctx.fillRect(cx - 16, oy + 36, 32, 4); }
+          else if (st2 === 'scarf') { ctx.beginPath(); ctx.ellipse(cx, oy + 38, 13, 7, 0, PI, 0); ctx.fill(); ctx.fillStyle = T('#e0e0e0'); ctx.fillRect(cx - 13, oy + 60, 26, 9); ctx.fillRect(cx + 4, oy + 64, 8, 22); }
+          void hg;
+        };
+        draw(g, false); draw(gm, true);
+      }
     }
-    return mergeGeometries(parts);
+    const map = new THREE.CanvasTexture(cm); map.colorSpace = THREE.SRGBColorSpace;
+    const mask = new THREE.CanvasTexture(cmask);
+    for (const t of [map, mask]) { t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4; }
+    return { map, mask };
   }
 
   // ---------------- الأبراج الضوئية ----------------
@@ -819,6 +996,7 @@ export class World {
   startWave() { if (this.wave < -9) this.wave = 0; }
 
   dispose() {
+    this.scene.environment = null;
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {

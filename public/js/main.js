@@ -162,6 +162,7 @@ class App {
       $(id).addEventListener('change', () => this.net.send({ t: 'settings', settings: { stadium: $('room-stadium').value, duration: +$('room-dur').value, difficulty: $('room-diff').value } }));
     }
     // واجهة المباراة
+    $('rot-ok').onclick = () => { this.rotateDismissed = true; $('rotate').classList.add('hidden'); };
     $('hb-cam').onclick = () => this.match && this.match.cycleCamera();
     $('hb-sound').onclick = () => this.toggleSound();
     $('hb-full').onclick = () => this.toggleFull();
@@ -235,7 +236,7 @@ class App {
     this.selectChar(this.settings.char, true);
     // الملاعب
     const st = $('quick-stadiums');
-    st.innerHTML = STADIUMS.map((s) => `<div class="stad" data-st="${s.id}" style="background:linear-gradient(180deg, ${s.skyTop}, ${s.skyBottom});--g1:${s.grass[0]};--g2:${s.grass[1]}"><b>${s.name}</b><small>${s.desc}</small></div>`).join('');
+    st.innerHTML = STADIUMS.map((s) => `<div class="stad" data-st="${s.id}" style="background:linear-gradient(180deg, ${s.skyTop}, ${s.skyBottom});--g1:${s.pitch.colors[0]};--g2:${s.pitch.colors[1]}"><b>${s.name}</b><small>${s.desc}</small></div>`).join('');
     st.onclick = (e) => {
       const el = e.target.closest('[data-st]');
       if (!el) return;
@@ -378,6 +379,15 @@ class App {
     this.composerScene = null;
     this.input.enabled = true;
     this.input.showTouch(true);
+    document.body.classList.add('inmatch');
+    if (isMobile && !this.rotateDismissed) {
+      $('rotate').classList.remove('hidden');
+      // محاولة تثبيت الوضع الأفقي (يعمل على أندرويد في وضع ملء الشاشة)
+      const el = document.documentElement;
+      Promise.resolve(el.requestFullscreen ? el.requestFullscreen() : null)
+        .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+        .catch(() => {});
+    }
     this.input.keys.clear();
   }
 
@@ -385,6 +395,7 @@ class App {
     if (this.match) { this.match.destroy(); this.match = null; }
     this.input.enabled = false;
     this.input.showTouch(false);
+    document.body.classList.remove('inmatch');
   }
 
   quitMatch() {

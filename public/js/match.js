@@ -460,16 +460,10 @@ export class Match {
       } else if (this.camMode === 'top') {
         look.copy(toV(clamp(fx, -HL + 10, HL - 10), fy * 0.5, 0));
         pos.set(look.x, portrait ? 48 : 36, look.z + 9);
-      } else if (portrait) {
-        // عمودي: الملعب بالطول على الشاشة
-        const team = me ? this.roster[you].team : 0;
-        const d = team === 0 ? 1 : -1;
-        look.copy(toV(clamp(fx, -HL + 4, HL - 4) + d * 3, fy * 0.8, 0));
-        pos.copy(toV(look.x - d * 21, -look.z * 0.8, 30));
       } else {
         const cx = clamp(fx, -HL + (portrait ? 6 : 12), HL - (portrait ? 6 : 12));
         look.copy(toV(cx, fy * 0.55 + (portrait ? 0 : 1.5), 0));
-        const h = portrait ? 26 : 15, dz = portrait ? HW + 22 : HW + 11.5;
+        const h = portrait ? 30 : 15, dz = portrait ? HW + 30 : HW + 11.5;
         pos.set(cx * 0.96, h, dz + look.z * 0.25);
       }
     }
@@ -485,7 +479,7 @@ export class Match {
     this.camLook.lerp(look, Math.min(1, k * 1.4));
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);
-    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 58 : this.camMode === 'behind' ? 60 : 40;
+    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 70 : this.camMode === 'behind' ? 60 : 40;
     if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }
   }
 
