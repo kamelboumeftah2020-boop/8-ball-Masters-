@@ -28,6 +28,7 @@ class App {
     this.paused = false;
     this.quick = { stadium: 'royal', duration: 180, difficulty: 'normal', team: 0, slot: 3 };
     if (isMobile) document.body.classList.add('touch');
+    if (window.OFFLINE_ONLY) $('btn-online').classList.add('hidden');
     this.onResize();
     window.addEventListener('resize', () => this.onResize());
     this.bindUI();
@@ -541,11 +542,12 @@ class App {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+const boot = () => {
   try {
     window.app = new App();
   } catch (e) {
     console.error(e);
     document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;inset:0;display:grid;place-items:center;background:#0b1220;color:#fff;font-family:Tahoma;padding:20px;text-align:center">تعذر تشغيل اللعبة: متصفحك لا يدعم WebGL.<br>${esc(e.message)}</div>`);
   }
-});
+};
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot); else boot();
