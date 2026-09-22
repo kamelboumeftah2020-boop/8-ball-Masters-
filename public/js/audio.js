@@ -436,6 +436,7 @@ export class AudioEngine {
 
   // ---------- المعلق ----------
   say(text, excited = false) {
+    if (this.onSay) this.onSay(text, excited);
     if (!this.commentary || !this.enabled || !window.speechSynthesis) return;
     try {
       const u = new SpeechSynthesisUtterance(text);

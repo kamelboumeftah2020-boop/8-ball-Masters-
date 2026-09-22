@@ -590,7 +590,7 @@ export class Match {
         audio.kick(e.pw, !!e.h);
         if (e.k !== 'pass' && e.pw > 0.45) audio.whoosh(e.pw);
         if (!replay && e.p === this.you) this.vibrate(e.k === 'shot' ? 25 : 12);
-        if (!replay && e.s) audio.cheer(0.5 + e.pw * 0.4);
+        if (!replay && e.s) { audio.cheer(0.5 + e.pw * 0.4); if (Math.random() < 0.55) audio.say(pick(['تسديدة قوية!', 'يسدد نحو المرمى!', 'محاولة خطيرة!', `${name(e.p).replace(/[^\p{L} ]/gu, '')} يسدد!`])); }
         const p = pos(e.p);
         this.fx.kickDust(p.x, p.y, e.pw, !!e.h);
         if (!replay && e.s) { this.excite = Math.max(this.excite, 0.75); this.world.excite = Math.max(this.world.excite, 0.5); }
@@ -680,7 +680,7 @@ export class Match {
         }
         break;
       }
-      case 'tackle': if (e.ok) { audio.ability('tackle'); if (!replay && e.p === this.you) { audio.applause(1.5, 0.6); this.vibrate(20); } } break;
+      case 'tackle': if (e.ok) { audio.ability('tackle'); if (!replay && e.p === this.you) { audio.applause(1.5, 0.6); this.vibrate(20); if (Math.random() < 0.6) audio.say(pick(['افتكاك نظيف!', 'استرجع الكرة!', 'دفاع رائع!'])); } } break;
       case 'slide': audio.ability('slide'); break;
       case 'foul': audio.ability('tackle'); if (!replay) { audio.ooh(); if (e.v === this.you) this.vibrate(70); } break;
       case 'wallhit': this.fx.wallHit(e.x, e.y); audio.ability('wallhit'); break;

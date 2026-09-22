@@ -31,7 +31,9 @@
           <input id="inp-name" maxlength="14" placeholder="اكتب اسمك" />
         </label>
         <div class="menu-buttons">
+          <div id="career" class="career"></div>
           <button id="btn-quick" class="big primary">⚡ لعب سريع ضد البوتات</button>
+          <button id="btn-cup" class="big gold">🏆 كأس الأساطير</button>
           <button id="btn-online" class="big accent">🌐 أونلاين مع الأصدقاء</button>
           <div class="row">
             <button id="btn-settings">⚙️ الإعدادات</button>
@@ -195,6 +197,7 @@
       </div>
       <div id="banner" class="banner"><div id="banner-text"></div><div id="banner-sub"></div></div>
       <div id="countdown" class="hidden"></div>
+      <div id="subtitle"></div>
       <div id="feed"></div>
       <div id="pcard" class="hidden">
         <div id="pc-ab" class="ability"><span id="pc-ab-icon"></span><kbd>R</kbd></div>
@@ -231,7 +234,9 @@
       <div class="panel wide">
         <h1 id="end-title"></h1>
         <div id="end-score" class="end-score"></div>
+        <div id="end-cup" class="cupbar hidden"></div>
         <div id="end-mvp" class="mvp"></div>
+        <div id="end-xp" class="xp"></div>
         <div id="end-stats"></div>
         <div class="actions">
           <button id="end-menu" class="back">🏠 القائمة الرئيسية</button>

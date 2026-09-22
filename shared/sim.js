@@ -78,6 +78,7 @@ export class Game {
     this.pendingSP = null;
     this.skipVotes = new Set();
     this.over = false;
+    this.poss = [0, 0];
     const roster = opts.roster || [[], []];
     const usedChars = new Set();
     for (let team = 0; team < 2; team++) {
@@ -238,6 +239,7 @@ export class Game {
         this.stepCelebration(dt);
         return;
     }
+    if (this.phase === PHASE.PLAY && this.ball.owner >= 0) this.poss[this.players[this.ball.owner].team] += dt;
     if (this.phase === PHASE.GOAL) this.stepCelebration(dt);
     else this.updatePlayers(dt);
     this.updateZones(dt);
@@ -724,13 +726,13 @@ export class Game {
         const fx = Math.cos(p.face), fy = Math.sin(p.face);
         const reach = PLAYER_R * p.c.look.build + BALL_R + 0.18 + spd * 0.035;
         const tx = p.x + fx * reach, ty = p.y + fy * reach;
-        const k = 11 * p.c.stats.dribble;
+        const k = (p.human ? 15 : 11) * p.c.stats.dribble;
         b.vx = p.vx + (tx - b.x) * k; b.vy = p.vy + (ty - b.y) * k;
         b.vz = 0; b.z = BALL_R;
         b.spin *= 0.9;
         b.x += b.vx * dt; b.y += b.vy * dt;
         // لمسات أطول أثناء الركض السريع
-        if (p.sprinting && spd > 6.6 && p.touchT <= 0) {
+        if (!p.human && p.sprinting && spd > 6.6 && p.touchT <= 0) {
           b.owner = -1;
           b.vx = p.vx * 1.38 + fx * 0.6; b.vy = p.vy * 1.38 + fy * 0.6;
           p.pickupCD = 0.22; p.touchT = 0.7;
@@ -751,6 +753,27 @@ export class Game {
           const hs = hyp(b.vx, b.vy);
           if (hs > 16) { b.vx *= 16 / hs; b.vy *= 16 / hs; }
           b.vz -= b.vz * 3 * dt;
+        }
+      }
+    }
+
+    // مساعدة الالتصاق: الكرة القريبة تنجذب لقدم اللاعب البشري تلقائياً
+    if (this.phase === PHASE.PLAY && b.z < 1.4) {
+      let best = null, bd = 2.6;
+      for (const p of this.players) {
+        if (!p.human || p.state !== STATE.NORMAL || p.pickupCD > 0) continue;
+        const d = hyp(p.x - b.x, p.y - b.y);
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (best) {
+        let oppCloser = false;
+        for (const o of this.players) if (o.team !== best.team && hyp(o.x - b.x, o.y - b.y) < bd - 0.3) oppCloser = true;
+        if (!oppCloser) {
+          const dx = best.x - b.x, dy = best.y - b.y, d = bd || 1;
+          const k = (1 - d / 2.6) * 26;
+          b.vx += (dx / d) * k * dt + (best.vx - b.vx) * 3 * dt;
+          b.vy += (dy / d) * k * dt + (best.vy - b.vy) * 3 * dt;
+          if (b.vz > 0) b.vz *= 1 - 3 * dt;
         }
       }
     }
@@ -831,8 +854,8 @@ export class Game {
           return;
         }
       }
-      const reachFeet = pr + BALL_R + (p.state === STATE.SLIDE ? 0.55 : 0.28);
-      if (d < reachFeet && b.z < 1.05) {
+      const reachFeet = pr + BALL_R + (p.state === STATE.SLIDE ? 0.55 : p.human ? 0.6 : 0.28);
+      if (d < reachFeet && b.z < (p.human ? 1.4 : 1.05)) {
         if (p.state === STATE.SLIDE) {
           if (p.pickupCD > 0) continue;
           const a = Math.atan2(p.vy, p.vx);
@@ -864,7 +887,7 @@ export class Game {
       const p = best;
       const rel = hyp(b.vx - p.vx, b.vy - p.vy);
       if (p.kickBuf) { this.performKick(p, p.kickBuf.kind, p.kickBuf.power, p.kickBuf.opt); return; }
-      if (rel < 13 + 3 * p.c.stats.dribble || b.lastTeam === p.team) {
+      if (rel < (p.human ? 26 : 13 + 3 * p.c.stats.dribble) || b.lastTeam === p.team) {
         const prevOwnerTeam = b.lastTeam;
         b.owner = p.id; b.gk = false;
         b.lastTouch = p.id; b.lastTeam = p.team; b.fx = null;
@@ -1475,6 +1498,11 @@ export class Game {
       ]),
       z: this.zones.map((z) => (z.k === 'ice' ? ['ice', r2(z.x), r2(z.y), z.r, 0, r2(z.t / z.T), z.team] : ['wall', r2(z.x), r2(z.y), z.len, r2(z.a), r2(z.t / z.T), z.team])),
     };
+  }
+
+  possession() {
+    const t = this.poss[0] + this.poss[1] || 1;
+    return [Math.round((this.poss[0] / t) * 100), 100 - Math.round((this.poss[0] / t) * 100)];
   }
 
   statsTable() {

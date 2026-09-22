@@ -16,7 +16,9 @@ export class LocalTransport {
   roster() { return this.game.roster(); }
   update(dt) {
     if (this.paused) return;
-    this.acc += Math.min(dt, 0.1);
+    // تصوير بطيء لحظة الهدف
+    const slow = this.game.phase === PHASE.GOAL && this.game.phaseT < 1.1 ? 0.3 : 1;
+    this.acc += Math.min(dt, 0.1) * slow;
     let steps = 0;
     while (this.acc >= DT && steps < 8) {
       this.acc -= DT; steps++;
@@ -26,7 +28,7 @@ export class LocalTransport {
     const g = this.game;
     if (g.phase === PHASE.END && g.phaseT > 0.05 && !this.endSent) {
       this.endSent = true;
-      setTimeout(() => this.onEnd && this.onEnd({ stats: g.statsTable(), score: g.score }), 3500);
+      setTimeout(() => this.onEnd && this.onEnd({ stats: g.statsTable(), score: g.score, poss: g.possession() }), 3500);
     }
   }
   sendInput(inp) { if (this.you >= 0) this.game.setInput(this.you, inp); }

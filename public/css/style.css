@@ -315,3 +315,23 @@ body.touch .banner.small #banner-text { font-size: 22px; }
   #touch .tctl { transform: scale(0.85); transform-origin: bottom right; }
   #touch .stick { left: 95px; }
 }
+
+/* ---------- الكأس والتقدم ---------- */
+button.gold { background: linear-gradient(135deg, #fbbf24, #b45309); border-color: #fde68a; color: #1a1204; box-shadow: 0 6px 20px rgba(251, 191, 36, 0.35); }
+.career { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 700; }
+.career .lvl { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #111; border-radius: 10px; padding: 2px 10px; font-weight: 900; }
+.career .xpbar { flex: 1; height: 7px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden; }
+.career .xpbar i { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #fbbf24); }
+.xp { text-align: center; margin: 8px 0; font-weight: 900; }
+.xp .gain { color: #86efac; font-size: 20px; }
+.xp .lvlup { display: inline-block; margin-top: 6px; padding: 4px 14px; border-radius: 20px; background: linear-gradient(135deg, #fbbf24, #f97316); color: #111; animation: pop 0.6s 2; }
+.cupbar { display: flex; justify-content: center; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
+.cupbar span { padding: 4px 12px; border-radius: 20px; background: rgba(255,255,255,0.08); border: 1px solid var(--line); font-size: 13px; font-weight: 700; }
+.cupbar span.won { background: rgba(34,197,94,0.3); border-color: #4ade80; }
+.cupbar span.cur { background: rgba(251,191,36,0.3); border-color: #fbbf24; }
+.cupbar span.lost { background: rgba(239,68,68,0.3); border-color: #f87171; }
+.trophy { font-size: 80px; text-align: center; animation: goalwob 0.6s ease-in-out infinite alternate; filter: drop-shadow(0 0 24px rgba(251,191,36,0.8)); }
+#subtitle { position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%); max-width: 80vw; text-align: center; font-size: 17px; font-weight: 900;
+  color: #fff; background: rgba(0,0,0,0.55); padding: 6px 14px; border-radius: 10px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+#subtitle.show { opacity: 1; }
+#subtitle.hot { color: #ffd23f; font-size: 21px; }

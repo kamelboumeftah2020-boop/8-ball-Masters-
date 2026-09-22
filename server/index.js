@@ -154,7 +154,7 @@ class Room {
         }
         if (this.game.phase === PHASE.END && this.game.phaseT > 0.05 && !this.endSent) {
           this.endSent = true;
-          this.broadcast({ t: 'end', stats: this.game.statsTable(), score: this.game.score });
+          this.broadcast({ t: 'end', stats: this.game.statsTable(), score: this.game.score, poss: this.game.possession() });
         }
         if (this.game.phase === PHASE.END && this.game.phaseT > 14) return this.stop();
       }

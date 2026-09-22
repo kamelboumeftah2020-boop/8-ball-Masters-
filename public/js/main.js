@@ -13,6 +13,11 @@ import { TEAMS, DIFFICULTY, DURATIONS, TEAM_SIZE, STATE, BALL_R } from '/shared/
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const POS_NAMES = ['حارس', 'مدافع', 'مدافع', 'مهاجم', 'مهاجم'];
+const CUP_ROUNDS = [
+  { name: 'ربع النهائي', diff: 'easy' },
+  { name: 'نصف النهائي', diff: 'normal' },
+  { name: 'النهائي', diff: 'hard', stadium: 'neon' },
+];
 const isMobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
 
 class App {
@@ -29,10 +34,17 @@ class App {
     this.quick = { stadium: 'royal', duration: 180, difficulty: 'normal', team: 0, slot: 3 };
     if (isMobile) document.body.classList.add('touch');
     if (window.OFFLINE_ONLY) $('btn-online').classList.add('hidden');
+    // ترجمة المعلق كنص على الشاشة (إذا لم يوجد صوت عربي)
+    audio.onSay = (text, hot) => {
+      const el = $('subtitle');
+      el.textContent = '🎙️ ' + text; el.classList.toggle('hot', !!hot); el.classList.add('show');
+      clearTimeout(this.subT); this.subT = setTimeout(() => el.classList.remove('show'), 2600);
+    };
     this.onResize();
     window.addEventListener('resize', () => this.onResize());
     this.bindUI();
     this.buildMenus();
+    this.renderCareer();
     this.setupMenuScene(STADIUMS[Math.floor(Math.random() * STADIUMS.length)].id);
     this.setupNet();
     this.last = performance.now();
@@ -145,6 +157,7 @@ class App {
     $('btn-settings').onclick = () => this.show('settings');
     $('btn-help').onclick = () => this.show('help');
     $('btn-quick-start').onclick = () => this.startQuick();
+    $('btn-cup').onclick = () => this.startCup(0);
     $('btn-create').onclick = () => this.connectOnline().then(() => this.net.send({ t: 'create', settings: { ...this.quickSettings(), public: $('chk-public').checked, name: `غرفة ${this.settings.name}` } }));
     $('btn-join').onclick = () => { const c = $('inp-code').value.trim().toUpperCase(); if (c) this.connectOnline().then(() => this.net.send({ t: 'join', code: c })); };
     $('inp-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-join').click(); });
@@ -177,7 +190,14 @@ class App {
     $('end-menu').onclick = () => { this.quitMatch(); };
     $('end-again').onclick = () => {
       $('endscreen').classList.add('hidden');
-      if (this.match && this.match.local) { this.endMatch(); this.startQuick(); }
+      if (this.match && this.match.local) {
+        const cup = this.cup;
+        this.endMatch();
+        if (cup && cup.next != null) this.startCup(cup.next);
+        else if (cup && cup.champion) { this.cup = null; this.setupMenuScene(this.quick.stadium); this.show('main'); this.renderCareer(); }
+        else if (cup) this.startCup(0);
+        else this.startQuick();
+      }
       else { this.endMatch(); this.show('room'); this.renderRoom(); }
     };
     // الإدخال
@@ -353,8 +373,33 @@ class App {
     this.render(w.scene, this.camera);
   }
 
+  // ---------- التقدم (المستوى والنقاط) ----------
+  career() {
+    const c = this.settings.career || (this.settings.career = { xp: 0, coins: 0, matches: 0, wins: 0, goals: 0, cups: 0 });
+    return c;
+  }
+  levelOf(xp) { return Math.floor(Math.sqrt(xp / 120)) + 1; }
+  levelXp(l) { return (l - 1) * (l - 1) * 120; }
+  renderCareer() {
+    const c = this.career();
+    const l = this.levelOf(c.xp);
+    const k = (c.xp - this.levelXp(l)) / (this.levelXp(l + 1) - this.levelXp(l));
+    $('career').innerHTML = `<span class="lvl">⭐ ${l}</span><div class="xpbar"><i style="width:${Math.round(k * 100)}%"></i></div><span>🪙 ${c.coins}</span>${c.cups ? `<span>🏆 ${c.cups}</span>` : ''}`;
+  }
+
+  // ---------- كأس الأساطير ----------
+  startCup(round = 0) {
+    const R = CUP_ROUNDS[round];
+    const others = STADIUMS.filter((x) => x.id !== 'neon');
+    this.cup = { round, results: this.cup && round > 0 ? this.cup.results : [] };
+    Object.assign(this.quick, { difficulty: R.diff, duration: 180, stadium: R.stadium || others[Math.floor(Math.random() * others.length)].id, team: 0 });
+    this.startQuick(true);
+    setTimeout(() => this.match && this.match.banner(`🏆 ${R.name}`, `كأس الأساطير — ${DIFFICULTY[R.diff].label}`, 'goal', '#fbbf24'), 400);
+  }
+
   // ---------- المباراة ----------
-  startQuick() {
+  startQuick(keepCup) {
+    if (!keepCup) this.cup = null;
     this.loading(true, 'جارٍ تجهيز الملعب…');
     setTimeout(() => {
       const roster = [[], []];
@@ -407,6 +452,7 @@ class App {
     if (wasOnline || this.room) { this.net.send({ t: 'leave' }); this.room = null; }
     this.setupMenuScene(this.quick.stadium);
     this.show('main');
+    this.renderCareer();
   }
 
   showEnd(d) {
@@ -426,6 +472,43 @@ class App {
     const rows = stats.slice().sort((x, y) => x.team - y.team || y.g - x.g).map((s) => `<tr class="${s.id === you ? 'me' : ''}"><td><span style="color:${TEAMS[s.team].color}">●</span> ${charOf(s.char).icon} ${esc(s.name)}</td><td>${s.g}</td><td>${s.a}</td><td>${s.sh}</td><td>${s.ps}</td><td>${s.tk}</td><td>${s.sv}</td></tr>`).join('');
     $('end-stats').innerHTML = `<table class="st"><tr><th>اللاعب</th><th>⚽</th><th>🅰️</th><th>تسديد</th><th>تمرير</th><th>افتكاك</th><th>تصدي</th></tr>${rows}</table>`;
     $('end-again').textContent = m.local ? '🔁 مباراة جديدة' : '↩ العودة للغرفة';
+    // الاستحواذ
+    if (d.poss) $('end-score').insertAdjacentHTML('beforeend', `<div class="muted small" dir="rtl" style="margin-top:4px">الاستحواذ: ${TEAMS[0].name} ${d.poss[0]}٪ • ${TEAMS[1].name} ${d.poss[1]}٪</div>`);
+    // التقدم
+    const won = myTeam >= 0 && a !== b && (a > b ? 0 : 1) === myTeam;
+    const draw = a === b;
+    let xpHtml = '';
+    if (you >= 0 && !m.xpGiven) {
+      m.xpGiven = true;
+      const me = stats.find((x) => x.id === you) || { g: 0, a: 0, sv: 0, tk: 0 };
+      const c = this.career();
+      const before = this.levelOf(c.xp);
+      let gain = 40 + me.g * 35 + me.a * 20 + me.sv * 15 + me.tk * 5 + (won ? 100 : draw ? 40 : 0);
+      if (mvp && mvp.id === you) gain += 40;
+      const coins = Math.round(gain / 4) + (this.cup && won && this.cup.round === 2 ? 250 : 0);
+      c.xp += gain; c.coins += coins; c.matches++; c.goals += me.g; if (won) c.wins++;
+      const after = this.levelOf(c.xp);
+      xpHtml = `<span class="gain">+${gain} XP</span> &nbsp; 🪙 +${coins}${mvp && mvp.id === you ? ' &nbsp; ⭐ أفضل لاعب +40' : ''}` + (after > before ? `<br><span class="lvlup">⬆️ مستوى جديد: ${after}!</span>` : '');
+      this.saveSettings();
+    }
+    $('end-xp').innerHTML = xpHtml;
+    // الكأس
+    const cupEl = $('end-cup');
+    if (this.cup && m.local) {
+      const cup = this.cup;
+      cup.results[cup.round] = won ? 'won' : 'lost';
+      cup.next = null; cup.champion = false;
+      if (won && cup.round < CUP_ROUNDS.length - 1) { cup.next = cup.round + 1; $('end-again').textContent = `▶ ${CUP_ROUNDS[cup.next].name}`; }
+      else if (won) {
+        cup.champion = true;
+        this.career().cups++; this.saveSettings();
+        $('end-title').innerHTML = '<div class="trophy">🏆</div>بطل كأس الأساطير!';
+        $('end-again').textContent = '🏠 احتفل وارجع للقائمة';
+        audio.goalParty(); audio.chant(0);
+      } else { $('end-title').textContent = 'خرجت من الكأس 😔'; $('end-again').textContent = '🔁 أعد المحاولة من البداية'; }
+      cupEl.innerHTML = CUP_ROUNDS.map((r, i) => `<span class="${cup.results[i] || (i === cup.round ? 'cur' : '')}">${cup.results[i] === 'won' ? '✅' : cup.results[i] === 'lost' ? '❌' : '⚪'} ${r.name}</span>`).join('');
+      cupEl.classList.remove('hidden');
+    } else cupEl.classList.add('hidden');
     $('endscreen').classList.remove('hidden');
     this.input.showTouch(false);
   }
