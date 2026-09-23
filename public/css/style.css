@@ -489,8 +489,8 @@ button.primary { background: linear-gradient(135deg, #d4ff5c, #86d91a); border-c
   background: #04070d; animation: fadein 0.3s; }
 @keyframes fadein { from { opacity: 0; } }
 .vs-side { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 20px 4vw; position: relative; }
-.vs-side.l { background: linear-gradient(90deg, var(--c0) , rgba(4,7,13,0.2)); clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); animation: inl 0.5s cubic-bezier(.2,1.2,.4,1); }
-.vs-side.r { background: linear-gradient(270deg, var(--c1), rgba(4,7,13,0.2)); clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%); animation: inr 0.5s cubic-bezier(.2,1.2,.4,1); align-items: flex-end; }
+.vs-side.l { background: linear-gradient(90deg, var(--c0), #04070d 92%); clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); animation: inl 0.5s cubic-bezier(.2,1.2,.4,1); }
+.vs-side.r { background: linear-gradient(270deg, var(--c1), #04070d 92%); clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%); animation: inr 0.5s cubic-bezier(.2,1.2,.4,1); align-items: flex-end; }
 @keyframes inl { from { transform: translateX(-60%); } } @keyframes inr { from { transform: translateX(60%); } }
 .vs-team { font-size: clamp(26px, 4vw, 44px); font-weight: 900; text-shadow: 0 4px 14px rgba(0,0,0,0.6); direction: rtl; }
 .vs-list { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -547,3 +547,85 @@ button.primary { background: linear-gradient(135deg, #d4ff5c, #86d91a); border-c
 .fut-img { justify-content: flex-end; padding-right: 2%; }
 .fut.mini .fut-img { justify-content: center; padding: 0; margin-top: 30%; height: 44%; }
 .fut.mini .fut-top { top: 7%; left: 9%; }
+
+/* ================= إعداد المباراة ================= */
+.setup { width: min(1040px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+  background: linear-gradient(180deg, rgba(8, 12, 22, 0.95), rgba(4, 7, 13, 0.95)); border-top: 3px solid var(--acc); border-radius: 8px; padding: 16px 20px; }
+.setup-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.setup-head h2 { margin: 0; font-size: 24px; font-weight: 900; }
+.mode-switch { display: flex; background: rgba(255,255,255,0.06); border-radius: 30px; padding: 4px; gap: 4px; }
+.mode-switch button { border: none; border-radius: 26px; padding: 8px 18px; background: transparent; font-weight: 900; }
+.mode-switch button.on { background: var(--acc); color: #0b1600; box-shadow: 0 0 16px rgba(198,255,61,0.45); }
+.mode-switch button small { display: block; font-size: 10px; font-weight: 700; opacity: 0.75; }
+.clubs-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+.club-pick { position: relative; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cc) 55%, #05080f), #070b14 75%); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+.club-pick::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(120deg, rgba(255,255,255,0.04) 0 12px, transparent 12px 24px); }
+.club-pick > * { position: relative; }
+.cp-label { position: absolute !important; top: 8px; right: 12px; font-size: 11px; font-weight: 900; letter-spacing: 1px; color: var(--acc); }
+.cp-crest svg { width: 84px; height: 84px; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5)); }
+.cp-info { flex: 1; min-width: 0; }
+.cp-info b { display: block; font-size: 26px; font-weight: 900; line-height: 1.1; }
+.cp-info small { color: var(--muted); }
+.cp-info .ovr { font-family: var(--num); font-size: 15px; color: var(--acc); margin-top: 4px; }
+.cp-kit svg { width: 52px; height: 56px; }
+.cp-arrow { width: 36px; height: 52px; padding: 0; font-size: 26px; font-weight: 900; border-radius: 6px; background: rgba(0,0,0,0.35); }
+.cp-vs { align-self: center; font-family: var(--num); font-style: italic; font-size: 38px; font-weight: 700; color: #fff; text-shadow: 0 0 18px var(--acc); }
+.setup-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+.setup-opts { display: flex; flex-direction: column; gap: 2px; }
+.setup .stadiums { grid-template-columns: repeat(5, 1fr); }
+.setup .stad { min-height: 78px; border-radius: 4px; }
+.setup .actions { position: sticky; bottom: -16px; margin: 0 -20px -16px; padding: 10px 20px; background: rgba(4,7,13,0.97); border-top: 1px solid var(--line); }
+body.no-abilities #touch .t-ab, body.no-abilities #pc-ab { display: none !important; }
+@media (max-height: 520px) and (orientation: landscape) {
+  .setup { padding: 8px 14px; gap: 6px; }
+  .setup-head h2 { font-size: 17px; }
+  .mode-switch button { padding: 5px 12px; font-size: 13px; }
+  .club-pick { padding: 8px 10px; gap: 8px; }
+  .cp-crest svg { width: 52px; height: 52px; }
+  .cp-info b { font-size: 17px; }
+  .cp-kit { display: none; }
+  .cp-arrow { width: 28px; height: 40px; font-size: 20px; }
+  .cp-vs { font-size: 24px; }
+  .setup-grid { gap: 10px; }
+  .setup .stad { min-height: 48px; }
+  .setup .actions { bottom: -8px; margin: 0 -14px -8px; padding: 6px 14px; }
+}
+@media (max-width: 700px) { .clubs-row { grid-template-columns: 1fr; } .setup-grid { grid-template-columns: 1fr; } .cp-vs { display: none; } }
+
+body.no-abilities #pc-ab-name { display: none; }
+.vs-team svg { vertical-align: middle; }
+.sb-team svg { flex: none; }
+/* الرادار أسفل الوسط */
+#minimap { left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: 220px; height: 136px; opacity: 0.88; border-radius: 4px; border: 1px solid rgba(255,255,255,0.18); }
+#pcard { right: 14px; }
+
+/* ================= تقرير المباراة ================= */
+.report { width: min(980px, 100%); max-height: 100%; overflow-y: auto; background: linear-gradient(180deg, rgba(8,12,22,0.97), rgba(4,7,13,0.97)); border-top: 3px solid var(--acc); border-radius: 8px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.rep-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; direction: ltr; }
+.rep-team { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 900; direction: rtl; }
+.rep-team.l { justify-content: flex-end; } .rep-team svg { width: 64px; height: 64px; }
+.rep-score { text-align: center; direction: rtl; }
+.rep-score #end-title { font-size: 18px; font-weight: 900; color: var(--acc); margin: 0; }
+.rep-score #end-score { font-family: var(--num); font-size: 54px; font-weight: 700; direction: ltr; line-height: 1.05; margin: 0; }
+.rep-score .ft { font-family: var(--num); font-size: 12px; letter-spacing: 3px; color: var(--muted); }
+.rep-body { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; }
+.rep-stats { display: flex; flex-direction: column; gap: 8px; }
+.rs-row { display: grid; grid-template-columns: 34px 1fr 34px; gap: 8px; align-items: center; direction: ltr; font-family: var(--num); font-size: 15px; }
+.rs-row .lab { grid-column: 1 / 4; text-align: center; font-family: 'Cairo', sans-serif; font-size: 12px; color: var(--muted); margin-bottom: -4px; }
+.rs-bar { display: flex; height: 7px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.rs-bar i { display: block; height: 100%; }
+.rs-row b:last-child { text-align: right; }
+.rep-players table.st td:last-child b { font-family: var(--num); padding: 1px 6px; border-radius: 3px; background: #1e2a3c; }
+.rep-players table.st td:last-child b.hi { background: #16a34a; } .rep-players table.st td:last-child b.lo { background: #b45309; }
+@media (max-height: 520px) and (orientation: landscape) {
+  .report { padding: 8px 14px; gap: 6px; }
+  .rep-team { font-size: 16px; } .rep-team svg { width: 40px; height: 40px; }
+  .rep-score #end-score { font-size: 34px; }
+  .rep-body { gap: 10px; } .rs-row { font-size: 13px; }
+  #minimap { display: none; }
+}
+@media (max-width: 760px) { .rep-body { grid-template-columns: 1fr; } }
+/* القائمة المؤقتة */
+#pause .panel { width: min(420px, 100%); }
+#pause .menu-buttons button { text-align: right; padding: 12px 16px; border-radius: 4px; }

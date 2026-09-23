@@ -4,9 +4,10 @@ import { World, toV } from './scene.js';
 import { Effects } from './effects.js';
 import { Player3D } from './player3d.js';
 import { audio } from './audio.js';
-import { FIELD, BALL_R, TEAMS, PHASE, STATE, BTN, EMOTES } from '/shared/constants.js';
+import { FIELD, BALL_R, TEAMS, PHASE, STATE, BTN, EMOTES, MODES } from '/shared/constants.js';
 import { charOf } from '/shared/characters.js';
 import { stadiumOf } from '/shared/stadiums.js';
+import { clubOf, crestSVG } from '/shared/clubs.js';
 import { integrateMovement } from '/shared/sim.js';
 
 const { L, W, GW } = FIELD;
@@ -84,7 +85,9 @@ export class Match {
     this.transport = opts.transport;
     this.q = app.settings.quality;
     this.stadium = stadiumOf(opts.stadium);
-    this.world = new World(app.renderer, this.stadium, this.q);
+    this.world = new World(app.renderer, this.stadium, this.q, opts.mode || 'real');
+    this.M = MODES[opts.mode] || MODES.real;
+    document.body.classList.toggle('no-abilities', !this.M.abilities);
     this.scene = this.world.scene;
     this.fx = new Effects(this.world, this.q);
     this.fx.onBoom = () => audio.drum(audio.ctx ? audio.ctx.currentTime : 0, 0.4, 50);
@@ -435,7 +438,7 @@ export class Match {
     if (latest.b[6] === you && latest.b[8] !== 1) mul *= 0.93;
     if (srv[10] > 0) mul *= 0.8;
     const sprint = !!(inp.b & BTN.SPRINT) && (srv[7] > 0.03 || (flags & 2)) && Math.hypot(inp.mx, inp.my) > 0.2;
-    integrateMovement(p, inp.mx, inp.my, sprint, dt, mul);
+    integrateMovement(p, inp.mx, inp.my, sprint, dt, mul, MODES[this.opts.mode] || MODES.real);
     const spd = Math.hypot(p.vx, p.vy);
     const ml = Math.hypot(inp.mx, inp.my);
     let want = null;
@@ -551,7 +554,7 @@ export class Match {
         const cx = clamp(fx, -HL + (portrait ? 6 : 8), HL - (portrait ? 6 : 8));
         look.copy(toV(cx, fy * 0.75 + (portrait ? 0 : 0.5), 0));
         const touch = document.body.classList.contains('touch');
-        const h = portrait ? 30 : touch ? 8.5 : 11, dz = portrait ? HW + 30 : touch ? HW + 0.5 : HW + 4;
+        const h = portrait ? 30 : touch ? 12 : 15, dz = portrait ? HW + 30 : touch ? HW + 10 : HW + 17;
         pos.set(cx * 0.96, h, dz + look.z * 0.55);
       }
     }
@@ -567,7 +570,7 @@ export class Match {
     this.camLook.lerp(look, Math.min(1, k * 1.4));
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);
-    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 70 : this.camMode === 'behind' ? 60 : 44;
+    const fov = this.replay || ph === PHASE.GOAL ? 50 : portrait ? 70 : this.camMode === 'behind' ? 60 : document.body.classList.contains('touch') ? 34 : 30;
     if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }
   }
 
@@ -727,11 +730,11 @@ export class Match {
     const c = charOf(this.roster[you].char);
     const tips = [
       { id: 'move', ok: this.playT > 0.4, t: touch ? '🕹️ حرّك العصا على يسار الشاشة' : '🕹️ تحرك بـ WASD أو الأسهم', s: touch ? 'ادفعها للآخر لتركض بسرعة' : 'اضغط Shift للركض السريع' },
-      { id: 'shoot', ok: b[6] === you, t: touch ? '🦶 الزر الأحمر = تسديد!' : '🦶 مسافة = تسديد!', s: 'التصويب تلقائي نحو الزاوية البعيدة عن الحارس' },
+      { id: 'shoot', ok: b[6] === you, t: touch ? '🦶 الزر الأحمر = تسديد' : '🦶 مسافة = تسديد', s: this.M.assist ? 'التصويب تلقائي نحو الزاوية البعيدة عن الحارس' : 'اضغط مطولاً للقوة • وجّه العصا نحو الزاوية • القوة الزائدة تطير الكرة فوق العارضة' },
       { id: 'pass', ok: b[6] === you && seen.includes('shoot'), t: touch ? '➡️ الزر الأخضر = تمرير' : '➡️ E = تمرير • Q = كرة عالية', s: touch ? 'الدائرة الخضراء تحت زميلك • اضغط مطولاً لكرة عالية' : 'الدائرة الخضراء تحت الزميل الذي سيستلم' },
       { id: 'def', ok: ownerTeam >= 0 && ownerTeam !== myTeam, t: touch ? '🦵 في الدفاع: الزر الأحمر = افتكاك' : '🦵 F = افتكاك / انزلاق', s: 'اقترب من حامل الكرة ثم اضغط' },
-      { id: 'ability', ok: this.playT > 15 && state.p[you][8] === 0, t: `${c.icon} قدرتك الخاصة جاهزة: ${c.ability.name}`, s: (touch ? 'اضغط زر ✨ — ' : 'اضغط R — ') + c.ability.desc },
-      { id: 'walls', ok: this.playT > 28, t: '🏟️ الكرة ترتد من الجدران!', s: 'استعملها لتمرير الكرة حول المدافعين' },
+      { id: 'ability', ok: this.M.abilities && this.playT > 15 && state.p[you][8] === 0, t: `${c.icon} قدرتك الخاصة جاهزة: ${c.ability.name}`, s: (touch ? 'اضغط زر ✨ — ' : 'اضغط R — ') + c.ability.desc },
+      { id: 'walls', ok: this.M.walls && this.playT > 28, t: '🏟️ الكرة ترتد من الجدران!', s: 'استعملها لتمرير الكرة حول المدافعين' },
     ];
     const next = tips.find((x) => !seen.includes(x.id) && x.ok);
     if (!next) {
@@ -752,8 +755,8 @@ export class Match {
   // ---------- الواجهة ----------
   setupHUD() {
     $('hud').classList.remove('hidden');
-    $('sb-t0').textContent = TEAMS[0].name;
-    $('sb-t1').textContent = TEAMS[1].name;
+    $('sb-t0').innerHTML = `${crestSVG(clubOf(TEAMS[0].id), 26)}<span>${TEAMS[0].name}</span>`;
+    $('sb-t1').innerHTML = `<span>${TEAMS[1].name}</span>${crestSVG(clubOf(TEAMS[1].id), 26)}`;
     $('sb-c0').style.background = TEAMS[0].color;
     $('sb-c1').style.background = TEAMS[1].color;
     $('feed').innerHTML = '';

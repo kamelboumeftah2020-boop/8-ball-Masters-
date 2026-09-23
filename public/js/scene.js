@@ -36,7 +36,8 @@ function shadeHex(hex, amt) {
 }
 
 export class World {
-  constructor(renderer, stadium, quality = 'medium') {
+  constructor(renderer, stadium, quality = 'medium', mode = 'real') {
+    this.walls = mode === 'legends';
     this.renderer = renderer;
     this.st = stadium;
     this.q = quality;
@@ -470,11 +471,12 @@ export class World {
       m.castShadow = this.q === 'high';
       this.scene.add(m);
     };
-    const E = WALL + 0.06;
+    const E = this.walls ? WALL + 0.06 : 2.4;
     addBoard(L + 2 * E, 0, HW + E, PI);
     addBoard(L + 2 * E, 0, -HW - E, 0);
     const endLen = HW + E - (GW / 2 + 0.1);
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) addBoard(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
+    if (!this.walls) { addBoard(W + 5, HL + 3.4, 0, PI / 2); addBoard(W + 5, -HL - 3.4, 0, -PI / 2); }
+    if (this.walls) for (const sx of [-1, 1]) for (const sy of [-1, 1]) addBoard(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
     // زجاج شفاف فوق اللوحات (ملعب داخلي)
     const glassM = new THREE.MeshPhysicalMaterial({ color: '#dff4ff', transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0, depthWrite: false, side: THREE.DoubleSide });
     const frameM = new THREE.MeshStandardMaterial({ color: '#e8eef5', roughness: 0.4, metalness: 0.5 });
@@ -493,9 +495,9 @@ export class World {
         this.scene.add(holder);
       }
     };
-    addGlass(L + 2 * E, 0, HW + E, PI);
-    addGlass(L + 2 * E, 0, -HW - E, 0);
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) addGlass(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
+    if (this.walls) addGlass(L + 2 * E, 0, HW + E, PI);
+    if (this.walls) addGlass(L + 2 * E, 0, -HW - E, 0);
+    if (this.walls) for (const sx of [-1, 1]) for (const sy of [-1, 1]) addGlass(endLen, sx * (HL + E), sy * (GW / 2 + 0.1 + endLen / 2), sx > 0 ? PI / 2 : -PI / 2);
   }
 
   // ---------------- المدرجات والجمهور ----------------

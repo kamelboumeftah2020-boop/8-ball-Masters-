@@ -5,22 +5,38 @@ export const SNAPSHOT_EVERY = 2; // 30 لقطة/ثانية للشبكة
 
 // أبعاد الملعب بالمتر (x = الطول, y = العرض, z = الارتفاع)
 export const FIELD = {
-  L: 46,
-  W: 28,
-  GW: 6.8,   // عرض المرمى
-  GH: 2.4,   // ارتفاع العارضة
+  L: 52,
+  W: 34,
+  GW: 6.0,   // عرض المرمى
+  GH: 2.3,   // ارتفاع العارضة
   GD: 1.9,   // عمق الشباك
-  BOX_R: 7,  // نصف قطر منطقة الجزاء (شكل قوس)
-  CIRCLE_R: 4.5,
+  BOX_R: 7.5,  // نصف قطر منطقة الجزاء (شكل قوس)
+  CIRCLE_R: 5,
   POST_R: 0.07,
   WALL: 0.7, // جدران الملعب الداخلي (بعد خط التماس)
 };
 
-export const BALL_R = 0.2;
+export const BALL_R = 0.13;
 export const PLAYER_R = 0.45;
 export const GRAVITY = 9.81;
 
 export const TEAM_SIZE = 5;
+
+// أوضاع اللعب: واقعي (افتراضي) أو أساطير (قدرات خاصة وإيقاع أركيد)
+export const MODES = {
+  real: {
+    id: 'real', label: 'واقعي', base: 5.9, sprint: 1.47, acc: 11, accS: 8.5, stop: 15, k: 8, turn: 0.42, stamina: 0.11,
+    walls: false, abilities: false, assist: false, fouls: true, knock: true,
+    stickR: 1.4, stickK: 11, reach: 0.38, rel: 17, catchK: 16, pass: [7, 0.7, 8.5, 23], shot: [13, 17],
+    kickoff: 2.0, out: 1.0, spBot: 1.2, spHuman: 8, goalT: 4.8, replayT: 6.2,
+  },
+  legends: {
+    id: 'legends', label: 'أساطير', base: 7.0, sprint: 1.33, acc: 26, accS: 22, stop: 26, k: 14, turn: 0.75, stamina: 0.075,
+    walls: true, abilities: true, assist: true, fouls: false, knock: false,
+    stickR: 2.6, stickK: 26, reach: 0.6, rel: 26, catchK: 17, pass: [10, 0.85, 12, 30], shot: [17, 19],
+    kickoff: 1.2, out: 0.6, spBot: 0.6, spHuman: 4, goalT: 3.6, replayT: 4.6,
+  },
+};
 
 // أزرار الإدخال (bitmask)
 export const BTN = {

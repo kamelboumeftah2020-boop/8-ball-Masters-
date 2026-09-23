@@ -59,26 +59,22 @@
 
     <!-- ========== لعب سريع ========== -->
     <section id="scr-quick" class="screen hidden">
-      <div class="panel wide">
-        <h2>⚡ مباراة سريعة</h2>
-        <h4>الملعب</h4>
-        <div id="quick-stadiums" class="stadiums"></div>
-        <div class="grid2">
-          <div>
-            <h4>مدة المباراة</h4>
-            <div class="seg" id="quick-dur"></div>
-          </div>
-          <div>
-            <h4>مستوى البوتات</h4>
-            <div class="seg" id="quick-diff"></div>
-          </div>
-          <div>
-            <h4>فريقك</h4>
-            <div class="seg" id="quick-team"></div>
-          </div>
-          <div>
-            <h4>مركزك</h4>
-            <div class="seg" id="quick-pos"></div>
+      <div class="setup">
+        <div class="setup-head">
+          <h2>إعداد المباراة</h2>
+          <div class="mode-switch" id="quick-mode"></div>
+        </div>
+        <div class="clubs-row">
+          <div class="club-pick" id="pick-home"></div>
+          <div class="cp-vs">VS</div>
+          <div class="club-pick" id="pick-away"></div>
+        </div>
+        <div class="setup-grid">
+          <div class="setup-stad"><h4>الملعب</h4><div id="quick-stadiums" class="stadiums"></div></div>
+          <div class="setup-opts">
+            <div><h4>المدة</h4><div class="seg" id="quick-dur"></div></div>
+            <div><h4>المستوى</h4><div class="seg" id="quick-diff"></div></div>
+            <div><h4>مركزك</h4><div class="seg" id="quick-pos"></div></div>
           </div>
         </div>
         <div class="actions">
@@ -130,6 +126,9 @@
           <div class="card">
             <h4>إعدادات المباراة <small id="host-note" class="muted"></small></h4>
             <div class="row wrap">
+              <select id="room-mode"></select>
+              <select id="room-home"></select>
+              <select id="room-away"></select>
               <select id="room-stadium"></select>
               <select id="room-dur"></select>
               <select id="room-diff"></select>
@@ -253,13 +252,18 @@
     </div>
 
     <div id="endscreen" class="overlay hidden">
-      <div class="panel wide">
-        <h1 id="end-title"></h1>
-        <div id="end-score" class="end-score"></div>
+      <div class="report">
+        <div class="rep-head">
+          <div class="rep-team l" id="rep-t0"></div>
+          <div class="rep-score"><div id="end-title"></div><div id="end-score"></div><div class="ft">FULL TIME</div></div>
+          <div class="rep-team r" id="rep-t1"></div>
+        </div>
         <div id="end-cup" class="cupbar hidden"></div>
-        <div id="end-mvp" class="mvp"></div>
+        <div class="rep-body">
+          <div class="rep-stats" id="rep-stats"></div>
+          <div class="rep-players"><div id="end-mvp" class="mvp"></div><div id="end-stats"></div></div>
+        </div>
         <div id="end-xp" class="xp"></div>
-        <div id="end-stats"></div>
         <div class="actions">
           <button id="end-menu" class="back">🏠 القائمة الرئيسية</button>
           <button id="end-again" class="big primary">🔁 مباراة جديدة</button>

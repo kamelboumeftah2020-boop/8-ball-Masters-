@@ -1,6 +1,7 @@
 // نظام الأطقم (السكينات): كل طقم = بيانات فقط، والرسم يتم إجرائياً كخامة (texture)
 // لإضافة سكين جديد مستقبلاً: أضف عنصراً إلى KITS أو SKINS ثم مرّره إلى Player3D عبر opts.skin
 import * as THREE from 'three';
+import { TEAMS } from '/shared/constants.js';
 
 // أنماط القمصان المدعومة: plain, pinstripes, stripes, hoops, sash, halves, gradient, camo, chevron
 export const KITS = {
@@ -19,6 +20,8 @@ export const SKINS = {
 
 export function kitFor(team, slot, skin) {
   if (skin && SKINS[skin]) return SKINS[skin];
+  const T = TEAMS[team];
+  if (T && T.kit) return slot === 0 ? T.gkKit : T.kit;
   return KITS[(slot === 0 ? 'gk' : 'home') + team];
 }
 

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Player3D } from './player3d.js';
 import { CHARACTERS } from '/shared/characters.js';
+import { TEAMS } from '/shared/constants.js';
 
 const cache = new Map();
 let R = null;
@@ -29,7 +30,7 @@ function setup() {
 
 // team: 0/1، slot: للمركز (يؤثر على طقم الحارس)
 export function portrait(charId, team = 0, slot = 3) {
-  const key = `${charId}|${team}|${slot}`;
+  const key = `${charId}|${team}|${slot}|${TEAMS[team] && TEAMS[team].id}|${TEAMS[team] && TEAMS[team].color}`;
   if (cache.has(key)) return cache.get(key);
   let url = '';
   try {

@@ -9,7 +9,8 @@ import { portrait, cardHTML, ratings } from './portraits.js';
 import { LocalTransport, NetClient, NetTransport } from './net.js';
 import { CHARACTERS, charOf } from '/shared/characters.js';
 import { STADIUMS, stadiumOf } from '/shared/stadiums.js';
-import { TEAMS, DIFFICULTY, DURATIONS, TEAM_SIZE, STATE, BALL_R } from '/shared/constants.js';
+import { TEAMS, DIFFICULTY, DURATIONS, TEAM_SIZE, STATE, BALL_R, MODES } from '/shared/constants.js';
+import { CLUBS, clubOf, teamsFromClubs, crestSVG } from '/shared/clubs.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -24,6 +25,7 @@ const isMobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad
 class App {
   constructor() {
     this.loadSettings();
+    if (this.settings.homeClub) this.quick_home = this.settings.homeClub;
     this.canvas = $('gl');
     this.initRenderer();
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1200);
@@ -32,7 +34,10 @@ class App {
     this.match = null;
     this.room = null;
     this.paused = false;
-    this.quick = { stadium: 'royal', duration: 180, difficulty: 'normal', team: 0, slot: 3 };
+    this.quick = { stadium: 'royal', duration: 180, difficulty: 'normal', team: 0, slot: 3, mode: 'real', home: 'falcons', away: 'tigers' };
+    if (this.quick_home) this.quick.home = this.quick_home;
+    if (this.quick.home === this.quick.away) this.quick.away = CLUBS.find((c) => c.id !== this.quick.home).id;
+    this.applyClubs(this.quick.home, this.quick.away);
     if (isMobile) document.body.classList.add('touch');
     document.body.classList.toggle('lefty', !!this.settings.lefty);
     window.__noVib = this.settings.vibrate === false;
@@ -111,18 +116,19 @@ class App {
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer = r;
     this.composer = null;
-    if (q === 'high') this.initBloom();
+    if (q !== 'low') this.initBloom();
   }
 
   async initBloom() {
     try {
-      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { ShaderPass }] = await Promise.all([
         import('three/addons/postprocessing/EffectComposer.js'),
         import('three/addons/postprocessing/RenderPass.js'),
         import('three/addons/postprocessing/UnrealBloomPass.js'),
         import('three/addons/postprocessing/OutputPass.js'),
+        import('three/addons/postprocessing/ShaderPass.js'),
       ]);
-      this.bloomMods = { EffectComposer, RenderPass, UnrealBloomPass, OutputPass };
+      this.bloomMods = { EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass };
       this.composerScene = null;
     } catch (e) { console.warn('bloom unavailable', e); }
   }
@@ -130,10 +136,23 @@ class App {
   render(scene, camera) {
     if (this.bloomMods) {
       if (this.composerScene !== scene) {
-        const { EffectComposer, RenderPass, UnrealBloomPass, OutputPass } = this.bloomMods;
+        const { EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass } = this.bloomMods;
         this.composer = new EffectComposer(this.renderer);
         this.composer.addPass(new RenderPass(scene, camera));
-        this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(this.width, this.height), 0.35, 0.5, 0.85));
+        if (this.settings.quality === 'high') this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(this.width, this.height), 0.28, 0.45, 0.88));
+        // تدرج لوني سينمائي: تباين خفيف + تشبع + تظليل الأطراف (أسلوب البث التلفزيوني)
+        this.composer.addPass(new ShaderPass({
+          uniforms: { tDiffuse: { value: null } },
+          vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+          fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+            void main(){ vec4 c = texture2D(tDiffuse, vUv);
+              float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+              c.rgb = mix(vec3(l), c.rgb, 1.12);
+              c.rgb = (c.rgb - 0.18) * 1.06 + 0.18;
+              vec2 d = vUv - 0.5; float v = smoothstep(0.85, 0.25, length(d * vec2(1.0, 1.25)));
+              c.rgb *= mix(0.72, 1.0, v);
+              gl_FragColor = vec4(max(c.rgb, 0.0), c.a); }`,
+        }));
         this.composer.addPass(new OutputPass());
         this.composer.setSize(this.width, this.height);
         this.composerScene = scene;
@@ -200,8 +219,8 @@ class App {
     const sendChat = () => { const i = $('room-chat-inp'); if (i.value.trim()) { this.net.send({ t: 'chat', text: i.value.trim() }); i.value = ''; } };
     $('room-chat-send').onclick = sendChat;
     $('room-chat-inp').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
-    for (const id of ['room-stadium', 'room-dur', 'room-diff']) {
-      $(id).addEventListener('change', () => this.net.send({ t: 'settings', settings: { stadium: $('room-stadium').value, duration: +$('room-dur').value, difficulty: $('room-diff').value } }));
+    for (const id of ['room-stadium', 'room-dur', 'room-diff', 'room-mode', 'room-home', 'room-away']) {
+      $(id).addEventListener('change', () => this.net.send({ t: 'settings', settings: { stadium: $('room-stadium').value, duration: +$('room-dur').value, difficulty: $('room-diff').value, mode: $('room-mode').value, home: $('room-home').value, away: $('room-away').value } }));
     }
     // واجهة المباراة
     $('rot-ok').onclick = () => { this.rotateDismissed = true; $('rotate').classList.add('hidden'); };
@@ -299,7 +318,8 @@ class App {
     this.markOn(st, '[data-st]', 'st', this.quick.stadium);
     this.seg('quick-dur', DURATIONS.map((d) => [d, `${d / 60} د`]), () => this.quick.duration, (v) => (this.quick.duration = +v));
     this.seg('quick-diff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), () => this.quick.difficulty, (v) => (this.quick.difficulty = v));
-    this.seg('quick-team', TEAMS.map((t, i) => [i, t.name]), () => this.quick.team, (v) => (this.quick.team = +v));
+    this.seg('quick-mode', [['real', '⚽ واقعي<small>كرة حقيقية</small>'], ['legends', '✨ أساطير<small>قدرات خارقة</small>']], () => this.quick.mode, (v) => (this.quick.mode = v));
+    this.renderClubPicks();
     this.seg('quick-pos', [[3, 'مهاجم ⚽'], [1, 'مدافع 🛡️'], [0, 'حارس 🧤']], () => this.quick.slot, (v) => (this.quick.slot = +v));
     // الإعدادات
     this.seg('set-quality', [['low', 'منخفضة'], ['medium', 'متوسطة'], ['high', 'عالية']], () => this.settings.quality, (v) => {
@@ -322,11 +342,13 @@ class App {
     $('set-comm').onchange = () => { this.settings.commentary = $('set-comm').checked; audio.commentary = this.settings.commentary; this.saveSettings(); if (audio.commentary) audio.say('أهلاً بكم في أساطير الكرة'); };
     $('hb-sound').textContent = this.settings.sound ? '🔊' : '🔇';
     // الغرفة
+    $('room-mode').innerHTML = Object.values(MODES).map((m) => `<option value="${m.id}">وضع: ${m.label}</option>`).join('');
+    $('room-home').innerHTML = CLUBS.map((c) => `<option value="${c.id}">🏠 ${c.name}</option>`).join('');
+    $('room-away').innerHTML = CLUBS.map((c) => `<option value="${c.id}">✈️ ${c.name}</option>`).join('');
     $('room-stadium').innerHTML = STADIUMS.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
     $('room-dur').innerHTML = DURATIONS.map((d) => `<option value="${d}">${d / 60} دقائق</option>`).join('');
     $('room-diff').innerHTML = Object.entries(DIFFICULTY).map(([k, v]) => `<option value="${k}">بوتات: ${v.label}</option>`).join('');
-    $('room-t0').textContent = TEAMS[0].name;
-    $('room-t1').textContent = TEAMS[1].name;
+
   }
 
   seg(id, options, get, set) {
@@ -335,6 +357,53 @@ class App {
     const mark = () => el.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(get())));
     el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); mark(); };
     mark();
+  }
+
+  applyClubs(home, away) {
+    const t = teamsFromClubs(home, away);
+    for (const i of [0, 1]) { for (const k of Object.keys(TEAMS[i])) delete TEAMS[i][k]; Object.assign(TEAMS[i], t[i]); }
+  }
+
+  kitSVG(kit) {
+    const sec = kit.second, base = kit.base;
+    let pat = '';
+    if (kit.pattern === 'stripes') pat = [22, 38, 54].map((x) => `<rect x="${x}" y="0" width="7" height="70" fill="${sec}"/>`).join('');
+    else if (kit.pattern === 'pinstripes') pat = [18, 26, 34, 42, 50, 58].map((x) => `<rect x="${x}" y="0" width="1.6" height="70" fill="${sec}"/>`).join('');
+    else if (kit.pattern === 'hoops') pat = [24, 40, 56].map((y) => `<rect x="0" y="${y}" width="80" height="7" fill="${sec}"/>`).join('');
+    else if (kit.pattern === 'halves') pat = `<rect x="40" y="0" width="40" height="70" fill="${sec}"/>`;
+    else if (kit.pattern === 'sash') pat = `<path d="M10 10 L70 60 L70 70 L60 70 L10 22 Z" fill="${sec}"/>`;
+    else if (kit.pattern === 'chevron') pat = `<path d="M0 30 L40 44 L80 30 L80 38 L40 52 L0 38 Z" fill="${sec}"/>`;
+    else if (kit.pattern === 'gradient') pat = `<rect width="80" height="70" fill="${sec}" opacity="0.45"/>`;
+    const shirt = 'M24 4 L32 4 Q40 10 48 4 L56 4 L76 16 L68 30 L60 26 L60 68 L20 68 L20 26 L12 30 L4 16 Z';
+    const id = 'k' + Math.floor(Math.random() * 1e6);
+    return `<svg viewBox="0 0 80 72"><defs><clipPath id="${id}"><path d="${shirt}"/></clipPath></defs><path d="${shirt}" fill="${base}"/><g clip-path="url(#${id})">${pat}</g><path d="${shirt}" fill="none" stroke="${kit.trim}" stroke-width="2.5"/></svg>`;
+  }
+
+  renderClubPicks() {
+    for (const side of ['home', 'away']) {
+      const el = $('pick-' + side);
+      const c = clubOf(this.quick[side]);
+      const T = TEAMS[side === 'home' ? 0 : 1];
+      el.style.setProperty('--cc', c.primary);
+      el.innerHTML = `<span class="cp-label">${side === 'home' ? 'فريقك' : 'الخصم'}</span>
+        <button class="cp-arrow" data-d="-1" aria-label="السابق">›</button>
+        <div class="cp-crest">${crestSVG(c, 84)}</div>
+        <div class="cp-info"><b>${c.name}</b><small>${c.city}</small><div class="ovr">OVR ${c.rating} ${'★'.repeat(Math.max(1, Math.round((c.rating - 75) / 2)))}</div></div>
+        <div class="cp-kit">${this.kitSVG(T.kit)}</div>
+        <button class="cp-arrow" data-d="1" aria-label="التالي">‹</button>`;
+      el.onclick = (e) => {
+        const b = e.target.closest('[data-d]');
+        if (!b) return;
+        const other = this.quick[side === 'home' ? 'away' : 'home'];
+        let i = CLUBS.findIndex((x) => x.id === this.quick[side]);
+        do { i = (i + +b.dataset.d + CLUBS.length) % CLUBS.length; } while (CLUBS[i].id === other);
+        this.quick[side] = CLUBS[i].id;
+        if (side === 'home') { this.settings.homeClub = CLUBS[i].id; this.saveSettings(); }
+        this.applyClubs(this.quick.home, this.quick.away);
+        this.renderClubPicks();
+        if (side === 'home') { this.buildPreview(); const cc = charOf(this.settings.char); $('hero-card').innerHTML = cardHTML(cc, { cls: 'big' }); }
+      };
+    }
   }
 
   markOn(root, sel, key, val) { root.querySelectorAll(sel).forEach((e) => e.classList.toggle('on', e.dataset[key] === val)); }
@@ -432,7 +501,8 @@ class App {
     const R = CUP_ROUNDS[round];
     const others = STADIUMS.filter((x) => x.id !== 'neon');
     this.cup = { round, results: this.cup && round > 0 ? this.cup.results : [] };
-    Object.assign(this.quick, { difficulty: R.diff, duration: 180, stadium: R.stadium || others[Math.floor(Math.random() * others.length)].id, team: 0 });
+    const opp = CLUBS.filter((c) => c.id !== this.quick.home).sort((a, b) => a.rating - b.rating);
+    Object.assign(this.quick, { difficulty: R.diff, duration: 180, stadium: R.stadium || others[Math.floor(Math.random() * others.length)].id, team: 0, mode: 'real', away: opp[Math.min(opp.length - 1, round * 2 + Math.floor(Math.random() * 2))].id });
     this.startQuick(true);
   }
 
@@ -442,10 +512,12 @@ class App {
     this.loading(true, 'جارٍ تجهيز الملعب…');
     setTimeout(() => {
       const roster = [[], []];
+      this.quick.team = 0;
       roster[this.quick.team][this.quick.slot] = { name: this.settings.name, char: this.settings.char, human: true };
       const you = this.quick.team * TEAM_SIZE + this.quick.slot;
-      const tr = new LocalTransport({ ...this.quickSettings(), roster, you, seed: Math.floor(Math.random() * 1e9) });
-      this.beginMatch({ stadium: this.quick.stadium, duration: this.quick.duration, roster: tr.roster(), you, local: true, transport: tr });
+      this.applyClubs(this.quick.home, this.quick.away);
+      const tr = new LocalTransport({ ...this.quickSettings(), mode: this.quick.mode, roster, you, seed: Math.floor(Math.random() * 1e9) });
+      this.beginMatch({ stadium: this.quick.stadium, duration: this.quick.duration, mode: this.quick.mode, roster: tr.roster(), you, local: true, transport: tr });
       tr.onSnapshot = (s, ev) => this.match && this.match.onSnapshot(s, ev);
       tr.onEnd = (d) => this.showEnd(d);
       this.loading(false);
@@ -460,11 +532,11 @@ class App {
     vs.style.setProperty('--c0', TEAMS[0].color);
     vs.style.setProperty('--c1', TEAMS[1].color);
     for (const t of [0, 1]) {
-      $('vs-t' + t).textContent = TEAMS[t].name;
+      $('vs-t' + t).innerHTML = `${crestSVG(clubOf(TEAMS[t].id), 64)} ${TEAMS[t].name}`;
       $('vs-l' + t).innerHTML = roster.filter((r) => r.team === t).map((r) => cardHTML(charOf(r.char), { mini: true, team: t, gk: r.slot === 0, cls: r.id === you ? 'you' : '' })).join('');
     }
     const st = stadiumOf(this.quick.stadium);
-    const cupName = this.cup ? `🏆 ${CUP_ROUNDS[this.cup.round].name}` : 'مباراة ودية';
+    const cupName = (this.cup ? `🏆 ${CUP_ROUNDS[this.cup.round].name}` : 'مباراة ودية') + ` • ${MODES[this.quick.mode].label}`;
     $('vs-info').innerHTML = `<b>${cupName}</b>${st.name} • ${DIFFICULTY[this.quick.difficulty].label} • ${this.quick.duration / 60} د`;
     vs.classList.remove('hidden');
     audio.horn(null, 0.8);
@@ -530,16 +602,25 @@ class App {
     let title = a === b ? 'تعادل 🤝' : `فوز ${TEAMS[a > b ? 0 : 1].name} 🏆`;
     if (myTeam >= 0 && a !== b) title = (a > b ? 0 : 1) === myTeam ? 'فزت! 🏆🎉' : 'خسرت… حظاً أوفر 😔';
     $('end-title').textContent = title;
-    $('end-score').innerHTML = `<span style="background:${TEAMS[0].color}">${TEAMS[0].name}</span> ${a} - ${b} <span style="background:${TEAMS[1].color}">${TEAMS[1].name}</span>`;
+    $('end-score').textContent = `${a} - ${b}`;
+    for (const t of [0, 1]) $('rep-t' + t).innerHTML = t === 0 ? `<span>${TEAMS[0].name}</span>${crestSVG(clubOf(TEAMS[0].id), 64)}` : `${crestSVG(clubOf(TEAMS[1].id), 64)}<span>${TEAMS[1].name}</span>`;
     const stats = d.stats;
-    const score = (s) => s.g * 5 + s.a * 3 + s.sv * 2 + s.tk + s.sh * 0.5 + s.ps * 0.2;
+    // إحصائيات الفريقين
+    const sum = (t, k) => stats.filter((x) => x.team === t).reduce((acc, x) => acc + (x[k] || 0), 0);
+    const rows2 = [['الاستحواذ %', d.poss || [50, 50]], ['التسديدات', [sum(0, 'sh'), sum(1, 'sh')]], ['التمريرات', [sum(0, 'ps'), sum(1, 'ps')]], ['الافتكاك', [sum(0, 'tk'), sum(1, 'tk')]], ['التصديات', [sum(0, 'sv'), sum(1, 'sv')]]];
+    $('rep-stats').innerHTML = rows2.map(([lab, [x, y]]) => {
+      const tot = x + y || 1;
+      return `<div class="rs-row"><span class="lab">${lab}</span><b>${x}</b><div class="rs-bar"><i style="width:${(x / tot) * 100}%;background:${TEAMS[0].color}"></i><i style="width:${(y / tot) * 100}%;background:${TEAMS[1].color}"></i></div><b>${y}</b></div>`;
+    }).join('');
+    // تقييم اللاعبين من 10
+    const winT = a === b ? -1 : a > b ? 0 : 1;
+    const rate = (x) => Math.max(4.5, Math.min(10, 6 + x.g * 1.1 + x.a * 0.6 + x.sv * 0.35 + x.tk * 0.15 + x.sh * 0.08 + x.ps * 0.03 + (x.team === winT ? 0.4 : winT === -1 ? 0 : -0.3)));
+    const score = (x) => rate(x);
     const mvp = stats.slice().sort((x, y) => score(y) - score(x))[0];
-    $('end-mvp').innerHTML = mvp ? `⭐ أفضل لاعب: <b>${esc(mvp.name)}</b> ${charOf(mvp.char).icon} — ${mvp.g} أهداف، ${mvp.a} تمريرات حاسمة، ${mvp.sv} تصديات` : '';
-    const rows = stats.slice().sort((x, y) => x.team - y.team || y.g - x.g).map((s) => `<tr class="${s.id === you ? 'me' : ''}"><td><span style="color:${TEAMS[s.team].color}">●</span> ${charOf(s.char).icon} ${esc(s.name)}</td><td>${s.g}</td><td>${s.a}</td><td>${s.sh}</td><td>${s.ps}</td><td>${s.tk}</td><td>${s.sv}</td></tr>`).join('');
-    $('end-stats').innerHTML = `<table class="st"><tr><th>اللاعب</th><th>⚽</th><th>🅰️</th><th>تسديد</th><th>تمرير</th><th>افتكاك</th><th>تصدي</th></tr>${rows}</table>`;
+    $('end-mvp').innerHTML = mvp ? `⭐ أفضل لاعب: <b>${esc(mvp.name)}</b> ${charOf(mvp.char).icon} — تقييم ${rate(mvp).toFixed(1)}` : '';
+    const rows = stats.slice().sort((x, y) => x.team - y.team || rate(y) - rate(x)).map((x) => { const r = rate(x); return `<tr class="${x.id === you ? 'me' : ''}"><td><span style="color:${TEAMS[x.team].color}">●</span> ${esc(x.name)}</td><td>${x.g}</td><td>${x.a}</td><td>${x.sh}</td><td>${x.ps}</td><td>${x.tk}</td><td>${x.sv}</td><td><b class="${r >= 7.5 ? 'hi' : r < 6 ? 'lo' : ''}">${r.toFixed(1)}</b></td></tr>`; }).join('');
+    $('end-stats').innerHTML = `<table class="st"><tr><th>اللاعب</th><th>⚽</th><th>🅰️</th><th>تسديد</th><th>تمرير</th><th>افتكاك</th><th>تصدي</th><th>التقييم</th></tr>${rows}</table>`;
     $('end-again').textContent = m.local ? '🔁 مباراة جديدة' : '↩ العودة للغرفة';
-    // الاستحواذ
-    if (d.poss) $('end-score').insertAdjacentHTML('beforeend', `<div class="muted small" dir="rtl" style="margin-top:4px">الاستحواذ: ${TEAMS[0].name} ${d.poss[0]}٪ • ${TEAMS[1].name} ${d.poss[1]}٪</div>`);
     // التقدم
     const won = myTeam >= 0 && a !== b && (a > b ? 0 : 1) === myTeam;
     const draw = a === b;
@@ -601,7 +682,8 @@ class App {
     n.on('match', (m) => {
       if (this.match && !this.match.local) { this.match.setRoster(m.roster, m.you); return; }
       $('endscreen').classList.add('hidden');
-      this.beginMatch({ stadium: m.stadium, duration: m.duration, roster: m.roster, you: m.you, local: false, transport: new NetTransport(n) });
+      this.applyClubs(m.home, m.away);
+      this.beginMatch({ stadium: m.stadium, duration: m.duration, mode: m.mode, roster: m.roster, you: m.you, local: false, transport: new NetTransport(n) });
       this.match.rtt = n.rtt;
       if (m.you < 0) this.toast('أنت متفرج 👁 — اختر مقعداً من القائمة للانضمام');
     });
@@ -679,9 +761,12 @@ class App {
       el.innerHTML = html.join('');
       el.onclick = (e) => { const b = e.target.closest('[data-slot]'); if (b) this.net.send({ t: 'slot', team: +b.dataset.team, slot: +b.dataset.slot }); };
     }
+    this.applyClubs(r.settings.home, r.settings.away);
+    $('room-t0').innerHTML = `${crestSVG(clubOf(r.settings.home), 26)} ${TEAMS[0].name}`;
+    $('room-t1').innerHTML = `${crestSVG(clubOf(r.settings.away), 26)} ${TEAMS[1].name}`;
     const specs = r.members.filter((m) => m.team < 0);
     $('spectators').textContent = specs.length ? `👁 متفرجون: ${specs.map((s) => s.name).join('، ')}` : '';
-    for (const [id, v] of [['room-stadium', r.settings.stadium], ['room-dur', r.settings.duration], ['room-diff', r.settings.difficulty]]) {
+    for (const [id, v] of [['room-stadium', r.settings.stadium], ['room-dur', r.settings.duration], ['room-diff', r.settings.difficulty], ['room-mode', r.settings.mode], ['room-home', r.settings.home], ['room-away', r.settings.away]]) {
       $(id).value = String(v);
       $(id).disabled = !isHost || r.playing;
     }

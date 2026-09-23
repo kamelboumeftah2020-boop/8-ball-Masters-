@@ -5,9 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Game } from '../shared/sim.js';
-import { TICK_RATE, DT, SNAPSHOT_EVERY, TEAM_SIZE, PHASE, DURATIONS, DIFFICULTY } from '../shared/constants.js';
+import { TICK_RATE, DT, SNAPSHOT_EVERY, TEAM_SIZE, PHASE, DURATIONS, DIFFICULTY, MODES } from '../shared/constants.js';
 import { CHAR_BY_ID } from '../shared/characters.js';
 import { STADIUM_BY_ID } from '../shared/stadiums.js';
+import { CLUB_BY_ID } from '../shared/clubs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -66,7 +67,7 @@ class Room {
     this.code = code;
     this.host = host.id;
     this.members = new Map();
-    this.settings = { stadium: 'royal', duration: 180, difficulty: 'normal', public: true, name: `غرفة ${host.name}` };
+    this.settings = { stadium: 'royal', duration: 180, difficulty: 'normal', mode: 'real', home: 'falcons', away: 'tigers', public: true, name: `غرفة ${host.name}` };
     this.applySettings(settings || {});
     this.game = null;
     this.timer = null;
@@ -77,6 +78,10 @@ class Room {
     if (DURATIONS.includes(+s.duration)) this.settings.duration = +s.duration;
     if (s.difficulty && DIFFICULTY[s.difficulty]) this.settings.difficulty = s.difficulty;
     if (typeof s.public === 'boolean') this.settings.public = s.public;
+    if (s.mode && MODES[s.mode]) this.settings.mode = s.mode;
+    if (s.home && CLUB_BY_ID[s.home]) this.settings.home = s.home;
+    if (s.away && CLUB_BY_ID[s.away] && s.away !== this.settings.home) this.settings.away = s.away;
+    if (this.settings.away === this.settings.home) this.settings.away = Object.keys(CLUB_BY_ID).find((k) => k !== this.settings.home);
     if (s.name) this.settings.name = clean(s.name, 24);
   }
   slotTaken(team, slot) {
@@ -127,7 +132,7 @@ class Room {
     if (!this.game) return;
     const roster = this.game.roster();
     for (const m of this.members.values()) {
-      send(m, { t: 'match', stadium: this.settings.stadium, duration: this.settings.duration, difficulty: this.settings.difficulty, roster, you: m.team >= 0 ? m.team * TEAM_SIZE + m.slot : -1 });
+      send(m, { t: 'match', stadium: this.settings.stadium, duration: this.settings.duration, difficulty: this.settings.difficulty, mode: this.settings.mode, home: this.settings.home, away: this.settings.away, roster, you: m.team >= 0 ? m.team * TEAM_SIZE + m.slot : -1 });
     }
   }
   start() {
