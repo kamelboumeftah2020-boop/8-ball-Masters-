@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>أساطير الكرة 5×5</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Oswald:wght@500;700&display=swap" />
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -25,29 +25,35 @@
   <div id="ui">
     <!-- ========== الشاشة الرئيسية ========== -->
     <section id="scr-main" class="screen">
-      <div class="menu-col">
-        <div class="brand">
-          <div class="logo">⚽</div>
-          <h1>أساطير الكرة <span>5×5</span></h1>
-          <p>كل لاعب يتحكم بنجم واحد… كوّنوا فريقكم واصنعوا الأسطورة</p>
-        </div>
-        <label class="field">اسمك في الملعب
-          <input id="inp-name" maxlength="14" placeholder="اكتب اسمك" />
-        </label>
-        <div class="menu-buttons">
+      <header class="topbar">
+        <div class="brandmark"><span class="bm-ball">⚽</span><div><b>أساطير الكرة</b><small>LEGENDS 5V5</small></div></div>
+        <div class="profile">
+          <input id="inp-name" maxlength="14" placeholder="اسمك" aria-label="اسمك" />
           <div id="career" class="career"></div>
-          <button id="btn-quick" class="big primary">⚡ لعب سريع ضد البوتات</button>
-          <button id="btn-cup" class="big gold">🏆 كأس الأساطير</button>
-          <button id="btn-online" class="big accent">🌐 أونلاين مع الأصدقاء</button>
-          <div class="row">
-            <button id="btn-settings">⚙️ الإعدادات</button>
-            <button id="btn-help">🎮 طريقة اللعب</button>
-          </div>
+          <button id="btn-settings" class="icon-btn" title="الإعدادات">⚙️</button>
         </div>
+      </header>
+      <div class="hub">
+        <nav class="tiles">
+          <button id="btn-quick" class="tile t-hero"><span class="t-k">مباراة سريعة</span><span class="t-t">العب الآن</span><span class="t-s">ضد البوتات • 5 ملاعب</span><span class="t-go">▶</span></button>
+          <button id="btn-cup" class="tile t-gold"><span class="t-k">بطولة</span><span class="t-t">كأس الأساطير</span><span class="t-s">3 أدوار نحو اللقب 🏆</span></button>
+          <button id="btn-online" class="tile t-blue"><span class="t-k">متعدد اللاعبين</span><span class="t-t">أونلاين</span><span class="t-s">العب مع أصدقائك</span></button>
+          <button id="btn-team" class="tile t-team"><span class="t-k">نجمك</span><span class="t-t">اختر اللاعب</span><span class="t-s" id="team-sub"></span></button>
+          <button id="btn-help" class="tile t-help"><span class="t-k">دليل</span><span class="t-t">طريقة اللعب</span></button>
+        </nav>
+        <div class="hero-side"><div id="hero-card"></div></div>
       </div>
-      <div class="char-col">
-        <div id="char-info" class="card"></div>
-        <div id="char-grid"></div>
+    </section>
+
+    <!-- ========== اختيار النجم ========== -->
+    <section id="scr-team" class="screen hidden">
+      <div class="panel wide team-panel">
+        <h2>اختر نجمك</h2>
+        <div class="team-wrap">
+          <div id="char-grid" class="cards"></div>
+          <div id="char-info" class="card"></div>
+        </div>
+        <div class="actions"><button class="back" data-go="main">↩ رجوع</button><button class="big primary" data-go="main">تأكيد ✓</button></div>
       </div>
     </section>
 
@@ -273,6 +279,11 @@
     </div>
 
     <div id="rotate" class="hidden"><div class="rot-ic">📱↻</div><b>أدِر هاتفك للوضع الأفقي</b><span>للحصول على أفضل رؤية للملعب</span><button id="rot-ok" class="tiny">متابعة هكذا</button></div>
+    <div id="vs" class="hidden">
+      <div class="vs-side l"><div class="vs-team" id="vs-t0"></div><div class="vs-list" id="vs-l0"></div></div>
+      <div class="vs-mid"><div class="vs-logo">VS</div><div id="vs-info"></div><div class="vs-tap">المس للمتابعة</div></div>
+      <div class="vs-side r"><div class="vs-team" id="vs-t1"></div><div class="vs-list" id="vs-l1"></div></div>
+    </div>
     <div id="toast"></div>
     <div id="loading" class="hidden"><div class="spinner"></div><div id="loading-text">جارٍ تجهيز الملعب…</div></div>
   </div>

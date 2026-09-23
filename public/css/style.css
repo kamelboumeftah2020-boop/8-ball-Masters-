@@ -409,3 +409,141 @@ body.lefty #touch .t-hint { right: auto; left: 20px; }
 
 .sb-score b.bump { animation: bump 0.8s ease-out; color: #ffd23f; }
 @keyframes bump { 0% { transform: scale(2.2); } 60% { transform: scale(0.9); } 100% { transform: scale(1); } }
+
+/* =====================================================================
+   التصميم الاحترافي (أسلوب ألعاب كرة القدم الكبرى)
+   ===================================================================== */
+:root { --acc: #c6ff3d; --acc2: #19d3ff; --ink: #05080f; --num: 'Oswald', 'Cairo', sans-serif; }
+button.primary { background: linear-gradient(135deg, #d4ff5c, #86d91a); border-color: #e9ffb0; color: #0b1600; box-shadow: 0 6px 22px rgba(170, 255, 60, 0.35); }
+.panel { background: linear-gradient(180deg, rgba(10, 16, 28, 0.94), rgba(6, 10, 18, 0.94)); border-radius: 10px; border-top: 3px solid var(--acc); }
+.panel h2 { font-weight: 900; letter-spacing: 0.5px; }
+.panel h2::after { content: ''; display: block; width: 54px; height: 3px; background: var(--acc2); margin-top: 6px; }
+
+/* الشاشة الرئيسية */
+#scr-main { display: grid; grid-template-rows: auto 1fr; align-items: stretch; justify-content: stretch; gap: 14px; padding: 18px 28px;
+  background: linear-gradient(270deg, rgba(3, 6, 12, 0.94) 0%, rgba(3, 6, 12, 0.6) 48%, rgba(3, 6, 12, 0) 72%); }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.brandmark { display: flex; align-items: center; gap: 10px; }
+.bm-ball { font-size: 38px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6)); animation: spin 8s linear infinite; }
+.brandmark b { display: block; font-size: 24px; font-weight: 900; line-height: 1; }
+.brandmark small { font-family: var(--num); letter-spacing: 5px; color: var(--acc); font-size: 12px; }
+.profile { display: flex; align-items: center; gap: 8px; }
+.profile input { width: 150px; padding: 7px 12px; border-radius: 20px; font-size: 14px; background: rgba(0,0,0,0.5); }
+.profile .career { border-radius: 20px; padding: 6px 12px; background: rgba(0,0,0,0.5); min-width: 170px; }
+.icon-btn { width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 18px; background: rgba(0,0,0,0.5); }
+.hub { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 0; }
+.tiles { display: grid; grid-template-columns: 1.35fr 1fr; grid-template-rows: 1.5fr 1fr 0.8fr; gap: 10px; width: min(640px, 60vw); height: min(440px, 72vh); }
+.tile { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; text-align: right;
+  padding: 14px 18px; border: none; border-radius: 4px; color: #fff; clip-path: polygon(0 0, 100% 0, 100% 80%, 93% 100%, 0 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); transition: transform 0.15s, filter 0.15s; }
+.tile::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(120deg, rgba(255,255,255,0.05) 0 14px, transparent 14px 28px); pointer-events: none; }
+.tile::after { content: ''; position: absolute; top: 0; right: 0; width: 5px; height: 100%; background: var(--acc); opacity: 0; transition: opacity 0.15s; }
+.tile:hover, .tile:focus-visible { transform: translateY(-3px); filter: brightness(1.15); }
+.tile:hover::after, .tile:focus-visible::after { opacity: 1; }
+.tile > span { position: relative; }
+.t-k { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: rgba(255,255,255,0.75); }
+.t-t { font-size: 28px; font-weight: 900; line-height: 1.15; }
+.t-s { font-size: 13px; color: rgba(255,255,255,0.8); }
+.t-go { position: absolute !important; top: 16px; left: 18px; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-size: 22px;
+  background: var(--acc); color: #0b1600; box-shadow: 0 0 24px rgba(198,255,61,0.6); animation: pulse 1s infinite alternate; }
+.t-hero { grid-row: 1 / 3; background: radial-gradient(circle at 25% 20%, rgba(198,255,61,0.35), transparent 50%), linear-gradient(145deg, #17904a, #07361c); }
+.t-hero .t-t { font-size: 44px; }
+.t-gold { background: linear-gradient(145deg, #e6a91c, #6b4300); }
+.t-blue { background: linear-gradient(145deg, #2166e0, #0a1f52); }
+.t-team { background: linear-gradient(145deg, #6c2bd9, #1c0b42); }
+.t-help { background: linear-gradient(145deg, #34445c, #121a26); }
+.t-help .t-t, .t-team .t-t { font-size: 22px; }
+.hero-side { flex: 1; display: flex; align-items: flex-end; justify-content: flex-end; height: 100%; padding-bottom: 6px; }
+
+/* بطاقات اللاعبين */
+.fut { position: relative; width: 150px; aspect-ratio: 0.7; display: flex; flex-direction: column; align-items: center; padding: 12px 10px 16px; direction: ltr; cursor: pointer;
+  clip-path: polygon(50% 0, 100% 5%, 100% 88%, 50% 100%, 0 88%, 0 5%); color: #2b1d00; transition: transform 0.15s, filter 0.15s;
+  background: linear-gradient(160deg, #fff6c2, #efcb62 38%, #bf9123 72%, #7d5c10); }
+.fut.silver { background: linear-gradient(160deg, #ffffff, #dde4ec 40%, #a4b0bf 75%, #6f7c8c); color: #19212c; }
+.fut.icon { background: linear-gradient(160deg, #f1fbff, #9fdcff 32%, #5170ff 68%, #2a1c7a); color: #fff; }
+.fut::after { content: ''; position: absolute; inset: 5px; clip-path: inherit; border: 2px solid rgba(255,255,255,0.35); pointer-events: none; }
+.fut-top { position: absolute; top: 13%; left: 13%; display: flex; flex-direction: column; align-items: center; line-height: 1; z-index: 2; }
+.fut-top b { font-family: var(--num); font-size: 30px; font-weight: 700; }
+.fut-top span { font-family: var(--num); font-size: 13px; font-weight: 700; }
+.fut-top i { font-style: normal; font-size: 15px; margin-top: 4px; }
+.fut-img { width: 100%; height: 50%; margin-top: 8%; display: flex; align-items: flex-end; justify-content: center; }
+.fut-img img { height: 100%; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
+.fut-img .fb { font-size: 48px; }
+.fut-name { font-weight: 900; font-size: 16px; width: 80%; text-align: center; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; padding: 1px 0; margin-top: 2px; opacity: 0.95; }
+.fut-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; font-size: 10px; margin-top: 4px; }
+.fut-stats span { display: flex; gap: 4px; align-items: baseline; }
+.fut-stats b { font-family: var(--num); font-size: 14px; }
+.fut:hover { transform: translateY(-4px); }
+.fut.on { filter: drop-shadow(0 0 10px var(--acc)) drop-shadow(0 0 3px var(--acc)); transform: scale(1.04); }
+.fut.mini { width: 70px; padding: 6px 5px 8px; }
+.fut.mini .fut-top b { font-size: 17px; } .fut.mini .fut-top span { font-size: 9px; } .fut.mini .fut-top i { display: none; }
+.fut.mini .fut-name { font-size: 10px; }
+.fut.big { width: 190px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; justify-items: center; max-height: 62vh; overflow-y: auto; padding: 6px; }
+.cards .fut { width: 128px; }
+.team-wrap { display: grid; grid-template-columns: 1fr 270px; gap: 14px; align-items: start; }
+.team-panel #char-info .stats { display: grid; }
+
+/* شاشة المواجهة */
+#vs { position: fixed; inset: 0; z-index: 35; display: grid; grid-template-columns: 1fr auto 1fr; direction: ltr; overflow: hidden; cursor: pointer;
+  background: #04070d; animation: fadein 0.3s; }
+@keyframes fadein { from { opacity: 0; } }
+.vs-side { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 20px 4vw; position: relative; }
+.vs-side.l { background: linear-gradient(90deg, var(--c0) , rgba(4,7,13,0.2)); clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); animation: inl 0.5s cubic-bezier(.2,1.2,.4,1); }
+.vs-side.r { background: linear-gradient(270deg, var(--c1), rgba(4,7,13,0.2)); clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%); animation: inr 0.5s cubic-bezier(.2,1.2,.4,1); align-items: flex-end; }
+@keyframes inl { from { transform: translateX(-60%); } } @keyframes inr { from { transform: translateX(60%); } }
+.vs-team { font-size: clamp(26px, 4vw, 44px); font-weight: 900; text-shadow: 0 4px 14px rgba(0,0,0,0.6); direction: rtl; }
+.vs-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.vs-side.r .vs-list { justify-content: flex-end; }
+.vs-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 10px; }
+.vs-logo { font-family: var(--num); font-style: italic; font-weight: 700; font-size: clamp(60px, 10vw, 110px); color: #fff; text-shadow: 0 0 30px var(--acc), 0 0 4px #fff; animation: pop 0.6s; }
+#vs-info { direction: rtl; text-align: center; font-weight: 700; color: var(--muted); }
+#vs-info b { color: #fff; display: block; font-size: 18px; }
+.vs-tap { font-size: 12px; color: var(--acc); animation: blink 1s infinite; }
+.vs-list .fut.you { filter: drop-shadow(0 0 8px var(--acc)); }
+
+/* لوحة النتيجة بأسلوب البث التلفزيوني */
+#scoreboard { border-radius: 2px; background: #070b14; border: none; box-shadow: 0 6px 20px rgba(0,0,0,0.5); clip-path: polygon(3% 0, 97% 0, 100% 100%, 0 100%); padding: 0 14px; }
+.sb-team { font-weight: 900; }
+.sb-team i { width: 6px; height: 100%; min-height: 34px; border-radius: 0; }
+.sb-score { background: transparent; gap: 3px; }
+.sb-score b { font-family: var(--num); background: #f4f6f8; color: #0a0f18; min-width: 34px; padding: 1px 4px; font-size: 24px; }
+.sb-score em { font-family: var(--num); background: var(--acc); color: #0b1600; border-radius: 0; font-size: 16px; padding: 3px 10px; margin: 0 4px; }
+.banner.goal { width: 100vw; padding: 8px 0 12px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bc) 85%, #000) 18%, color-mix(in srgb, var(--bc) 85%, #000) 82%, transparent); }
+.banner.goal #banner-text { text-shadow: 0 6px 0 rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.4); }
+#pcard { border-radius: 4px; clip-path: polygon(0 0, 100% 0, 100% 100%, 6% 100%); }
+
+@media (max-height: 520px) and (orientation: landscape) {
+  #scr-main { padding: 8px 14px; gap: 8px; }
+  .bm-ball { font-size: 26px; } .brandmark b { font-size: 17px; } .brandmark small { font-size: 9px; letter-spacing: 3px; }
+  .profile input { width: 110px; padding: 5px 10px; font-size: 13px; }
+  .profile .career { min-width: 130px; padding: 4px 10px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .tiles { width: 60vw; height: 74vh; gap: 7px; }
+  .tile { padding: 8px 12px; }
+  .t-t { font-size: 19px; } .t-hero .t-t { font-size: 28px; } .t-help .t-t, .t-team .t-t { font-size: 16px; }
+  .t-s { font-size: 11px; } .t-k { font-size: 10px; }
+  .t-go { width: 40px; height: 40px; font-size: 16px; top: 10px; left: 12px; }
+  .hero-side .fut { width: 118px; }
+  .hero-side .fut .fut-stats { display: none; }
+  .team-wrap { grid-template-columns: 1fr 210px; }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); max-height: 62vh; gap: 6px; }
+  .cards .fut { width: 96px; } .cards .fut .fut-stats { display: none; }
+  .vs-side { padding: 10px 3vw; gap: 6px; }
+}
+@media (max-width: 860px) and (orientation: portrait) {
+  .hub { flex-direction: column; } .tiles { width: 100%; height: 60vh; } .hero-side { display: none; }
+  .profile .career { display: none; }
+}
+
+.fut.mini { width: 84px; }
+.vs-list { flex-wrap: nowrap; }
+.fut-stats { font-size: 9px; gap: 0 8px; }
+.fut-stats b { font-size: 13px; }
+.fut-img { height: 48%; overflow: hidden; }
+.fut-img img { height: 118%; }
+@media (max-height: 520px) and (orientation: landscape) { .fut.mini { width: 62px; } .vs-list { gap: 4px; } .vs-team { font-size: 24px; } }
+
+.fut-img { justify-content: flex-end; padding-right: 2%; }
+.fut.mini .fut-img { justify-content: center; padding: 0; margin-top: 30%; height: 44%; }
+.fut.mini .fut-top { top: 7%; left: 9%; }

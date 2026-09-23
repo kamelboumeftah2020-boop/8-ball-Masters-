@@ -1,5 +1,6 @@
 // نموذج اللاعب ثلاثي الأبعاد (مبني من أشكال بسيطة) مع رسوم متحركة إجرائية
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { STATE, TEAMS } from '/shared/constants.js';
 import { charOf } from '/shared/characters.js';
 import { kitFor, jerseyTexture, bandTexture } from './skins.js';
@@ -20,6 +21,7 @@ const capsule = (r, l) => geo(`cap${r}_${l}`, () => new THREE.CapsuleGeometry(r,
 const sphere = (r, w = 16, h = 12) => geo(`sph${r}_${w}`, () => new THREE.SphereGeometry(r, w, h));
 const box = (x, y, z) => geo(`box${x}_${y}_${z}`, () => new THREE.BoxGeometry(x, y, z));
 
+function sm(a, b, v) { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); }
 function shade(m) { m.castShadow = true; m.receiveShadow = false; return m; }
 const lathe = (key, pts, seg = 18) => geo(`lathe_${key}_${seg}_${pts.join()}`, () => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg));
 function clothMat(map) {
@@ -75,7 +77,8 @@ export class Player3D {
     const h = look.height, b = look.build;
     this.h = h;
     this.root = new THREE.Group();
-    this.body = new THREE.Group();
+    this.body = new THREE.Bone();
+    this._bake = [];
     this.root.add(this.body);
     this.hipY = 0.92 * h;
     this.body.position.y = this.hipY;
@@ -96,20 +99,24 @@ export class Player3D {
     const shortsTop = shade(new THREE.Mesh(lathe('shorts', [[0.168, -0.2], [0.176, -0.12], [0.172, -0.02], [0.162, 0.07]], 22), shortsM));
     shortsTop.scale.set(0.68 * B, 1, B);
     this.body.add(shortsTop);
+    this._bake.push([shortsTop, (x, y) => [[this.torso, sm(-0.02, 0.07, y) * 0.45]]]);
 
     // الجذع (القميص بخامة كاملة)
-    this.torso = new THREE.Group();
+    this.torso = new THREE.Bone();
     this.body.add(this.torso);
     const chest = shade(new THREE.Mesh(lathe('torso', [[0.158, -0.03], [0.152, 0.08], [0.148, 0.17], [0.165, 0.27], [0.188, 0.36], [0.2, 0.43], [0.205, 0.49], [0.185, 0.545], [0.12, 0.585], [0.055, 0.605]], 28), jerseyM));
     chest.scale.set(0.66 * B, 1, B);
     this.torso.add(chest);
+    this._bake.push([chest, (x, y, z) => [[this.body, sm(0.1, -0.03, y) * 0.5], [z > 0 ? () => this.arms[1].sh : () => this.arms[0].sh, sm(0.11, 0.2, Math.abs(z)) * sm(0.38, 0.5, y) * 0.5]]]);
 
     // الرقبة والرأس
-    this.neck = new THREE.Group();
+    this.neck = new THREE.Bone();
     this.neck.position.y = 0.57;
     this.torso.add(this.neck);
-    this.neck.add(shade(new THREE.Mesh(lathe('neck', [[0.05, -0.02], [0.046, 0.06], [0.05, 0.12]], 14), skinM)));
-    this.head = new THREE.Group();
+    const neckM = shade(new THREE.Mesh(lathe('neck', [[0.055, -0.04], [0.046, 0.06], [0.05, 0.13]], 14), skinM));
+    this.neck.add(neckM);
+    this._bake.push([neckM, (x, y) => [[this.torso, sm(0.03, -0.04, y) * 0.6], [this.head, sm(0.07, 0.13, y) * 0.5]]]);
+    this.head = new THREE.Bone();
     this.head.position.y = 0.2;
     this.neck.add(this.head);
     const skull = shade(new THREE.Mesh(sphere(0.105, 28, 20), skinM));
@@ -151,24 +158,28 @@ export class Player3D {
     this.arms = [];
     const gloveM = gk || look.acc === 'gloves' ? mat(gk ? '#f2f2f2' : look.accColor, 0.55) : null;
     for (const sd of [-1, 1]) {
-      const sh = new THREE.Group();
+      const sh = new THREE.Bone();
       sh.position.set(0, 0.49, sd * 0.215 * B);
       this.torso.add(sh);
       const delt = shade(new THREE.Mesh(sphere(0.07 * B, 16, 12), sleeveM));
       delt.scale.set(1, 0.9, 1); delt.position.y = -0.01;
       sh.add(delt);
+      this._bake.push([delt, (x, y) => [[this.torso, sm(0.0, 0.06, y) * 0.35]]]);
       const sleeve = shade(new THREE.Mesh(lathe('sleeve', [[0.058, -0.17], [0.063, -0.08], [0.066, 0.0]], 16), sleeveM));
       sleeve.scale.set(B, 1, B);
       sh.add(sleeve);
+      this._bake.push([sleeve, () => []]);
       const upper = shade(new THREE.Mesh(lathe('uarm', [[0.038, -0.28], [0.046, -0.21], [0.052, -0.13], [0.05, -0.04]], 14), kit.longSleeves ? sleeveM : skinM));
       upper.scale.set(B, 1, B);
       sh.add(upper);
-      const el = new THREE.Group();
+      this._bake.push([upper, (x, y) => [[el, sm(-0.2, -0.28, y) * 0.5]]]);
+      const el = new THREE.Bone();
       el.position.y = -0.27;
       sh.add(el);
       const fore = shade(new THREE.Mesh(lathe('farm', [[0.029, -0.235], [0.036, -0.16], [0.043, -0.06], [0.04, 0.02]], 14), kit.longSleeves ? sleeveM : skinM));
       fore.scale.set(B, 1, B);
       el.add(fore);
+      this._bake.push([fore, (x, y) => [[sh, sm(-0.04, 0.02, y) * 0.5]]]);
       const hand = shade(new THREE.Mesh(sphere(0.045, 14, 10), gloveM || skinM));
       hand.scale.set(gloveM ? 0.75 : 0.55, 1.15, gloveM ? 1.25 : 1);
       hand.position.y = -0.285;
@@ -187,27 +198,32 @@ export class Player3D {
     // الساقان
     this.legs = [];
     for (const sd of [-1, 1]) {
-      const hip = new THREE.Group();
+      const hip = new THREE.Bone();
       hip.position.set(0, 0, sd * 0.095 * B);
       this.body.add(hip);
       const shortLeg = shade(new THREE.Mesh(lathe('sleg', [[0.088, -0.22], [0.094, -0.12], [0.092, 0.02]], 18), shortsM));
       shortLeg.scale.set(B, 1, B);
       hip.add(shortLeg);
+      this._bake.push([shortLeg, (x, y) => [[this.body, sm(-0.06, 0.02, y) * 0.5]]]);
       const thigh = shade(new THREE.Mesh(lathe('thigh', [[0.052, -0.44 * h], [0.064, -0.36], [0.078, -0.24], [0.084, -0.12]], 16), skinM));
       thigh.scale.set(B, 1, B);
       hip.add(thigh);
-      const knee = new THREE.Group();
+      this._bake.push([thigh, (x, y) => [[knee, sm(-0.34 * h, -0.44 * h, y) * 0.5]]]);
+      const knee = new THREE.Bone();
       knee.position.y = -0.44 * h;
       hip.add(knee);
       const kc = new THREE.Mesh(sphere(0.05, 12, 10), skinM);
       kc.scale.set(1.05, 1, 1);
       knee.add(kc);
+      this._bake.push([kc, (x, y) => [[hip, sm(-0.02, 0.05, y) * 0.5]]]);
       const shin = shade(new THREE.Mesh(lathe('shin', [[0.046, -0.1], [0.05, -0.04], [0.049, 0.01]], 14), skinM));
       shin.scale.set(B, 1, B);
       knee.add(shin);
+      this._bake.push([shin, (x, y) => [[hip, sm(-0.03, 0.01, y) * 0.5]]]);
       const sock = shade(new THREE.Mesh(lathe('sock', [[0.034, -0.43 * h], [0.037, -0.36], [0.05, -0.26], [0.058, -0.17], [0.054, -0.09], [0.052, -0.06]], 16), socksM));
       sock.scale.set(B, 1, B);
       knee.add(sock);
+      this._bake.push([sock, () => []]);
       const boot = shade(new THREE.Mesh(bootGeo(), bootsM));
       boot.position.set(0, -0.475 * h, 0);
       knee.add(boot);
@@ -217,6 +233,7 @@ export class Player3D {
       this.legs.push({ hip, knee, s: sd });
     }
 
+    this.bakeSkin();
     this.scale = 1;
     this.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 
@@ -270,6 +287,51 @@ export class Player3D {
     this.celebOffset = new THREE.Vector3();
     this.lastFace = 0;
     this.turnRate = 0;
+  }
+
+  // دمج أجزاء الجسم في جسد واحد مكسو بعظام (Skinned Mesh) لتنحني المفاصل بنعومة
+  bakeSkin() {
+    const root = this.root;
+    root.updateMatrixWorld(true);
+    const bones = [this.body, this.torso, this.neck, this.head, ...this.arms.flatMap((a) => [a.sh, a.el]), ...this.legs.flatMap((l) => [l.hip, l.knee])];
+    const idx = new Map(bones.map((b, i) => [b, i]));
+    const byMat = new Map();
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    for (const [mesh, rule] of this._bake) {
+      const parent = mesh.parent;
+      const g = mesh.geometry.clone();
+      const pos = g.attributes.position;
+      const n = pos.count;
+      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const sec = rule(x, y, z).map(([b, w]) => [typeof b === 'function' ? b() : b, w]).filter(([b, w]) => w > 0.001 && idx.has(b));
+        let total = 0;
+        sec.slice(0, 3).forEach(([b, w], k) => { si[i * 4 + k + 1] = idx.get(b); sw[i * 4 + k + 1] = w; total += w; });
+        si[i * 4] = idx.get(parent); sw[i * 4] = Math.max(0, 1 - total);
+      }
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2), 2));
+      if (g.index) { /* keep */ }
+      const m = mesh.material;
+      if (!byMat.has(m)) byMat.set(m, []);
+      byMat.get(m).push(g);
+      parent.remove(mesh);
+    }
+    const mats = [...byMat.keys()];
+    const geos = mats.map((m) => mergeGeometries(byMat.get(m).map((x) => (x.index ? x.toNonIndexed() : x))));
+    const merged = mergeGeometries(geos, true);
+    const skinned = new THREE.SkinnedMesh(merged, mats);
+    skinned.castShadow = true;
+    skinned.frustumCulled = false;
+    root.add(skinned);
+    const skeleton = new THREE.Skeleton(bones);
+    skinned.bind(skeleton, new THREE.Matrix4());
+    this.skinned = skinned;
+    this._bake = null;
   }
 
   addHair(look, hairM, skinM) {
@@ -424,7 +486,8 @@ export class Player3D {
           T.rotation.z = -(0.08 + amp * (sprint ? 0.28 : 0.16));
           // ميلان في المنعطفات
           B.rotation.x = Math.max(-0.35, Math.min(0.35, -this.turnRate * speed * 0.012));
-          T.rotation.y = -sn * 0.12 * amp;
+          T.rotation.y = -sn * 0.18 * amp;
+          B.rotation.y = sn * 0.1 * amp;
         } else {
           // وقفة تنفس
           const br = Math.sin(time * 2 + this.phase) * 0.02;
@@ -531,6 +594,9 @@ export class Player3D {
         T.rotation.z = 0.12 + (k > 0.1 ? -0.25 : 0);
       }
     }
+    // مزج ناعم بين الوضعيات (لا قفزات مفاجئة في الحركة)
+    this.smoothPose(dt, s.state);
+
     // المؤشرات
     if (this.arrow) { this.arrow.position.y = 2.35 * this.h + Math.sin(time * 5) * 0.08; this.arrow.rotation.y = time * 2; }
     if (this.ring) this.ring.material.opacity = 0.65 + Math.sin(time * 6) * 0.25;
@@ -633,6 +699,25 @@ export class Player3D {
         la.el.rotation.z = 1.2; ra.el.rotation.z = 1.2;
       }
     }
+  }
+
+  smoothPose(dt, state) {
+    const list = this._poseList || (this._poseList = [this.body, this.torso, this.neck, ...this.arms.flatMap((a) => [a.sh, a.el]), ...this.legs.flatMap((l) => [l.hip, l.knee])]);
+    const prev = this._prev || (this._prev = list.map((o) => ({ r: o.rotation.clone(), p: o.position.clone() })));
+    const k = 1 - Math.exp(-dt * (state === STATE.DOWN || state === STATE.DIVE ? 12 : 16));
+    const celebrate = state === STATE.CELEBRATE;
+    list.forEach((o, i) => {
+      const pr = prev[i];
+      if (celebrate && o === this.body) { pr.r.copy(o.rotation); pr.p.copy(o.position); return; }
+      for (const ax of ['x', 'y', 'z']) {
+        let d = o.rotation[ax] - pr.r[ax];
+        if (Math.abs(d) > Math.PI) { pr.r[ax] = o.rotation[ax]; continue; }
+        pr.r[ax] += d * k;
+        o.rotation[ax] = pr.r[ax];
+      }
+      pr.p.lerp(o.position, k);
+      o.position.copy(pr.p);
+    });
   }
 
   triggerKick(header, isThrow) { this.kickT = 0; this.kickHeader = header; this.kickThrow = isThrow; }

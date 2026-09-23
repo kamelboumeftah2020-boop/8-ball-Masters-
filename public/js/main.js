@@ -5,6 +5,7 @@ import { Player3D } from './player3d.js';
 import { Match } from './match.js';
 import { Input } from './input.js';
 import { audio } from './audio.js';
+import { portrait, cardHTML, ratings } from './portraits.js';
 import { LocalTransport, NetClient, NetTransport } from './net.js';
 import { CHARACTERS, charOf } from '/shared/characters.js';
 import { STADIUMS, stadiumOf } from '/shared/stadiums.js';
@@ -83,7 +84,7 @@ class App {
     const unlock = () => { audio.init(); audio.setEnabled(this.settings.sound); audio.setVolume(this.settings.volume); audio.commentary = this.settings.commentary; };
     window.addEventListener('pointerdown', unlock, { once: false });
     window.addEventListener('keydown', unlock, { once: false });
-    document.addEventListener('click', (e) => { if (e.target.closest('button, .char, .stad')) audio.click(); });
+    document.addEventListener('click', (e) => { if (e.target.closest('button, .fut, .stad')) audio.click(); });
   }
 
   // ---------- الإعدادات ----------
@@ -182,6 +183,7 @@ class App {
     $('btn-online').onclick = () => { this.show('online'); this.connectOnline(); };
     $('btn-settings').onclick = () => this.show('settings');
     $('btn-help').onclick = () => this.show('help');
+    $('btn-team').onclick = () => { this.show('team'); if (!$('char-grid').children.length) { $('char-grid').innerHTML = '<div class="muted">جارٍ تجهيز البطاقات…</div>'; setTimeout(() => this.renderCards(), 30); } };
     $('btn-quick-start').onclick = () => this.startQuick();
     $('btn-cup').onclick = () => this.startCup(0);
     $('btn-create').onclick = () => this.connectOnline().then(() => this.net.send({ t: 'create', settings: { ...this.quickSettings(), public: $('chk-public').checked, name: `غرفة ${this.settings.name}` } }));
@@ -274,7 +276,10 @@ class App {
   buildMenus() {
     // الشخصيات
     const grid = $('char-grid');
-    grid.innerHTML = CHARACTERS.map((c) => `<div class="char" data-char="${c.id}"><div class="ic">${c.icon}</div><div class="nm">${c.name}</div><div class="tt">${c.title}</div></div>`).join('');
+    this.renderCards = () => {
+      grid.innerHTML = CHARACTERS.map((c) => cardHTML(c)).join('');
+      this.markOn(grid, '[data-char]', 'char', this.settings.char);
+    };
     grid.onclick = (e) => {
       const el = e.target.closest('[data-char]');
       if (!el) return;
@@ -345,6 +350,9 @@ class App {
       <h3>${c.icon} ${c.name} <small class="muted">— ${c.title}</small></h3>
       <div class="ab">✨ <b>${c.ability.name}</b>: ${c.ability.desc} <span class="muted">(${c.ability.cd} ث)</span></div>
       <div class="stats">${bar('السرعة', s.speed)}${bar('التسديد', s.shot)}${bar('التمرير', s.pass)}${bar('المراوغة', s.dribble)}${bar('الافتكاك', s.tackle)}${bar('حراسة المرمى', s.keeper)}</div>`;
+    $('hero-card').innerHTML = cardHTML(c, { cls: 'big' });
+    const r = ratings(c);
+    $('team-sub').textContent = `${c.icon} ${c.name} • ${r.ovr} ${r.pos}`;
     if (!silent) {
       this.net.send({ t: 'char', char: c.id });
       this.buildPreview();
@@ -399,7 +407,7 @@ class App {
     const wide = this.width > this.height;
     const r = wide ? 7 : 8;
     this.camera.position.set(Math.sin(a) * r * 0.5, 1.9, r);
-    this.camera.lookAt(wide ? -0.25 : 0, wide ? 1.1 : 0.4, 0);
+    this.camera.lookAt(wide ? 1.35 : 0, wide ? 1.05 : 0.4, 0);
     if (Math.abs(this.camera.fov - 42) > 0.1) { this.camera.fov = 42; this.camera.updateProjectionMatrix(); }
     w.update(dt, new THREE.Vector3(), { excite: 0.25 });
     this.render(w.scene, this.camera);
@@ -426,7 +434,6 @@ class App {
     this.cup = { round, results: this.cup && round > 0 ? this.cup.results : [] };
     Object.assign(this.quick, { difficulty: R.diff, duration: 180, stadium: R.stadium || others[Math.floor(Math.random() * others.length)].id, team: 0 });
     this.startQuick(true);
-    setTimeout(() => this.match && this.match.banner(`🏆 ${R.name}`, `كأس الأساطير — ${DIFFICULTY[R.diff].label}`, 'goal', '#fbbf24'), 400);
   }
 
   // ---------- المباراة ----------
@@ -442,7 +449,33 @@ class App {
       tr.onSnapshot = (s, ev) => this.match && this.match.onSnapshot(s, ev);
       tr.onEnd = (d) => this.showEnd(d);
       this.loading(false);
+      this.showVS(tr.roster(), you, tr);
     }, 30);
+  }
+
+  // شاشة المواجهة قبل المباراة (التشكيلتان)
+  showVS(roster, you, tr) {
+    const vs = $('vs');
+    tr.paused = true;
+    vs.style.setProperty('--c0', TEAMS[0].color);
+    vs.style.setProperty('--c1', TEAMS[1].color);
+    for (const t of [0, 1]) {
+      $('vs-t' + t).textContent = TEAMS[t].name;
+      $('vs-l' + t).innerHTML = roster.filter((r) => r.team === t).map((r) => cardHTML(charOf(r.char), { mini: true, team: t, gk: r.slot === 0, cls: r.id === you ? 'you' : '' })).join('');
+    }
+    const st = stadiumOf(this.quick.stadium);
+    const cupName = this.cup ? `🏆 ${CUP_ROUNDS[this.cup.round].name}` : 'مباراة ودية';
+    $('vs-info').innerHTML = `<b>${cupName}</b>${st.name} • ${DIFFICULTY[this.quick.difficulty].label} • ${this.quick.duration / 60} د`;
+    vs.classList.remove('hidden');
+    audio.horn(null, 0.8);
+    const go = () => {
+      if (vs.classList.contains('hidden')) return;
+      vs.classList.add('hidden');
+      tr.paused = false;
+      clearTimeout(this.vsT);
+    };
+    vs.onclick = go;
+    this.vsT = setTimeout(go, 3800);
   }
 
   beginMatch(opts) {

@@ -699,7 +699,12 @@ export class Game {
       vx = ((tx - b.x) / d) * hs; vy = ((ty - b.y) / d) * hs;
       vz = clamp((landZ - b.z + 0.5 * GRAVITY * T * T) / T, 2, 14);
     }
+    // الكرة ترث جزءاً من سرعة اللاعب (تسديدة أثناء الجري أقوى وأكثر واقعية)
+    const carry = kind === 'pass' ? 0.2 : 0.35;
+    vx += p.vx * carry; vy += p.vy * carry;
     b.vx = vx; b.vy = vy; b.vz = vz; b.spin = spin;
+    // دوران أمامي للتسديدات (تنخفض الكرة)، ودوران خلفي للكرات العالية (تتوقف بسرعة بعد الارتداد)
+    b.topspin = kind === 'shot' ? 4 + power * 6 : kind === 'lob' ? -7 : 0;
     if (b.z < BALL_R) b.z = BALL_R;
     this.ev({ e: 'kick', p: p.id, k: kind, pw: r2(power), h: header ? 1 : 0, s: isShot ? 1 : 0, fx: b.fx ? FX_CODE[b.fx] : 0 });
     if (this.phase === PHASE.SETPIECE) { this.phase = PHASE.PLAY; this.phaseT = 0; this.sp = null; }
@@ -790,6 +795,7 @@ export class Game {
     const onGround = b.z <= BALL_R + 0.001 && Math.abs(b.vz) < 0.01;
     if (!onGround) {
       b.vz -= GRAVITY * dt;
+      if (b.topspin) b.vz -= b.topspin * 0.12 * dt * Math.min(1.5, hyp(b.vx, b.vy) / 20);
       const sp = hyp(b.vx, b.vy, b.vz);
       const drag = Math.max(0, 1 - 0.0085 * sp * dt);
       b.vx *= drag; b.vy *= drag; b.vz *= drag;
@@ -806,8 +812,10 @@ export class Game {
       if (b.vz < -1.4) {
         const imp = -b.vz;
         b.vz = imp * 0.55 * this.stadium.bounce;
-        const f = 0.9;
+        // تأثير الدوران عند الارتداد
+        const f = clamp(0.9 + (b.topspin || 0) * 0.012, 0.72, 1.02);
         b.vx *= f; b.vy *= f;
+        b.topspin = (b.topspin || 0) * 0.5;
         if (imp > 4) this.ev({ e: 'bounce', v: r1(imp) });
       } else b.vz = 0;
     }
@@ -898,7 +906,7 @@ export class Game {
       if (p.kickBuf) { this.performKick(p, p.kickBuf.kind, p.kickBuf.power, p.kickBuf.opt); return; }
       if (rel < (p.human ? 26 : 13 + 3 * p.c.stats.dribble) || b.lastTeam === p.team) {
         const prevOwnerTeam = b.lastTeam;
-        b.owner = p.id; b.gk = false;
+        b.owner = p.id; b.gk = false; b.topspin = 0;
         b.lastTouch = p.id; b.lastTeam = p.team; b.fx = null;
         p.touchT = 0.35;
         if (prevOwnerTeam !== p.team && prevOwnerTeam !== -1 && this.lastShot && this.time - this.lastShot.t < 1.5 && rel > 10) {

@@ -538,7 +538,7 @@ export class Match {
       smooth = 1.5;
     } else {
       let fx = b[0], fy = b[1];
-      if (me) { fx = lerp(b[0], mx, 0.45); fy = lerp(b[1], my, 0.45); }
+      if (me) { fx = lerp(b[0], mx, 0.55); fy = lerp(b[1], my, 0.55); }
       if (this.camMode === 'behind' && me) {
         const team = this.roster[you].team;
         const d = team === 0 ? 1 : -1;
@@ -551,7 +551,7 @@ export class Match {
         const cx = clamp(fx, -HL + (portrait ? 6 : 8), HL - (portrait ? 6 : 8));
         look.copy(toV(cx, fy * 0.75 + (portrait ? 0 : 0.5), 0));
         const touch = document.body.classList.contains('touch');
-        const h = portrait ? 30 : touch ? 10.5 : 12.5, dz = portrait ? HW + 30 : touch ? HW + 5 : HW + 8;
+        const h = portrait ? 30 : touch ? 8.5 : 11, dz = portrait ? HW + 30 : touch ? HW + 0.5 : HW + 4;
         pos.set(cx * 0.96, h, dz + look.z * 0.55);
       }
     }
