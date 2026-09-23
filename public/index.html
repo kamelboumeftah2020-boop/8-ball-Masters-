@@ -10,6 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" />
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <script type="importmap">
     { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
   </script>
@@ -17,6 +20,7 @@
 <body>
   <canvas id="gl"></canvas>
   <div id="flash"></div>
+  <div id="splash"><div class="ball">⚽</div><h1>أساطير الكرة 5×5</h1><div class="tap">المس للبدء ▶</div><small>🔊 شغّل الصوت لأفضل تجربة</small></div>
 
   <div id="ui">
     <!-- ========== الشاشة الرئيسية ========== -->
@@ -150,6 +154,10 @@
         <label class="field">مستوى الصوت <input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
         <label class="check"><input type="checkbox" id="set-sound" /> تشغيل المؤثرات والجمهور</label>
         <label class="check"><input type="checkbox" id="set-comm" /> المعلق الصوتي</label>
+        <h4>التحكم</h4>
+        <label class="check"><input type="checkbox" id="set-lefty" /> وضع اليد اليسرى (الأزرار على اليسار)</label>
+        <label class="check"><input type="checkbox" id="set-vib" /> الاهتزاز</label>
+        <label class="check"><input type="checkbox" id="set-tut" /> إظهار نصائح التعليم مجدداً</label>
         <h4>الكاميرا الافتراضية</h4>
         <div class="seg" id="set-cam"></div>
         <div class="actions"><button class="back" data-go="main">↩ حفظ ورجوع</button></div>
@@ -160,6 +168,13 @@
     <section id="scr-help" class="screen hidden">
       <div class="panel">
         <h2>🎮 طريقة اللعب</h2>
+        <div class="card" style="margin-bottom:8px">
+          <b>📱 على الهاتف:</b> العصا على اليسار للحركة (ادفعها للآخر = ركض).<br>
+          <b>🦶 الزر الأحمر:</b> تسديد قوي يصوّب تلقائياً • في الدفاع يصبح <b>افتكاك</b>.<br>
+          <b>➡️ الزر الأخضر:</b> تمرير (الدائرة الخضراء تبين المستلم) • اضغط مطولاً = كرة عالية • في الدفاع يصبح <b>ركض</b>.<br>
+          <b>✨ زر المهارة:</b> يضيء عندما تكون قدرتك الخاصة جاهزة.<br>
+          <b>🏟️ الملعب بجدران:</b> الكرة ترتد من اللوحات — استغلها في التمرير!
+        </div>
         <table class="keys">
           <tr><td><kbd>W A S D</kbd> / الأسهم</td><td>الحركة</td></tr>
           <tr><td><kbd>Shift</kbd></td><td>الركض السريع (يستهلك اللياقة)</td></tr>
@@ -198,6 +213,7 @@
       <div id="banner" class="banner"><div id="banner-text"></div><div id="banner-sub"></div></div>
       <div id="countdown" class="hidden"></div>
       <div id="subtitle"></div>
+      <div id="tip"></div>
       <div id="feed"></div>
       <div id="pcard" class="hidden">
         <div id="pc-ab" class="ability"><span id="pc-ab-icon"></span><kbd>R</kbd></div>

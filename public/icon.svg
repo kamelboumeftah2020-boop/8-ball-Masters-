@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#2f8f3f"/><stop offset="1" stop-color="#0b3d1c"/></radialGradient>
+    <radialGradient id="ball" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c9d2dc"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+  <g stroke="#ffffff" stroke-opacity="0.25" stroke-width="10" fill="none">
+    <line x1="256" y1="0" x2="256" y2="512"/><circle cx="256" cy="256" r="120"/>
+  </g>
+  <circle cx="256" cy="250" r="140" fill="url(#ball)" stroke="#0b1220" stroke-width="8"/>
+  <polygon points="256,190 313,231 291,298 221,298 199,231" fill="#0b1220"/>
+  <g fill="#0b1220">
+    <polygon points="256,112 290,128 256,150 222,128"/>
+    <polygon points="380,215 385,255 352,262 345,225"/>
+    <polygon points="132,215 167,225 160,262 127,255"/>
+    <polygon points="190,365 222,340 238,370 210,388"/>
+    <polygon points="322,365 302,388 274,370 290,340"/>
+  </g>
+  <text x="256" y="470" text-anchor="middle" font-family="Arial Black, Arial" font-weight="900" font-size="64" fill="#ffd23f">5×5</text>
+</svg>

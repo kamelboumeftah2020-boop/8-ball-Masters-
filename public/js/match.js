@@ -339,6 +339,7 @@ export class Match {
       goalBoards: ph === PHASE.GOAL || ph === PHASE.REPLAY,
     });
     this.fx.update(dt);
+    this.updateTutorial(state, dt);
     this.updateHUD(this.replay ? { ...state, ph: latest.ph, pt: latest.pt, tl: latest.tl, sc: latest.sc, gd: latest.gd } : state, dt);
     if (this.lastPhase !== ph) this.onPhase(ph, this.lastPhase, state);
     this.lastPhase = ph;
@@ -636,7 +637,7 @@ export class Match {
         this.renderScorers();
         this.camSnap = true;
         const isMine = this.you >= 0 && this.roster[this.you] && this.roster[this.you].team === e.team;
-        $('emotebar').classList.toggle('hidden', !(this.you >= 0));
+        $('emotebar').classList.toggle('hidden', !isMine);
         if (isMine && e.p === this.you) this.toast('اختر احتفالك: 1-5 🎉');
         break;
       }
@@ -711,6 +712,43 @@ export class Match {
     return Math.max(1, Math.ceil((elapsed / this.opts.duration) * 90));
   }
 
+  // ---------- التعليم التفاعلي (أول مباراة) ----------
+  updateTutorial(state, dt) {
+    const set = this.app.settings;
+    if (set.tutorialDone || this.you < 0 || this.replay) return;
+    const seen = set.tutSeen || (set.tutSeen = []);
+    this.tipT = (this.tipT || 0) - dt;
+    this.playT = (this.playT || 0) + (state.ph === PHASE.PLAY ? dt : 0);
+    if (this.tipT > 0 || state.ph !== PHASE.PLAY) return;
+    const touch = document.body.classList.contains('touch');
+    const you = this.you, b = state.b;
+    const myTeam = this.roster[you].team;
+    const ownerTeam = b[6] >= 0 && this.roster[b[6]] ? this.roster[b[6]].team : -1;
+    const c = charOf(this.roster[you].char);
+    const tips = [
+      { id: 'move', ok: this.playT > 0.4, t: touch ? '🕹️ حرّك العصا على يسار الشاشة' : '🕹️ تحرك بـ WASD أو الأسهم', s: touch ? 'ادفعها للآخر لتركض بسرعة' : 'اضغط Shift للركض السريع' },
+      { id: 'shoot', ok: b[6] === you, t: touch ? '🦶 الزر الأحمر = تسديد!' : '🦶 مسافة = تسديد!', s: 'التصويب تلقائي نحو الزاوية البعيدة عن الحارس' },
+      { id: 'pass', ok: b[6] === you && seen.includes('shoot'), t: touch ? '➡️ الزر الأخضر = تمرير' : '➡️ E = تمرير • Q = كرة عالية', s: touch ? 'الدائرة الخضراء تحت زميلك • اضغط مطولاً لكرة عالية' : 'الدائرة الخضراء تحت الزميل الذي سيستلم' },
+      { id: 'def', ok: ownerTeam >= 0 && ownerTeam !== myTeam, t: touch ? '🦵 في الدفاع: الزر الأحمر = افتكاك' : '🦵 F = افتكاك / انزلاق', s: 'اقترب من حامل الكرة ثم اضغط' },
+      { id: 'ability', ok: this.playT > 15 && state.p[you][8] === 0, t: `${c.icon} قدرتك الخاصة جاهزة: ${c.ability.name}`, s: (touch ? 'اضغط زر ✨ — ' : 'اضغط R — ') + c.ability.desc },
+      { id: 'walls', ok: this.playT > 28, t: '🏟️ الكرة ترتد من الجدران!', s: 'استعملها لتمرير الكرة حول المدافعين' },
+    ];
+    const next = tips.find((x) => !seen.includes(x.id) && x.ok);
+    if (!next) {
+      if (tips.every((x) => seen.includes(x.id))) { set.tutorialDone = true; this.app.saveSettings(); }
+      return;
+    }
+    seen.push(next.id);
+    this.app.saveSettings();
+    const el = $('tip');
+    el.innerHTML = `${next.t}<small>${next.s}</small>`;
+    el.classList.add('show');
+    audio.click();
+    clearTimeout(this.tipHide);
+    this.tipHide = setTimeout(() => el.classList.remove('show'), 4800);
+    this.tipT = 6.5;
+  }
+
   // ---------- الواجهة ----------
   setupHUD() {
     $('hud').classList.remove('hidden');
@@ -760,8 +798,10 @@ export class Match {
   updateHUD(state, dt) {
     const c = this.hudCache;
     const set = (id, v) => { if (c[id] !== v) { c[id] = v; $(id).textContent = v; } };
-    set('sb-s0', state.sc[0]);
-    set('sb-s1', state.sc[1]);
+    for (const t of [0, 1]) {
+      if (c['sb-s' + t] !== undefined && c['sb-s' + t] !== state.sc[t]) { const el = $('sb-s' + t); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+      set('sb-s' + t, state.sc[t]);
+    }
     set('sb-time', state.gd ? 'ذهبي' : this.fmtTime(state.tl));
     $('sb-time').classList.toggle('golden', !!state.gd);
     const you = this.you;
@@ -793,7 +833,7 @@ export class Match {
     // العد التنازلي
     const cdEl = $('countdown');
     if (state.ph === PHASE.KICKOFF) {
-      const n = Math.max(1, Math.ceil(2 - state.pt));
+      const n = Math.max(1, Math.ceil((1.2 - state.pt) / 0.4));
       set('countdown', String(n));
       cdEl.classList.remove('hidden');
     } else cdEl.classList.add('hidden');
@@ -867,7 +907,7 @@ export class Match {
 
   toast(t) { this.app.toast(t); }
 
-  vibrate(ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch { /* ignore */ } }
+  vibrate(ms) { if (!window.__noVib && navigator.vibrate) try { navigator.vibrate(ms); } catch { /* ignore */ } }
 
   emote(n) {
     this.transport.sendEmote(n);
@@ -879,6 +919,8 @@ export class Match {
 
   destroy() {
     audio.drums = false;
+    $('tip').classList.remove('show');
+    clearTimeout(this.tipHide);
     for (const p of this.players3d) p.dispose();
     this.world.dispose();
     $('hud').classList.add('hidden');

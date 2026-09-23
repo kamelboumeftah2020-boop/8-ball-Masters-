@@ -335,3 +335,77 @@ button.gold { background: linear-gradient(135deg, #fbbf24, #b45309); border-colo
   color: #fff; background: rgba(0,0,0,0.55); padding: 6px 14px; border-radius: 10px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
 #subtitle.show { opacity: 1; }
 #subtitle.hot { color: #ffd23f; font-size: 21px; }
+
+/* ================= هاتف أفقي: واجهة مضغوطة ================= */
+@media (max-height: 520px) and (orientation: landscape) {
+  .screen { padding: 8px 12px; }
+  #scr-main { flex-direction: row; justify-content: space-between; align-items: stretch; padding: 8px 14px; gap: 12px; overflow: hidden; }
+  .menu-col { width: 290px; min-width: 250px; padding: 10px 12px; gap: 6px; justify-content: flex-start; border-radius: 16px; overflow-y: auto; }
+  .brand .logo, .brand p { display: none; }
+  .brand h1 { font-size: 22px; margin: 0; }
+  .field { margin: 0; gap: 2px; font-size: 12px; }
+  .field input { padding: 6px 10px; font-size: 14px; }
+  .career { padding: 4px 10px; font-size: 12px; }
+  .menu-buttons { gap: 6px; }
+  .menu-buttons button.big { padding: 8px 12px; font-size: 15px; }
+  .menu-buttons .row button { padding: 6px 8px; font-size: 12px; }
+  .char-col { width: min(380px, 46vw); justify-content: flex-end; gap: 6px; }
+  #char-info { padding: 8px 10px; }
+  #char-info h3 { font-size: 16px; }
+  #char-info .ab { font-size: 12px; margin: 4px 0 0; padding: 5px 8px; }
+  #char-info .stats { display: none; }
+  #char-grid { display: flex; overflow-x: auto; gap: 6px; padding-bottom: 4px; scroll-snap-type: x mandatory; }
+  #char-grid .char { min-width: 62px; padding: 5px 4px; scroll-snap-align: start; }
+  #char-grid .char .ic { font-size: 22px; }
+  #char-grid .char .nm { font-size: 12px; }
+  #char-grid .char .tt { display: none; }
+  .panel { padding: 10px 14px; max-height: 100%; border-radius: 14px; }
+  .panel h2 { font-size: 18px; margin: 0 0 4px; }
+  .panel h4 { margin: 6px 0 4px; font-size: 13px; }
+  .stadiums { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .stad { min-height: 54px; padding: 6px; }
+  .stad small { display: none; }
+  .stad b { font-size: 12px; }
+  .grid2 { grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .seg button { padding: 5px 10px; font-size: 13px; }
+  .actions { position: sticky; bottom: -10px; margin: 8px -14px -10px; padding: 8px 14px; background: rgba(10, 16, 30, 0.95); border-top: 1px solid var(--line); }
+  .actions button.big { padding: 8px 18px; font-size: 16px; }
+  #end-title { font-size: 26px; }
+  .trophy { font-size: 50px; }
+  .end-score { font-size: 16px; margin: 2px 0 6px; }
+  .mvp { padding: 5px; font-size: 13px; margin-bottom: 4px; }
+  .xp { margin: 4px 0; font-size: 13px; }
+  table.st { font-size: 11px; }
+  table.st th, table.st td { padding: 3px 4px; }
+  .teams { margin: 6px 0; gap: 8px; }
+  .slot { min-height: 34px; padding: 4px 8px; }
+  .room-bottom .chat-log { height: 60px; }
+  table.keys td { padding: 4px; font-size: 13px; }
+}
+
+/* ================= شاشة البداية ================= */
+#splash { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(circle at 50% 35%, #173a2a 0%, #0b1220 60%, #05070d 100%); text-align: center; padding: 20px; cursor: pointer; }
+#splash .ball { font-size: 76px; animation: bounce 1s ease-in-out infinite; filter: drop-shadow(0 12px 16px rgba(0,0,0,0.6)); }
+@keyframes bounce { 50% { transform: translateY(-22px) rotate(180deg); } }
+#splash h1 { margin: 0; font-size: clamp(30px, 7vw, 56px); font-weight: 900; background: linear-gradient(135deg, #fff, #ffd23f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#splash .tap { font-size: 18px; font-weight: 900; padding: 12px 30px; border-radius: 30px; background: linear-gradient(135deg, #22c55e, #15803d); box-shadow: 0 8px 26px rgba(34,197,94,0.45); animation: pulse 0.9s infinite alternate; }
+#splash small { color: var(--muted); }
+#splash.gone { opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+@media (max-height: 520px) { #splash .ball { font-size: 52px; } #splash { gap: 8px; } }
+
+/* ================= نصائح التعليم ================= */
+#tip { position: absolute; top: 64px; left: 50%; transform: translateX(-50%) translateY(-20px); opacity: 0; max-width: min(92vw, 520px);
+  background: linear-gradient(135deg, rgba(20, 40, 70, 0.95), rgba(10, 20, 40, 0.95)); border: 2px solid var(--gold); border-radius: 14px;
+  padding: 10px 16px; font-weight: 900; font-size: 15px; text-align: center; transition: all 0.35s; pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+#tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#tip small { display: block; color: var(--muted); font-weight: 700; font-size: 12px; margin-top: 2px; }
+
+/* ================= يد اليسار ================= */
+body.lefty #touch .stick-zone { left: auto; right: 0; }
+body.lefty #touch .tctl { right: auto; left: max(18px, env(safe-area-inset-left)); transform: scaleX(-1); }
+body.lefty #touch .tctl .tb > * { transform: scaleX(-1); display: inline-block; }
+body.lefty #touch .t-hint { right: auto; left: 20px; }
+
+.sb-score b.bump { animation: bump 0.8s ease-out; color: #ffd23f; }
+@keyframes bump { 0% { transform: scale(2.2); } 60% { transform: scale(0.9); } 100% { transform: scale(1); } }

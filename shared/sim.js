@@ -856,7 +856,7 @@ export class Game {
       if (this.isGK(p) && this.inOwnBox(p, 0.3) && b.lastTeam !== -1) {
         const dive = p.state === STATE.DIVE;
         const reachMul = (p.human ? 1 : this.diff.reach) * (0.85 + 0.15 * p.c.stats.keeper);
-        const reach = pr + BALL_R + (dive ? 1.25 : 0.7) * reachMul;
+        const reach = pr + BALL_R + (dive ? 1.4 : 0.8) * reachMul;
         const hmax = dive ? 2.0 : 2.65;
         if (d < reach && b.z < hmax && p.pickupCD <= 0 && !(b.lastTouch === p.id && bsp > 3)) {
           this.keeperTouch(p, bsp);
@@ -926,7 +926,7 @@ export class Game {
   keeperTouch(p, bsp) {
     const b = this.ball;
     const shotBy = b.lastTeam !== p.team && b.lastTeam !== -1;
-    const catchLim = (13.5 + 4.5 * p.c.stats.keeper) * (p.human ? 1 : this.diff.reach) + (p.state === STATE.DIVE ? 2 : 0);
+    const catchLim = (17 + 5 * p.c.stats.keeper) * (p.human ? 1 : this.diff.reach) + (p.state === STATE.DIVE ? 2 : 0);
     const towardGoal = shotBy && this.lastShot && this.time - this.lastShot.t < 2.5;
     if (b.fx === 'fire' && bsp > 12) {
       // الكرة النارية تطيح بالحارس

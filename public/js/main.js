@@ -33,6 +33,32 @@ class App {
     this.paused = false;
     this.quick = { stadium: 'royal', duration: 180, difficulty: 'normal', team: 0, slot: 3 };
     if (isMobile) document.body.classList.add('touch');
+    document.body.classList.toggle('lefty', !!this.settings.lefty);
+    window.__noVib = this.settings.vibrate === false;
+    // شاشة البداية: تفعيل الصوت + ملء الشاشة + الوضع الأفقي
+    const splash = $('splash');
+    splash.addEventListener('click', () => {
+      audio.init(); audio.setEnabled(this.settings.sound); audio.setVolume(this.settings.volume);
+      splash.classList.add('gone');
+      setTimeout(() => splash.remove(), 600);
+      if (isMobile) {
+        const el = document.documentElement;
+        Promise.resolve(el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null)
+          .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+          .catch(() => {});
+      }
+    }, { once: true });
+    // إيقاف مؤقت عند مغادرة التطبيق
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this.match && this.match.local && !this.paused) this.togglePause(true);
+        if (audio.ctx) audio.ctx.suspend();
+      } else if (audio.ctx && this.settings.sound) audio.ctx.resume();
+    });
+    // تطبيق قابل للتثبيت (PWA)
+    if (!window.OFFLINE_ONLY && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
     if (window.OFFLINE_ONLY) $('btn-online').classList.add('hidden');
     // ترجمة المعلق كنص على الشاشة (إذا لم يوجد صوت عربي)
     audio.onSay = (text, hot) => {
@@ -65,7 +91,7 @@ class App {
     let s = {};
     try { s = JSON.parse(localStorage.getItem('fl5-settings') || '{}'); } catch { s = {}; }
     this.settings = Object.assign({
-      name: '', char: 'blaze', quality: isMobile ? 'low' : 'medium', volume: 0.8, sound: true, commentary: true, camera: 'broadcast',
+      name: '', char: 'blaze', quality: isMobile ? 'low' : 'medium', volume: 0.8, sound: true, commentary: true, camera: 'broadcast', lefty: false, vibrate: true, tutorialDone: false,
     }, s);
     if (!this.settings.name) this.settings.name = 'لاعب' + Math.floor(Math.random() * 900 + 100);
   }
@@ -279,6 +305,12 @@ class App {
     this.seg('set-cam', [['broadcast', 'بث تلفزيوني'], ['behind', 'خلف اللاعب'], ['top', 'من الأعلى']], () => this.settings.camera, (v) => { this.settings.camera = v; this.saveSettings(); });
     $('set-vol').value = this.settings.volume;
     $('set-vol').oninput = () => { this.settings.volume = +$('set-vol').value; audio.init(); audio.setVolume(this.settings.volume); this.saveSettings(); };
+    $('set-lefty').checked = !!this.settings.lefty;
+    $('set-lefty').onchange = () => { this.settings.lefty = $('set-lefty').checked; document.body.classList.toggle('lefty', this.settings.lefty); this.saveSettings(); };
+    $('set-vib').checked = this.settings.vibrate !== false;
+    $('set-vib').onchange = () => { this.settings.vibrate = $('set-vib').checked; window.__noVib = !this.settings.vibrate; this.saveSettings(); };
+    $('set-tut').checked = false;
+    $('set-tut').onchange = () => { if ($('set-tut').checked) { this.settings.tutorialDone = false; this.settings.tutSeen = []; this.saveSettings(); this.toast('ستظهر النصائح في المباراة القادمة'); } };
     $('set-sound').checked = this.settings.sound;
     $('set-sound').onchange = () => { this.settings.sound = $('set-sound').checked; audio.setEnabled(this.settings.sound); this.saveSettings(); };
     $('set-comm').checked = this.settings.commentary;
@@ -421,6 +453,7 @@ class App {
     $('pause').classList.add('hidden');
     this.paused = false;
     audio.init();
+    this.perf = null;
     this.match = new Match(this, opts);
     this.composerScene = null;
     this.input.enabled = true;
@@ -625,6 +658,27 @@ class App {
     if (!this.match) this.setupMenuScene(r.settings.stadium);
   }
 
+  // خفض الدقة تلقائياً إذا كان الهاتف بطيئاً
+  adaptQuality(dt) {
+    const q = this.perf || (this.perf = { t: 0, frames: 0, time: 0, pr: this.renderer.getPixelRatio(), warned: false });
+    q.t += dt; q.frames++; q.time += dt;
+    if (q.t < 4) { if (q.t < 2) { q.frames = 0; q.time = 0; } return; }
+    if (q.time >= 2.5) {
+      const fps = q.frames / q.time;
+      q.frames = 0; q.time = 0;
+      if (fps < 40 && q.pr > 0.6) {
+        q.pr = Math.max(0.6, q.pr - 0.2);
+        this.renderer.setPixelRatio(q.pr);
+        this.onResize();
+        if (!q.warned) { q.warned = true; this.toast('⚙️ تم ضبط الجودة تلقائياً لتشغيل أنعم'); }
+      } else if (fps < 28 && this.renderer.shadowMap.enabled && this.match) {
+        this.renderer.shadowMap.enabled = false;
+        this.match.world.sun.castShadow = false;
+        this.match.world.scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); });
+      }
+    }
+  }
+
   // ---------- الحلقة ----------
   loop(t) {
     requestAnimationFrame((tt) => this.loop(tt));
@@ -633,6 +687,7 @@ class App {
     if (this.match) {
       const inp = this.paused ? { mx: 0, my: 0, b: 0 } : this.input.read();
       this.match.frame(dt, inp);
+      this.adaptQuality(dt);
     } else this.updateMenu(dt);
   }
 }

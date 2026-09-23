@@ -87,7 +87,7 @@ export class Input {
         if (bit) this.touch.b |= bit; else this.touch.t[key] = true;
         btn.classList.add('on');
         btn.setPointerCapture && btn.setPointerCapture(e.pointerId);
-        if (navigator.vibrate) try { navigator.vibrate(8); } catch { /* ignore */ }
+        if (!window.__noVib && navigator.vibrate) try { navigator.vibrate(8); } catch { /* ignore */ }
       };
       const up = (e) => { e.preventDefault(); if (bit) this.touch.b &= ~bit; else this.touch.t[key] = false; btn.classList.remove('on'); };
       btn.addEventListener('pointerdown', down);
