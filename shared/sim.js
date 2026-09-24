@@ -97,7 +97,60 @@ export class Game {
       }
     }
     this.ball = { x: 0, y: 0, z: BALL_R, vx: 0, vy: 0, vz: 0, spin: 0, owner: -1, gk: false, fx: null, fxT: 0, lastTouch: -1, lastTeam: -1, inNet: false, prevX: 0, prevY: 0, prevZ: BALL_R };
+    // تبديل اللاعب تلقائياً (مباريات لاعب واحد ضد البوتات)
+    this.ctrl = null;
+    if (opts.autoSwitch) {
+      this.ctrl = [null, null];
+      this.lastSwitch = [0, 0];
+      for (const p of this.players) if (p.human && this.ctrl[p.team] == null) this.ctrl[p.team] = p.id;
+    }
     this.resetKickoff(this.rand() < 0.5 ? 0 : 1);
+  }
+
+  switchTo(team, pid) {
+    if (!this.ctrl || this.ctrl[team] == null || this.ctrl[team] === pid) return;
+    const old = this.players[this.ctrl[team]], np = this.players[pid];
+    if (!np || np.team !== team) return;
+    np.human = true; np.input = { ...old.input }; np.prevB = old.input.b; np.ai.t = 0;
+    np.hold.shoot = np.hold.lob = 0; np.kickBuf = null;
+    old.human = false; old.input = { mx: 0, my: 0, b: 0 }; old.prevB = 0; old.ai.t = 0; old.hold.shoot = old.hold.lob = 0;
+    this.ctrl[team] = pid;
+    this.lastSwitch[team] = this.time;
+    this.ev({ e: 'switch', team, p: pid });
+  }
+
+  nearestToBall(team, exclude = -1) {
+    const b = this.ball;
+    let best = null, bd = Infinity;
+    for (const p of this.players) {
+      if (p.team !== team || p.id === exclude || p.state === STATE.DOWN) continue;
+      if (this.isGK(p) && hyp(p.x - -this.attackDir(team) * HL, p.y) < BOX_R && hyp(b.x - p.x, b.y - p.y) > 4) continue;
+      const d = hyp(b.x - p.x, b.y - p.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  updateSwitching() {
+    if (!this.ctrl) return;
+    const b = this.ball;
+    for (const team of [0, 1]) {
+      const cid = this.ctrl[team];
+      if (cid == null) continue;
+      const cur = this.players[cid];
+      // منفذ الكرة الثابتة
+      if (this.phase === PHASE.SETPIECE && this.sp && this.sp.team === team && this.sp.taker !== cid) { this.switchTo(team, this.sp.taker); continue; }
+      if (this.phase !== PHASE.PLAY) continue;
+      const owner = b.owner >= 0 ? this.players[b.owner] : null;
+      if (owner && owner.team === team) { if (owner.id !== cid) this.switchTo(team, owner.id); continue; }
+      const lp = this.lastPass;
+      if (!owner && lp && lp.team === team && lp.to != null && this.time - lp.t < 2.5 && b.lastTeam === team) { if (lp.to !== cid) this.switchTo(team, lp.to); continue; }
+      if (this.time - this.lastSwitch[team] < 1.1) continue;
+      const cand = this.nearestToBall(team, cid);
+      if (!cand) continue;
+      const dc = hyp(b.x - cur.x, b.y - cur.y), dn = hyp(b.x - cand.x, b.y - cand.y);
+      if (dn < dc - 4 || (this.isGK(cur) && dn < dc)) this.switchTo(team, cand.id);
+    }
   }
 
   makePlayer(team, slot, r, char) {
@@ -152,7 +205,7 @@ export class Game {
     let mx = +inp.mx || 0, my = +inp.my || 0;
     const l = hyp(mx, my);
     if (l > 1) { mx /= l; my /= l; }
-    p.input.mx = mx; p.input.my = my; p.input.b = (inp.b | 0) & 127;
+    p.input.mx = mx; p.input.my = my; p.input.b = (inp.b | 0) & 511;
     if (p.input.b & BTN.SKIP && this.phase === PHASE.REPLAY) this.skipVotes.add(pid);
   }
   requestEmote(pid, n) {
@@ -242,6 +295,7 @@ export class Game {
         return;
     }
     if (this.phase === PHASE.PLAY && this.ball.owner >= 0) this.poss[this.players[this.ball.owner].team] += dt;
+    this.updateSwitching();
     if (this.phase === PHASE.GOAL) this.stepCelebration(dt);
     else this.updatePlayers(dt);
     this.updateZones(dt);
@@ -312,8 +366,30 @@ export class Game {
     }
 
     let mx = inp.mx || 0, my = inp.my || 0;
+    // تبديل يدوي
+    if ((pressed & BTN.SWITCH) && this.ctrl && this.ctrl[p.team] === p.id) {
+      const cand = this.nearestToBall(p.team, p.id);
+      if (cand) { this.switchTo(p.team, cand.id); return; }
+    }
+    // الضغط التلقائي: يتجه اللاعب نحو حامل الكرة / نقطة اعتراضها
+    if ((b & BTN.PRESS) && this.ball.owner !== p.id && this.phase === PHASE.PLAY) {
+      const ip = this.interceptPoint(p);
+      const owner = this.ball.owner >= 0 ? this.players[this.ball.owner] : null;
+      let tx = ip.x, ty = ip.y;
+      if (owner && owner.team !== p.team) { const gx = -this.attackDir(p.team) * HL - owner.x, gy = -owner.y, gl = hyp(gx, gy) || 1; tx = owner.x + (gx / gl) * 0.9; ty = owner.y + (gy / gl) * 0.9; }
+      const dx = tx - p.x, dy = ty - p.y, d = hyp(dx, dy);
+      if (d > 0.3) { mx = dx / d; my = dy / d; }
+    }
+    // استلام التمريرة: المستلم يتجه تلقائياً نحو الكرة (إلا إذا وجّهه المستخدم بعد التبديل)
+    const lp = this.lastPass;
+    if (lp && lp.to === p.id && this.ball.owner < 0 && this.phase === PHASE.PLAY && this.time - lp.t < 2.5 && this.ball.lastTeam === p.team
+      && (hyp(mx, my) < 0.2 || (this.ctrl && this.time - this.lastSwitch[p.team] < 0.45))) {
+      const ip = this.interceptPoint(p);
+      const dx = ip.x - p.x, dy = ip.y - p.y, d = hyp(dx, dy);
+      if (d > 0.35) { const k = Math.min(1, d / 2); mx = (dx / d) * k; my = (dy / d) * k; } else { mx = my = 0; }
+    }
     const mlen = hyp(mx, my);
-    let sprint = !!(b & BTN.SPRINT) && mlen > 0.2;
+    let sprint = (!!(b & BTN.SPRINT) || (!!(b & BTN.PRESS) && hyp(this.ball.x - p.x, this.ball.y - p.y) > 4)) && mlen > 0.2;
     if (p.buff.dash > 0) { sprint = mlen > 0.2; p.stamina = Math.min(1, p.stamina + dt * 0.2); }
     else if (sprint) {
       if (p.stamina > 0.02) p.stamina = Math.max(0, p.stamina - dt * this.M.stamina / p.c.stats.stamina);
@@ -347,7 +423,7 @@ export class Game {
     // التسديد (اضغط مطولاً للقوة)
     if (b & BTN.SHOOT) p.hold.shoot = Math.min(1.2, p.hold.shoot + dt);
     if (released & BTN.SHOOT) {
-      const pw = p.human && this.M.assist ? clamp(0.72 + (p.hold.shoot / 0.9) * 0.28, 0.72, 1) : clamp(p.hold.shoot / 0.9, p.human ? 0.3 : 0.2, 1);
+      const pw = p.human && this.M.assist ? clamp(0.72 + (p.hold.shoot / 0.9) * 0.28, 0.72, 1) : clamp(p.hold.shoot / 0.9, p.human ? 0.45 : 0.2, 1);
       p.hold.shoot = 0;
       this.tryKick(p, isTaker && this.sp.kind === 'throw' ? 'lob' : 'shot', pw, { dir: this.inputDir(p, inp) });
     }
@@ -1577,6 +1653,7 @@ export class Game {
       sc: this.score,
       gd: this.golden ? 1 : 0,
       sp: this.sp ? this.sp.taker : -1,
+      ct: this.ctrl,
       spk: this.sp ? this.sp.kind : (this.pendingSP ? this.pendingSP.kind : ''),
       b: [r2(b.x), r2(b.y), r2(b.z), r2(b.vx), r2(b.vy), r2(b.vz), b.owner, b.fx ? FX_CODE[b.fx] : 0, b.gk ? 1 : 0, r2(b.spin)],
       p: this.players.map((p) => [

@@ -31,8 +31,14 @@ export class LocalTransport {
       setTimeout(() => this.onEnd && this.onEnd({ stats: g.statsTable(), score: g.score, poss: g.possession() }), 3500);
     }
   }
-  sendInput(inp) { if (this.you >= 0) this.game.setInput(this.you, inp); }
-  sendEmote(n) { if (this.you >= 0) this.game.requestEmote(this.you, n); }
+  // اللاعب المتحكَّم فيه حالياً (يتغير مع التبديل التلقائي)
+  ctrlId() {
+    const g = this.game;
+    if (g.ctrl && this.you >= 0) { const c = g.ctrl[g.players[this.you].team]; if (c != null) return c; }
+    return this.you;
+  }
+  sendInput(inp) { const id = this.ctrlId(); if (id >= 0) this.game.setInput(id, inp); }
+  sendEmote(n) { const id = this.ctrlId(); if (id >= 0) this.game.requestEmote(id, n); }
   close() {}
 }
 

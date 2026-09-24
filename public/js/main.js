@@ -516,7 +516,7 @@ class App {
       roster[this.quick.team][this.quick.slot] = { name: this.settings.name, char: this.settings.char, human: true };
       const you = this.quick.team * TEAM_SIZE + this.quick.slot;
       this.applyClubs(this.quick.home, this.quick.away);
-      const tr = new LocalTransport({ ...this.quickSettings(), mode: this.quick.mode, roster, you, seed: Math.floor(Math.random() * 1e9) });
+      const tr = new LocalTransport({ ...this.quickSettings(), mode: this.quick.mode, roster, you, autoSwitch: true, seed: Math.floor(Math.random() * 1e9) });
       this.beginMatch({ stadium: this.quick.stadium, duration: this.quick.duration, mode: this.quick.mode, roster: tr.roster(), you, local: true, transport: tr });
       tr.onSnapshot = (s, ev) => this.match && this.match.onSnapshot(s, ev);
       tr.onEnd = (d) => this.showEnd(d);
@@ -596,8 +596,10 @@ class App {
   showEnd(d) {
     if (!this.match) return;
     const m = this.match;
-    const you = m.you;
+    const you = m.home ?? m.you;
     const myTeam = you >= 0 ? m.roster[you].team : -1;
+    // مع التبديل التلقائي يتحكم المستخدم في كامل الفريق
+    const teamCtl = m.local && myTeam >= 0;
     const [a, b] = d.score;
     let title = a === b ? 'تعادل 🤝' : `فوز ${TEAMS[a > b ? 0 : 1].name} 🏆`;
     if (myTeam >= 0 && a !== b) title = (a > b ? 0 : 1) === myTeam ? 'فزت! 🏆🎉' : 'خسرت… حظاً أوفر 😔';
@@ -627,15 +629,16 @@ class App {
     let xpHtml = '';
     if (you >= 0 && !m.xpGiven) {
       m.xpGiven = true;
-      const me = stats.find((x) => x.id === you) || { g: 0, a: 0, sv: 0, tk: 0 };
+      const me = teamCtl ? { g: sum(myTeam, 'g'), a: sum(myTeam, 'a'), sv: sum(myTeam, 'sv'), tk: sum(myTeam, 'tk') } : stats.find((x) => x.id === you) || { g: 0, a: 0, sv: 0, tk: 0 };
       const c = this.career();
       const before = this.levelOf(c.xp);
       let gain = 40 + me.g * 35 + me.a * 20 + me.sv * 15 + me.tk * 5 + (won ? 100 : draw ? 40 : 0);
-      if (mvp && mvp.id === you) gain += 40;
+      const myMvp = mvp && (teamCtl ? mvp.team === myTeam : mvp.id === you);
+      if (myMvp) gain += 40;
       const coins = Math.round(gain / 4) + (this.cup && won && this.cup.round === 2 ? 250 : 0);
       c.xp += gain; c.coins += coins; c.matches++; c.goals += me.g; if (won) c.wins++;
       const after = this.levelOf(c.xp);
-      xpHtml = `<span class="gain">+${gain} XP</span> &nbsp; 🪙 +${coins}${mvp && mvp.id === you ? ' &nbsp; ⭐ أفضل لاعب +40' : ''}` + (after > before ? `<br><span class="lvlup">⬆️ مستوى جديد: ${after}!</span>` : '');
+      xpHtml = `<span class="gain">+${gain} XP</span> &nbsp; 🪙 +${coins}${myMvp ? ' &nbsp; ⭐ أفضل لاعب +40' : ''}` + (after > before ? `<br><span class="lvlup">⬆️ مستوى جديد: ${after}!</span>` : '');
       this.saveSettings();
     }
     $('end-xp').innerHTML = xpHtml;

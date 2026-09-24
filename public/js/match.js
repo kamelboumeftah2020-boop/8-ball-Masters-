@@ -161,11 +161,12 @@ export class Match {
     this.roster = roster;
     const youChanged = this.you !== you;
     this.you = you;
+    this.home = you;
     this.pred = null;
     roster.forEach((r, i) => {
       const old = this.players3d[i];
       const key = `${r.char}|${r.name}|${r.human}|${r.id === you}`;
-      if (old && old.key === key) return;
+      if (old && old.key === key) { old.setSelected(r.id === you); return; }
       if (old) { this.scene.remove(old.root); old.dispose(); }
       const p3 = new Player3D(r, { local: r.id === you });
       p3.key = key;
@@ -192,6 +193,11 @@ export class Match {
     while (this.buf.length > 2 && this.buf[1].t < s.t - 1.5) this.buf.shift();
     while (this.history.length && this.history[0].t < s.t - 14) this.history.shift();
     this.latest = s;
+    // التبديل التلقائي: تتبّع اللاعب الذي يتحكم فيه المستخدم حالياً
+    if (s.ct && this.home >= 0 && this.roster[this.home]) {
+      const c = s.ct[this.roster[this.home].team];
+      if (c != null && c !== this.you) this.setControlled(c);
+    }
     if (ev && ev.length) {
       for (const e of ev) { this.evQueue.push(e); this.evHistory.push(e); }
       while (this.evHistory.length && this.evHistory[0].t < s.t - 14) this.evHistory.shift();
@@ -390,10 +396,26 @@ export class Match {
       }
       if (this.passPulse > 0) { out.b |= BTN.PASS; this.passPulse -= dt; }
     } else {
-      if (raw.tMain) out.b |= BTN.TACKLE;
-      if (raw.tSec) out.b |= BTN.SPRINT;
+      const gkCtx = this.touchCtx === 'defgk';
+      const db = Math.hypot(b[0] - me[0], b[1] - me[1]);
+      this.tkT = Math.max(0, (this.tkT || 0) - dt);
+      if (raw.tMain) {
+        if (gkCtx && db < 6) {
+          // الحارس: ارتماء عند الضغط
+          if (!this.mainWas) out.b |= BTN.TACKLE;
+        } else {
+          // ضغط تلقائي على حامل الكرة + افتكاك واقف عند الاقتراب
+          out.b |= BTN.PRESS;
+          if (b[6] >= 0 && b[8] !== 1 && db < 1.55 && this.tkT <= 0) { out.b |= BTN.TACKLE; this.tkT = 0.35; }
+        }
+      }
+      if (raw.tSec) {
+        if (this.local) { if (!this.secWas) out.b |= BTN.SWITCH; }
+        else out.b |= BTN.SPRINT;
+      }
       this.secT = 0; this.passPulse = 0;
     }
+    this.mainWas = !!raw.tMain; this.secWas = !!raw.tSec;
     if (raw.tMain) out.b |= BTN.SKIP;
   }
 
@@ -402,8 +424,8 @@ export class Match {
     if (!main) return;
     const att = ctx === 'att';
     main.classList.toggle('def', !att); sec.classList.toggle('def', !att);
-    main.innerHTML = att ? '<span class="i">🦶</span><small>تسديد</small>' : gk ? '<span class="i">🧤</span><small>ارتماء</small>' : '<span class="i">🦵</span><small>افتكاك</small>';
-    sec.innerHTML = att ? '<span class="i">➡️</span><small>تمرير</small>' : '<span class="i">⚡</span><small>ركض</small>';
+    main.innerHTML = att ? '<span class="i">🦶</span><small>تسديد</small>' : gk ? '<span class="i">🧤</span><small>ارتماء</small>' : '<span class="i">🦵</span><small>ضغط/افتكاك</small>';
+    sec.innerHTML = att ? '<span class="i">➡️</span><small>تمرير</small>' : this.local ? '<span class="i">🔄</span><small>تبديل</small>' : '<span class="i">⚡</span><small>ركض</small>';
   }
 
   sendInput(inp, dt) {
@@ -732,7 +754,7 @@ export class Match {
       { id: 'move', ok: this.playT > 0.4, t: touch ? '🕹️ حرّك العصا على يسار الشاشة' : '🕹️ تحرك بـ WASD أو الأسهم', s: touch ? 'ادفعها للآخر لتركض بسرعة' : 'اضغط Shift للركض السريع' },
       { id: 'shoot', ok: b[6] === you, t: touch ? '🦶 الزر الأحمر = تسديد' : '🦶 مسافة = تسديد', s: this.M.assist ? 'التصويب تلقائي نحو الزاوية البعيدة عن الحارس' : 'اضغط مطولاً للقوة • وجّه العصا نحو الزاوية • القوة الزائدة تطير الكرة فوق العارضة' },
       { id: 'pass', ok: b[6] === you && seen.includes('shoot'), t: touch ? '➡️ الزر الأخضر = تمرير' : '➡️ E = تمرير • Q = كرة عالية', s: touch ? 'الدائرة الخضراء تحت زميلك • اضغط مطولاً لكرة عالية' : 'الدائرة الخضراء تحت الزميل الذي سيستلم' },
-      { id: 'def', ok: ownerTeam >= 0 && ownerTeam !== myTeam, t: touch ? '🦵 في الدفاع: الزر الأحمر = افتكاك' : '🦵 F = افتكاك / انزلاق', s: 'اقترب من حامل الكرة ثم اضغط' },
+      { id: 'def', ok: ownerTeam >= 0 && ownerTeam !== myTeam, t: touch ? '🦵 في الدفاع: اضغط مطولاً على الزر الأحمر' : '🦵 V مطولاً = ضغط • F = افتكاك • X = تبديل', s: touch ? 'لاعبك يلاحق حامل الكرة ويفتكها تلقائياً • 🔄 للتبديل' : 'التبديل للاعب الأقرب يتم تلقائياً أيضاً' },
       { id: 'ability', ok: this.M.abilities && this.playT > 15 && state.p[you][8] === 0, t: `${c.icon} قدرتك الخاصة جاهزة: ${c.ability.name}`, s: (touch ? 'اضغط زر ✨ — ' : 'اضغط R — ') + c.ability.desc },
       { id: 'walls', ok: this.M.walls && this.playT > 28, t: '🏟️ الكرة ترتد من الجدران!', s: 'استعملها لتمرير الكرة حول المدافعين' },
     ];
@@ -772,6 +794,16 @@ export class Match {
     if (hint) { hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 8000); }
     this.touchCtx = null;
     this.updateCard(true);
+  }
+
+  setControlled(id) {
+    const a = this.players3d[this.you], b = this.players3d[id];
+    if (a) a.setSelected(false);
+    if (b) b.setSelected(true);
+    this.you = id;
+    this.pred = null;
+    this.touchCtx = null;
+    if (this.hudReady) { this.hudCache.stam = this.hudCache.cd = undefined; this.updateCard(true); }
   }
 
   updateCard() {

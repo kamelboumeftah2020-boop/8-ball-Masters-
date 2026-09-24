@@ -9,6 +9,8 @@ const KEYMAP = {
   KeyQ: 'lob', KeyL: 'lob',
   KeyF: 'tackle', KeyI: 'tackle', ControlLeft: 'tackle',
   KeyR: 'ability', KeyU: 'ability',
+  KeyV: 'press', KeyO: 'press',
+  KeyX: 'switch', KeyH: 'switch',
 };
 
 export class Input {
@@ -118,6 +120,8 @@ export class Input {
     if (k.has('lob')) b |= BTN.LOB;
     if (k.has('tackle')) b |= BTN.TACKLE;
     if (k.has('ability')) b |= BTN.ABILITY;
+    if (k.has('press')) b |= BTN.PRESS;
+    if (k.has('switch')) b |= BTN.SWITCH;
     // اللمس
     if (this.touch.mx || this.touch.my) { mx = this.touch.mx; my = this.touch.my; }
     b |= this.touch.b;
@@ -135,8 +139,10 @@ export class Input {
       if (pr(1)) b |= BTN.SHOOT | BTN.SKIP;
       if (pr(2)) b |= BTN.LOB;
       if (pr(3)) b |= BTN.ABILITY;
-      if (pr(4) || pr(5)) b |= BTN.TACKLE;
-      if (pr(7) || pr(6)) b |= BTN.SPRINT;
+      if (pr(5)) b |= BTN.TACKLE;
+      if (pr(4)) b |= BTN.SWITCH;
+      if (pr(6)) b |= BTN.PRESS;
+      if (pr(7)) b |= BTN.SPRINT;
       if (pr(9) && !this._padStart) this.emit('pause');
       this._padStart = pr(9);
       break;

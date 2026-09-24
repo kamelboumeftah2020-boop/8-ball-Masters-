@@ -46,6 +46,8 @@ export const BTN = {
   SPRINT: 8,
   TACKLE: 16,
   ABILITY: 32,
+  PRESS: 128,  // الضغط التلقائي على حامل الكرة
+  SWITCH: 256, // تبديل اللاعب المتحكم به
   SKIP: 64,
 };
 

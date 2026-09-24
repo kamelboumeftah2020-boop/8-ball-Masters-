@@ -238,28 +238,32 @@ export class Player3D {
     this.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 
     // مؤشرات
-    if (opts.local) {
+    if (!opts.preview) {
       const ring = new THREE.Mesh(
-        geo('selring', () => new THREE.RingGeometry(0.62, 0.8, 40)),
-        new THREE.MeshBasicMaterial({ color: '#fff27a', transparent: true, opacity: 0.9, depthWrite: false }),
+        geo('selring', () => new THREE.RingGeometry(0.58, 0.86, 40)),
+        new THREE.MeshBasicMaterial({ color: '#ffe600', transparent: true, opacity: 1, depthWrite: false, toneMapped: false }),
       );
+      // حافة داكنة لتباين أوضح فوق العشب
+      const edge = new THREE.Mesh(geo('seledge', () => new THREE.RingGeometry(0.86, 0.95, 40)), new THREE.MeshBasicMaterial({ color: '#1a1a00', transparent: true, opacity: 0.55, depthWrite: false }));
+      ring.add(edge);
       ring.rotation.x = -PI / 2;
       ring.position.y = 0.03;
       this.root.add(ring);
       this.ring = ring;
-      const arrow = new THREE.Mesh(geo('arrow', () => new THREE.ConeGeometry(0.16, 0.3, 4)), new THREE.MeshBasicMaterial({ color: '#fff27a' }));
+      const arrow = new THREE.Mesh(geo('arrow', () => new THREE.ConeGeometry(0.22, 0.42, 4)), new THREE.MeshBasicMaterial({ color: '#ffe600', toneMapped: false }));
       arrow.rotation.x = PI;
       arrow.position.y = 2.35 * h;
       this.root.add(arrow);
       this.arrow = arrow;
-    } else if (!opts.preview) {
-      const ring = new THREE.Mesh(
+      const tring = new THREE.Mesh(
         geo('teamring', () => new THREE.RingGeometry(0.5, 0.58, 32)),
         new THREE.MeshBasicMaterial({ color: team.color, transparent: true, opacity: 0.55, depthWrite: false }),
       );
-      ring.rotation.x = -PI / 2;
-      ring.position.y = 0.025;
-      this.root.add(ring);
+      tring.rotation.x = -PI / 2;
+      tring.position.y = 0.025;
+      this.root.add(tring);
+      this.teamRing = tring;
+      this.setSelected(!!opts.local);
     }
     if (!opts.preview && (info.human || opts.local)) {
       const label = makeLabel(opts.local ? `⭐ ${info.name}` : info.name, opts.local ? '#fff27a' : info.human ? '#ffffff' : '#dfe6ee', info.human ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.3)');
@@ -598,8 +602,8 @@ export class Player3D {
     this.smoothPose(dt, s.state);
 
     // المؤشرات
-    if (this.arrow) { this.arrow.position.y = 2.35 * this.h + Math.sin(time * 5) * 0.08; this.arrow.rotation.y = time * 2; }
-    if (this.ring) this.ring.material.opacity = 0.65 + Math.sin(time * 6) * 0.25;
+    if (this.arrow && this.selected) { this.arrow.position.y = 2.35 * this.h + Math.sin(time * 5) * 0.08; this.arrow.rotation.y = time * 2; }
+    if (this.ring && this.selected) this.ring.material.opacity = 0.85 + Math.sin(time * 6) * 0.15;
   }
 
   celebrate(s, st, dt, time) {
@@ -723,6 +727,14 @@ export class Player3D {
   triggerKick(header, isThrow) { this.kickT = 0; this.kickHeader = header; this.kickThrow = isThrow; }
 
   // موضع اليد/القدم في العالم (للكرة في الاحتفال)
+  // مؤشر اللاعب المتحكَّم فيه (يتنقل مع التبديل)
+  setSelected(on) {
+    this.selected = on;
+    if (this.ring) this.ring.visible = on;
+    if (this.arrow) this.arrow.visible = on;
+    if (this.teamRing) this.teamRing.visible = !on;
+  }
+
   dispose() {
     this.root.traverse((o) => {
       if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); }
