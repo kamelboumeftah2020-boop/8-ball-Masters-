@@ -1,7 +1,13 @@
-// تخزين واجهة التطبيق وسور المصحف لتعمل دون اتصال
-const SHELL = 'nur-shell-v1';
-const DATA = 'nur-data-v1';
-const FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/surahs.js', 'js/mawaiz.js', 'manifest.webmanifest', 'icons/icon.svg'];
+// تخزين واجهة التطبيق وسور المصحف والتفسير لتعمل دون اتصال
+const SHELL = 'nur-shell-v2';
+const DATA = 'nur-data-v2';
+const FILES = [
+  './', 'index.html', 'css/style.css', 'manifest.webmanifest',
+  'js/app.js', 'js/core.js', 'js/player.js', 'js/prayer.js',
+  'js/data/surahs.js', 'js/data/mawaiz.js', 'js/data/adhkar.js',
+  'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js',
+  'data/lectures.json', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -17,8 +23,10 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
-  // نص القرآن والخطوط: من التخزين أولًا
-  if (url.hostname === 'api.alquran.cloud' || url.hostname.endsWith('fonts.gstatic.com') || url.hostname === 'fonts.googleapis.com') {
+  // نص القرآن والتفسير والخطوط: من التخزين أولًا (لا تتغير)
+  const immutable = (url.hostname === 'api.alquran.cloud' && !url.pathname.includes('/search/'))
+    || url.hostname.endsWith('fonts.gstatic.com') || url.hostname === 'fonts.googleapis.com';
+  if (immutable) {
     e.respondWith(caches.open(DATA).then(async c => {
       const hit = await c.match(e.request);
       if (hit) return hit;
@@ -32,7 +40,16 @@ self.addEventListener('fetch', e => {
   // ملفات التطبيق: الشبكة أولًا ثم التخزين
   if (url.origin === location.origin) {
     e.respondWith(fetch(e.request)
-      .then(res => { const copy = res.clone(); caches.open(SHELL).then(c => c.put(e.request, copy)); return res; })
+      .then(res => { if (res.ok) { const copy = res.clone(); caches.open(SHELL).then(c => c.put(e.request, copy)); } return res; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
   }
+});
+
+// فتح التطبيق عند الضغط على إشعار الأذان
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(list => {
+    if (list.length) return list[0].focus();
+    return self.clients.openWindow('./#/adhan');
+  }));
 });

@@ -1,15 +1,26 @@
 {
-  "name": "نور — قرآن وأذان ومواعظ",
+  "name": "نور — القرآن والمواعظ والأذان",
   "short_name": "نور",
-  "description": "مواعظ، قرآن مسموع، مصحف، ومواقيت الأذان.",
+  "description": "القرآن الكريم مقروءًا ومسموعًا، ومواعظ العلماء، والأذكار الصحيحة، ومواقيت الأذان والقبلة.",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f5f3ec",
   "theme_color": "#0f6b5c",
+  "categories": ["education", "lifestyle", "books"],
   "icons": [
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "المصحف", "url": "./#/mushaf", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "الأذكار", "url": "./#/adhkar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "المواعظ", "url": "./#/mawaiz", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "مواقيت الصلاة", "url": "./#/adhan", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
