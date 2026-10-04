@@ -54,7 +54,7 @@ async function renderAudio(view, ctx) {
           </a>`).join('')}</div>`;
       }).join('')}
     </div>
-    <p class="source-note">${icons.info} محاضرات العلماء وخطب الحرمين من موقع <b>IslamHouse</b> (دار الإسلام) ومواد الشيخ خالد الراشد من <b>أرشيف الإنترنت</b>.</p>`;
+    <p class="source-note">${icons.info} محاضرات العلماء وخطب الحرمين من موقع <b>IslamHouse</b> (دار الإسلام) ومواعظ الشيخ خالد الراشد وسائر المشايخ في «مواعظ مؤثرة» من <b>أرشيف الإنترنت</b>، مقتصرة على المواعظ دون الخطب والدروس.</p>`;
 
   $('#contLec')?.addEventListener('click', async () => {
     const sp = data.speakers.find(s => s.id === last.sid);

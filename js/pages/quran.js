@@ -5,6 +5,7 @@ import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, pla
 import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './downloads.js';
 import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll } from '../mushafFont.js';
 import { immersive, keepAwake } from '../native.js';
+import { getWarshIndex, warshMarks } from './warsh.js';
 
 // بداية كل جزء [السورة، الآية]
 const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
@@ -15,13 +16,13 @@ const segment = active => `
     <a href="#/listen" class="${active === 'listen' ? 'active' : ''}" role="tab">${icons.headphones} الاستماع</a>
   </div>`;
 
-function surahRows(filter, mode) {
+function surahRows(filter, mode, widx) {
   const q = normalize(filter || '');
   const rows = SURAHS.map((s, i) => [s, i + 1])
     .filter(([s, n]) => !q || normalize(s[0]).includes(q) || String(n) === q || arNum(n) === filter.trim());
   return rows.map(([s, n]) => `<button class="row surah" data-n="${n}">
       <span class="num">${arNum(n)}</span>
-      <span class="meta"><strong>سورة ${s[0]}</strong><small>${surahSub(n)}</small></span>
+      <span class="meta"><strong>سورة ${s[0]}</strong><small>${widx ? `الصفحة ${arNum(widx.s[n - 1])} · رواية ورش` : surahSub(n)}</small></span>
       ${mode === 'listen' ? `${dlButton(surahUrl(player.reciter, n))}<span class="play-ic">${icons.play}</span>` : `<span class="chev">${icons.chevron}</span>`}
     </button>`).join('');
 }
@@ -32,29 +33,39 @@ export async function renderMushaf(view, args, ctx) {
   if (args[0]) return renderReader(view, +args[0], +(args[1] || 0), ctx);
   await migrateMarks().catch(() => {});
   if (!ctx.alive()) return;
-  const last = store.get('lastRead');
-  const lastHref = last ? (last.p ? `#/page/${last.p}` : `#/mushaf/${last.s}/${last.a}`) : '';
+  // المصحف المختار: حفص (مصحف المدينة) أو ورش (ملوّن للحفظ)
+  const warsh = store.get('mushafType', 'hafs') === 'warsh';
+  const widx = warsh ? await getWarshIndex().catch(() => null) : null;
+  if (!ctx.alive()) return;
+  if (warsh && !widx) { store.set('mushafType', 'hafs'); return renderMushaf(view, args, ctx); }
+  const base = warsh ? '#/warsh/' : '#/page/';
+  const last = store.get(warsh ? 'warshLast' : 'lastRead');
+  const lastHref = last ? (last.p ? `${base}${last.p}` : `#/mushaf/${last.s}/${last.a}`) : '';
   let tab = store.get('mushafTab', 'surahs');
   view.innerHTML = `
     ${segment('mushaf')}
+    <div class="mushaf-pick" id="mushafPick" role="radiogroup" aria-label="اختيار المصحف">
+      <button data-m="hafs" class="${warsh ? '' : 'active'}" role="radio" aria-checked="${!warsh}"><strong>رواية حفص</strong><small>مصحف المدينة النبوية</small></button>
+      <button data-m="warsh" class="${warsh ? 'active' : ''}" role="radio" aria-checked="${warsh}"><span class="dots"><i style="background:#0f6b5c"></i><i style="background:#8a3412"></i><i style="background:#1d4f8c"></i><i style="background:#6b2a78"></i></span><strong>رواية ورش</strong><small>ملوّن للحفظ، مع التسميع</small></button>
+    </div>
     <div class="mushaf-top">
       ${last ? `<a class="card continue" href="${lastHref}">
         <span class="tile-ic">${icons.book}</span>
         <div><small class="muted">آخر قراءة</small><strong>${last.p ? `الصفحة ${arNum(last.p)}` : `سورة ${surahName(last.s)}`}</strong><small class="muted">سورة ${surahName(last.s)}</small></div>
         <span class="chev">${icons.chevron}</span>
-      </a>` : `<a class="card continue" href="#/page/1">
+      </a>` : `<a class="card continue" href="${base}1">
         <span class="tile-ic">${icons.book}</span>
         <div><small class="muted">ابدأ القراءة</small><strong>من أول المصحف</strong><small class="muted">سورة الفاتحة</small></div>
         <span class="chev">${icons.chevron}</span>
       </a>`}
       <button class="card goto-page" id="gotoPage"><b>${icons.layers}</b><span>صفحة</span></button>
     </div>
-    <div class="card dl-card" id="dlCard">
+    <div class="card dl-card" id="dlCard" ${warsh ? 'hidden' : ''}>
       <span class="tile-ic gold sm">${icons.download}</span>
       <div><strong>المصحف دون إنترنت</strong><small id="dlText">…</small><div class="bar"><i id="dlBar"></i></div></div>
       <button class="btn" id="dlBtn">تحميل</button>
     </div>
-    <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث عن سورة أو كلمة في القرآن" autocomplete="off"></label>
+    <label class="search">${icons.search}<input id="q" type="search" placeholder="${warsh ? 'ابحث عن سورة بالاسم أو الرقم' : 'ابحث عن سورة أو كلمة في القرآن'}" autocomplete="off"></label>
     <div id="qsearch"></div>
     <div class="tabs" id="tabs">
       <button data-t="surahs">السور</button><button data-t="juz">الأجزاء</button><button data-t="marks">العلامات</button>
@@ -69,24 +80,30 @@ export async function renderMushaf(view, args, ctx) {
     const list = $('#list');
     if (tab === 'surahs') {
       list.className = 'list-card';
-      list.innerHTML = surahRows(q) || '<div class="empty">لا توجد سورة بهذا الاسم</div>';
+      list.innerHTML = surahRows(q, 'mushaf', widx) || '<div class="empty">لا توجد سورة بهذا الاسم</div>';
     } else if (tab === 'juz') {
       list.className = 'juz-grid';
-      list.innerHTML = JUZ.map(([s, a], i) => `<a class="juz" href="#/mushaf/${s}/${a}"><b>${arNum(i + 1)}</b><span>الجزء</span><small>${surahName(s)} ${arNum(a)}</small></a>`).join('');
+      list.innerHTML = JUZ.map(([s, a], i) => `<a class="juz" href="${warsh ? `#/warsh/${widx.j[i]}` : `#/mushaf/${s}/${a}`}"><b>${arNum(i + 1)}</b><span>الجزء</span><small>${surahName(s)} ${arNum(a)}</small></a>`).join('');
     } else {
-      const bm = pageMarks();
+      const bm = warsh ? warshMarks() : pageMarks();
       list.className = 'list-card';
       list.innerHTML = bm.length ? bm.map(b => {
-        const [parts, juz] = pagesData[b.p - 1];
-        return `<a class="row" href="#/page/${b.p}">
+        const [s, juz] = warsh ? [widx.p[b.p - 1][0], widx.p[b.p - 1][2]] : [pagesData[b.p - 1][0][0][0], pagesData[b.p - 1][1]];
+        return `<a class="row" href="${base}${b.p}">
         <span class="tile-ic gold sm">${icons.bookmark}</span>
-        <span class="meta"><strong>الصفحة ${arNum(b.p)}</strong><small>سورة ${surahName(parts[0][0])} · الجزء ${arNum(juz)}</small></span>
+        <span class="meta"><strong>الصفحة ${arNum(b.p)}</strong><small>سورة ${surahName(s)} · الجزء ${arNum(juz)}</small></span>
         <span class="chev">${icons.chevron}</span></a>`;
       }).join('')
         : '<div class="empty">لا توجد علامات بعد.<br>اضغط «علامة» أسفل أي صفحة أثناء القراءة.</div>';
     }
   };
-  $('#gotoPage').onclick = () => goToPageSheet(last?.p || 1);
+  $('#gotoPage').onclick = () => goToPageSheet(last?.p || 1, base);
+  $('#mushafPick').onclick = e => {
+    const b = e.target.closest('[data-m]');
+    if (!b || b.dataset.m === (warsh ? 'warsh' : 'hafs')) return;
+    store.set('mushafType', b.dataset.m);
+    renderMushaf(view, args, ctx);
+  };
   // تحميل خطوط صفحات المصحف كلها (نحو ٩٠ م.ب) للقراءة دون اتصال
   let dlRunning = false;
   const dlShow = (done, failed) => {
@@ -116,13 +133,13 @@ export async function renderMushaf(view, args, ctx) {
     const q = $('#q').value.trim();
     if (tab !== 'surahs') { tab = 'surahs'; }
     draw();
-    $('#qsearch').innerHTML = q.length >= 3 && !/^\d+$/.test(q)
+    $('#qsearch').innerHTML = q.length >= 3 && !/^\d+$/.test(q) && !warsh
       ? `<button class="btn ghost block" id="qBtn">${icons.search} البحث عن «${esc(q)}» في آيات القرآن</button>` : '';
     $('#qBtn')?.addEventListener('click', () => searchQuran(q));
   };
   $('#list').onclick = e => {
     const b = e.target.closest('.surah');
-    if (b) location.hash = `#/mushaf/${b.dataset.n}`;
+    if (b) location.hash = warsh ? `#/warsh/${widx.s[b.dataset.n - 1]}` : `#/mushaf/${b.dataset.n}`;
   };
   draw();
 }
@@ -550,7 +567,7 @@ export async function renderPage(view, args, ctx) {
   ctx.cleanup(() => document.removeEventListener('keydown', onKey));
 }
 
-function goToPageSheet(current) {
+export function goToPageSheet(current, base = '#/page/') {
   const { el, close } = sheet(`
     <div class="sheet-head"><h3>الانتقال إلى صفحة</h3><small class="muted">من ١ إلى ٦٠٤</small></div>
     <input class="input page-input" id="pgNum" type="text" inputmode="numeric" autocomplete="off" value="${current}">
@@ -560,7 +577,7 @@ function goToPageSheet(current) {
     const v = parseInt(String(inp.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10);
     if (!(v >= 1 && v <= 604)) return toast('أدخل رقمًا من ١ إلى ٦٠٤');
     close();
-    location.replace(`#/page/${v}`);
+    location.replace(`${base}${v}`);
   };
   $('#pgGoBtn', el).onclick = submit;
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });

@@ -34,7 +34,7 @@ export function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove('show'), 2600);
+  toast.t = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
 export async function fetchJSON(url) {

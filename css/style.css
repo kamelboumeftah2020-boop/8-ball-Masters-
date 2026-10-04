@@ -509,8 +509,9 @@ select.select {
 .adhan-sunnah small { color: var(--muted); font-size: 12px; }
 
 /* ═════════ التنبيه ═════════ */
-.toast { position: fixed; left: 50%; top: calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top))); z-index: 70; transform: translate(-50%, -150%); transition: transform .3s ease; background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 14px; font-size: 14px; font-weight: 500; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
-.toast.show { transform: translate(-50%, 0); }
+/* مخفي تمامًا (خارج الشاشة وشفاف) حتى لا يبقى منه شريط أسود خلف شريط الحالة */
+.toast { position: fixed; left: 50%; top: calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top))); z-index: 70; transform: translate(-50%, calc(-100% - 80px)); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .3s ease, opacity .3s ease, visibility 0s linear .3s; background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 14px; font-size: 14px; font-weight: 500; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+.toast.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; transition: transform .3s ease, opacity .3s ease, visibility 0s; }
 
 @media (min-width: 640px) {
   .view { padding-top: 12px; }
@@ -687,3 +688,47 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .dl-row .play-ic { border: 0; cursor: pointer; }
 .dl-row .meta .mini-progress { display: block; margin-top: 6px; }
 .btn.danger { background: #c0392b; color: #fff; }
+.adhan-status { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.adhan-status .st { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.7; }
+.adhan-status .st svg { width: 17px; height: 17px; margin-top: 3px; flex: none; }
+.adhan-status .st.ok svg { color: var(--primary); }
+.adhan-status .st.warn svg { color: #c0392b; }
+.adhan-status .link { color: var(--primary); font-weight: 700; text-decoration: underline; padding: 0 4px; }
+
+/* ── مصحف ورش: ملوّن للحفظ ── */
+.wr-page { font-family: 'KFGQPC Warsh', var(--quran); justify-content: flex-start; }
+.wr.opening .wr-page { justify-content: center; }
+.wr-page .wl { flex: none; }
+.wr-page .qh span, .wr-page .qb { font-family: 'KFGQPC Warsh', var(--quran); }
+.wt { line-height: var(--qlh); text-align: justify; text-align-last: justify; flex: none; overflow: hidden; word-spacing: .04em; }
+.wt.last, .wr.opening .wt { text-align-last: center; }
+.wr.opening .wt { text-align: center; }
+.wa { border-radius: 5px; transition: color .25s, background .25s; -webkit-box-decoration-break: clone; box-decoration-break: clone; cursor: pointer; }
+.wn { color: #9a7428; }
+:root[data-theme="dark"] .wn { color: #d9b866; }
+.wr-page.colored .c0 { color: #0f6b5c; }
+.wr-page.colored .c1 { color: #8a3412; }
+.wr-page.colored .c2 { color: #1d4f8c; }
+.wr-page.colored .c3 { color: #6b2a78; }
+:root[data-theme="dark"] .wr-page.colored .c0 { color: #6fd6bf; }
+:root[data-theme="dark"] .wr-page.colored .c1 { color: #f2a97d; }
+:root[data-theme="dark"] .wr-page.colored .c2 { color: #95bdf2; }
+:root[data-theme="dark"] .wr-page.colored .c3 { color: #d6a3e6; }
+.wa.sel { background: color-mix(in srgb, #c9a24a 28%, transparent); }
+/* وضع التسميع: تُخفى الآيات وتبقى أرقامها، وتُكشف باللمس */
+.wr-page.hide .wa:not(.shown) { color: transparent !important; background: color-mix(in srgb, #b8913a 13%, transparent); }
+.wr-page.hide .wa:not(.shown) .wn { color: #9a7428; }
+:root[data-theme="dark"] .wr-page.hide .wa:not(.shown) .wn { color: #d9b866; }
+.wr-page.hide .wa.shown { background: color-mix(in srgb, #0f6b5c 9%, transparent); }
+.wr-tag { color: #fff !important; background: #0f6b5c !important; border-color: #0f6b5c !important; font-size: 13.5px; padding: 0 10px; }
+.wr-tools { grid-template-columns: repeat(6, 1fr); }
+.wr-tools button.on { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+
+/* اختيار المصحف */
+.mushaf-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.mushaf-pick button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--surface); text-align: start; color: var(--text); }
+.mushaf-pick button strong { font-size: 15px; }
+.mushaf-pick button small { font-size: 12px; color: var(--muted); }
+.mushaf-pick button.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+.mushaf-pick .dots { display: flex; gap: 3px; margin-bottom: 4px; }
+.mushaf-pick .dots i { width: 9px; height: 9px; border-radius: 50%; }

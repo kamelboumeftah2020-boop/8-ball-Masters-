@@ -3,7 +3,7 @@
 
 المصادر:
 - IslamHouse (دار الإسلام): محاضرات وخطب كبار العلماء وأئمة الحرمين.
-- أرشيف الإنترنت: مواعظ الشيخ خالد الراشد.
+- أرشيف الإنترنت: مواعظ الشيخ خالد الراشد، ومواعظ مشايخ أهل السنة المعروفين بالوعظ.
 
 التشغيل: python3 tools/build_lectures.py
 """
@@ -46,6 +46,74 @@ RASHED_COLLECTIONS = [
 ]
 # نسخ مطابقة من الموسوعة نفسها (عناوينها بترميز قديم)، تُستعمل روابطَ بديلة فقط
 RASHED_MIRRORS = ['Mawsoa_Khaled-Errached_mp3', '312___________khaled-alrashed-312-dars-khotba-almawsoo3a-alsawteyya']
+
+# مواعظ مشايخ آخرين من أرشيف الإنترنت: (المعرّف، الاسم، المجموعات، ما يُحذف من العناوين)
+# المقصود المواعظ والمحاضرات الوعظية فقط، فتُستبعد الخطب والدروس العلمية والشروح والسلاسل.
+PREACHERS = [
+    ('elahmad', 'عبد المحسن الأحمد', ['Mawsoa-mp3_Elahmad'], r'(د\.?\s*)?عبد\s*ال?محسن\s*(بن\s*\S+\s*)?الا?أ?حمد'),
+    ('awadi', 'نبيل العوضي', ['Nabil-3awadi_Mawsoa-mp3'], r'نبيل\s*(بن\s*علي\s*)?العوضي'),
+    ('arifi', 'محمد العريفي', ['Dr-Mohammad-Arifi_Mawsoaa_uP_bY_mUSLEm', 'lecture-alarefe-2018'], r'(د\.?\s*)?محمد\s*(بن\s*عبد\s*الرحمن\s*)?العريفي'),
+    ('dowaish', 'إبراهيم الدويش', ['Islamic_Tape-140_uP_bY_mUSLEm'], r'إبراهيم\s*(بن\s*عبد\s*الله\s*)?الدويش'),
+    ('breik', 'سعد البريك', ['Dr_Saad_BRIC_255_Lectures_Mp3_up-by-muslem'], r'سعد\s*البريك'),
+    ('yaqoub', 'محمد حسين يعقوب', ['mohamed-hussein-yaqob-825-mp3'], r'محمد\s*حسين\s*يعقوب'),
+    ('hassan', 'محمد حسان', ['Med_Hassann_uP_bY_mUSLEm', 'mohamed-hassan-mp3', 'Mp3-___-----MAWSO3AH-428-BY-MOHAMMAD-HASSAN'], r'محمد\s*حسان'),
+    ('huwaini', 'أبو إسحاق الحويني', ['Al_Houwaini_Mawsoaa_577-lectures_uP_bY_mUSLEm'], r'أبو?ي?\s*إ?ا?سحاق\s*الحويني'),
+    ('qarni', 'عائض القرني', ['Ayed_Al-Qarni_458_Lectures_Mp3_up-by-muslem'], r'عائض\s*(بن\s*عبد\s*الله\s*)?القرني'),
+]
+# ما ليس موعظة: الخطب، والدروس والشروح، والسلاسل والحلقات، والفتاوى، والشعر، والردود والمسائل الخلافية
+NOT_MAWIZA = re.compile(
+    r'خطب|خطبة|درس|دروس|شرح|تفسير|سلسلة|حلق[ةه]|برنامج|ألفية|الفية|متن|كتاب|فتاو|فتوى|أسئلة|اسئلة|سؤال|'
+    r'قصائد|قصيدة|شعر|أمسية|امسية|لقاء|مقابلة|حوار|مناظرة|رد على|الرد|الشيعة|الرافضة|الصوفية|الإخوان|الاخوان|السياسة|'
+    r'الانتخابات|الثورة|ثورة|مظاهرات|الجهاد|جهاد|العمل الجماعي|أحكام|احكام|فقه|مصطلح|الحديث الضعيف|تخريج|علوم|أصول|اصول|'
+    r'سيرة الشيخ|السيرة الذاتية|عام الوفود|غزوة|المهدي|أشراط|اشراط|نهاية العالم|ألحان|الحان|حفل|تلاوة|تلاوات|'
+    r'صحيح|البخاري|رحلتي|القدرية|الإرجاء|الارجاء|الليبرالية|العولمة|العلمانية|قصة الرسالة|الفن|الميلاد|المولد|حملة|تفجيرات|'
+    r'ندوة|دورة|ولاة الأمر|الخلاف|الحزبية|الأحزاب|الديمقراطية')
+PART = re.compile(r'[\(\[]\s*(\d+)\s*[\)\]]|(?:الجزء|ج)\s*(\d+)|\s(\d+)\s*$')
+
+
+def decode_title(t):
+    # بعض المجموعات عناوينها بترميز ويندوز العربي القديم
+    if not AR.search(t):
+        try:
+            t2 = t.encode('latin-1').decode('cp1256')
+            if AR.search(t2):
+                return t2
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return t
+
+
+def preacher(name_re, collections):
+    """المجموعة الأولى أساسية، وما بعدها يضيف ما ليس فيها، ونسخ المادة نفسها تُحفظ روابطَ بديلة."""
+    items, seen = [], {}
+    for cid in collections:
+        for f, url in archive_files(cid):
+            raw = decode_title(f.get('title') or '')
+            if not AR.search(raw):
+                raw = decode_title(f['name'])
+            t = re.sub(r'\.mp3$', '', raw, flags=re.I).replace('_', ' ')
+            t = re.sub(name_re, '', t)
+            t = re.sub(r'^\s*\d+\s*[-–.]*\s*', '', t)
+            t = re.sub(r'(^|\s)(الشيخ|للشيخ|الدكتور|د\.)\s*:?(\s|$)', ' ', t)
+            t = re.sub(r'\s+', ' ', t).strip(' -–.,|:;')
+            d = round(seconds(f.get('length')))
+            if not AR.search(t) or NOT_MAWIZA.search(t) or d < 150:
+                continue
+            m = PART.search(t)
+            part = int(next(g for g in m.groups() if g)) if m else 1
+            if part > 2:  # المحاضرات الطويلة المقسمة: نكتفي بما كان في جزأين على الأكثر
+                continue
+            k = norm(t)
+            if len(k) < 3:
+                continue
+            same = seen.get(k)
+            if same:
+                if abs(same['d'] - d) < max(60, same['d'] * .05) and len(same.setdefault('a', [])) < 3 and url not in same['u']:
+                    same['a'].append(url)
+                continue
+            seen[k] = {'t': t, 'u': [url], 'd': d}
+            items.append(seen[k])
+    return sorted(items, key=lambda x: x['t'])
 
 
 def get(url):
@@ -176,6 +244,9 @@ def main():
     items = islamhouse()
     items['rashed'] = rashed()
     speakers = [{'id': 'rashed', 'name': 'خالد الراشد', 'group': 'mawaiz', 'src': 'archive.org'}]
+    for sid, name, cols, name_re in PREACHERS:
+        items[sid] = preacher(name_re, cols)
+        speakers.append({'id': sid, 'name': name, 'group': 'mawaiz', 'src': 'archive.org'})
     speakers += [{'id': s, 'name': n, 'group': g, 'src': 'islamhouse.com'} for s, n, _, g in SCHOLARS]
     for s in speakers:
         s['count'] = len(items[s['id']])

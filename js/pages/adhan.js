@@ -1,6 +1,6 @@
 // صفحة مواقيت الصلاة والأذان
 import { $, $$, esc, arNum, toast, icons } from '../core.js';
-import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan } from '../prayer.js';
+import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, testAdhan, openExactSettings, requestIgnoreBattery } from '../prayer.js';
 import { isNative, BUNDLED_ADHANS } from '../native.js';
 
 // في التطبيق: أصوات الأذان المضمّنة فقط (لتعمل والتطبيق مغلق ودون اتصال)
@@ -80,11 +80,13 @@ export function renderAdhan(view, args, ctx) {
           </div>
         </div>
         <label class="switch-row">
-          <span>${isNative ? 'رفع الأذان والتطبيق مغلق' : 'الإشعارات'}<small>${isNative ? 'إشعار بصوت الأذان عند دخول وقت كل صلاة' : 'تنبيه عند دخول وقت كل صلاة'}</small></span>
+          <span>${isNative ? 'رفع الأذان والتطبيق مغلق' : 'الإشعارات'}<small>${isNative ? 'يُرفع الأذان بصوت المؤذن عند دخول وقت كل صلاة' : 'تنبيه عند دخول وقت كل صلاة'}</small></span>
           <span class="switch"><input type="checkbox" id="alerts" ${cfg.alerts ? 'checked' : ''}><i></i></span>
         </label>
+        ${isNative ? `<div class="adhan-status" id="adhanStatus"><div class="loader small"><div class="spinner"></div></div></div>
+        <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان الآن (بعد ١٠ ثوانٍ)</button>` : ''}
         <div class="note-box">${icons.info} ${isNative
-          ? 'يُرفع الأذان في وقته حتى لو كان التطبيق مغلقًا. إن تأخر الإشعار، فاستثنِ «نور» من توفير البطارية في إعدادات الهاتف. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'
+          ? 'يُرفع الأذان على صوت المنبّه، فيُسمع حتى في الوضع الصامت؛ ويمكنك إيقافه من الإشعار. ويمكنك إيقاف الأذان لصلاة معيّنة من زر الجرس بجانبها.'
           : 'يُرفع الأذان تلقائيًا عند دخول الوقت ما دام التطبيق مفتوحًا. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'}</div>
       </div>
 
@@ -167,9 +169,47 @@ export function renderAdhan(view, args, ctx) {
   };
 
   draw();
-  prEvents.addEventListener('update', draw);
+  const onUpdate = () => { draw(); if (isNative) showStatus(); };
+  prEvents.addEventListener('update', onUpdate);
+
+  // حالة الأذان في الهاتف: الأذان القادم المجدول، والمنبّهات الدقيقة، وتوفير البطارية
+  const showStatus = async () => {
+    const box = $('#adhanStatus');
+    if (!box) return;
+    const st = await nativeAdhanStatus();
+    if (!st || !ctx.alive() || !$('#adhanStatus')) return;
+    const rows = [];
+    if (!cfg.alerts) rows.push(['warn', 'الأذان متوقف. فعّله من المفتاح أعلاه.']);
+    else if (st.nextAt) {
+      const d = new Date(st.nextAt);
+      const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const day = d.toDateString() === new Date().toDateString() ? 'اليوم' : 'غدًا';
+      rows.push(['ok', `الأذان القادم: <b>${st.nextName}</b> ${day} ${fmt12(hm)} — ومجدول ${arNum(st.upcoming)} أذانًا مقدّمًا`]);
+    } else rows.push(['warn', 'لا يوجد أذان مجدول بعد. حدّد موقعك ليُجدول الأذان.']);
+    rows.push(st.exact ? ['ok', 'المنبّهات الدقيقة مسموحة'] : ['warn', 'المنبّهات الدقيقة غير مسموحة، فقد يتأخر الأذان. <button class="link" data-fix="exact">السماح</button>']);
+    rows.push(st.batteryIgnored ? ['ok', 'التطبيق مستثنى من توفير البطارية'] : ['warn', 'قد يؤخّر توفير البطارية الأذان في بعض الهواتف. <button class="link" data-fix="battery">استثناء التطبيق</button>']);
+    if (!st.notifications) rows.push(['warn', 'الإشعارات متوقفة؛ سيُرفع الأذان دون إشعار وزر إيقاف.']);
+    box.innerHTML = rows.map(([k, t]) => `<div class="st ${k}">${k === 'ok' ? icons.check : icons.info}<span>${t}</span></div>`).join('');
+  };
+  const onFocus = () => { if (document.visibilityState === 'visible') showStatus(); };
+  if (isNative) {
+    showStatus();
+    prEvents.addEventListener('scheduled', showStatus);
+    document.addEventListener('visibilitychange', onFocus);
+    ctx.cleanup(() => { prEvents.removeEventListener('scheduled', showStatus); document.removeEventListener('visibilitychange', onFocus); });
+    const onClick = e => {
+      const f = e.target.closest('[data-fix]');
+      if (f) (f.dataset.fix === 'exact' ? openExactSettings() : requestIgnoreBattery());
+      if (e.target.closest('#testAdhan')) {
+        testAdhan(10);
+        toast('سيُرفع أذان التجربة بعد ١٠ ثوانٍ؛ يمكنك إغلاق التطبيق للتأكد');
+      }
+    };
+    view.addEventListener('click', onClick);
+    ctx.cleanup(() => view.removeEventListener('click', onClick));
+  }
   ctx.cleanup(() => {
-    prEvents.removeEventListener('update', draw);
+    prEvents.removeEventListener('update', onUpdate);
     if (!prev.paused && !document.querySelector('.adhan-alert')) prev.pause();
   });
 }

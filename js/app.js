@@ -8,6 +8,7 @@ import { renderMawaiz } from './pages/mawaiz.js';
 import { renderAdhkar, renderTasbih, renderQibla } from './pages/adhkar.js';
 import { renderAdhan } from './pages/adhan.js';
 import { renderDownloads } from './pages/downloads.js';
+import { renderWarsh } from './pages/warsh.js';
 
 /* ── المظهر ── */
 const root = document.documentElement;
@@ -29,6 +30,7 @@ const ROUTES = {
   mushaf: { render: renderMushaf, title: 'القرآن الكريم', tab: 'quran' },
   listen: { render: renderListen, title: 'القرآن الكريم', tab: 'quran' },
   page: { render: renderPage, title: 'المصحف', tab: 'quran' },
+  warsh: { render: renderWarsh, title: 'مصحف ورش', tab: 'quran' },
   mawaiz: { render: renderMawaiz, title: 'المواعظ', tab: 'mawaiz' },
   adhkar: { render: renderAdhkar, title: 'الأذكار', tab: 'adhkar' },
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },

@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // إضافة التشغيل في الخلفية (المواعظ والتلاوات)
         registerPlugin(NurMediaPlugin.class);
+        // الأذان: منبّهات دقيقة وخدمة ترفع الأذان والتطبيق مغلق
+        registerPlugin(NurAdhanPlugin.class);
         super.onCreate(savedInstanceState);
         // تقديم الصوتيات المحمّلة مع دعم التقديم داخل الملف
         getBridge().setWebViewClient(new NurWebViewClient(getBridge()));

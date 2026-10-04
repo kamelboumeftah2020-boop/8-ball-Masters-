@@ -1,7 +1,7 @@
 // مواقيت الصلاة، ورفع الأذان، واتجاه القبلة
 import { $, store, arNum, fetchJSON, toast, icons } from './core.js';
 import { audio } from './player.js';
-import { isNative, Notifications, BUNDLED_ADHANS, adhanChannel } from './native.js';
+import { isNative, Notifications, BUNDLED_ADHANS, nativePlugin } from './native.js';
 
 export const PRAYERS = [
   { key: 'Fajr', name: 'الفجر', icon: 'dawn' },
@@ -241,6 +241,7 @@ export function fireAdhan(p) {
       stopped = true;
       a.pause();
       Notifications()?.removeAllDeliveredNotifications().catch(() => {});
+      nativePlugin('NurAdhan')?.stop().catch(() => {});
       showDua();
     } else box.remove();
   };
@@ -264,30 +265,21 @@ export function scheduleAdhans() {
   return scheduling;
 }
 async function doSchedule() {
+  const NA = nativePlugin('NurAdhan');
   const LN = Notifications();
-  if (!LN) return;
-  const pending0 = await LN.getPending();
-  if (!cfg.alerts) {
-    if (pending0.notifications.length) await LN.cancel({ notifications: pending0.notifications.map(n => ({ id: n.id })) });
-    return;
+  // إلغاء إشعارات الأذان القديمة (من الإصدارات السابقة) حتى لا يتكرر الأذان
+  if (LN) {
+    try {
+      const old = await LN.getPending();
+      if (old.notifications.length) await LN.cancel({ notifications: old.notifications.map(n => ({ id: n.id })) });
+    } catch { /* لا شيء */ }
   }
-  const perm = await LN.checkPermissions();
-  if (perm.display !== 'granted') return;
-  for (const id of BUNDLED_ADHANS) {
-    await LN.createChannel({
-      id: `adhan_${id}`, name: `الأذان — ${ADHANS.find(a => a[0] === id)?.[1] || id}`,
-      description: 'رفع الأذان عند دخول وقت الصلاة', importance: 5, visibility: 1,
-      sound: `adhan_${id}.mp3`, vibration: true, lights: true,
-    });
-  }
-  // إن لم يُسمح بالتنبيهات الدقيقة نجدول تنبيهًا تقريبيًا بدل فتح الإعدادات في كل مرة
-  let exact = true;
-  try { exact = (await LN.checkExactNotificationSetting()).exact_alarm === 'granted'; } catch { /* أندرويد قديم */ }
-  const pending = await LN.getPending();
-  if (pending.notifications.length) await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+  if (!NA) return;
+  if (!cfg.alerts) { await NA.cancelAll(); return; }
   const now = new Date();
-  const list = [];
-  for (let i = 0; i < 7; i++) {
+  const items = [];
+  // نجدول ٣٠ يومًا مقدّمًا، فيستمر الأذان ولو لم يُفتح التطبيق مدة طويلة
+  for (let i = 0; i < 30; i++) {
     const d = new Date(now); d.setDate(now.getDate() + i);
     let day;
     try { day = await fetchDay(d); } catch { continue; }
@@ -295,35 +287,42 @@ async function doSchedule() {
       if (p.noAdhan || !cfg.on[p.key]) return;
       const at = toDate(day.timings[p.key], d);
       if (at <= now) return;
-      list.push({
-        id: (d.getMonth() + 1) * 100000 + d.getDate() * 1000 + idx,
-        title: `حان الآن موعد صلاة ${p.name}`,
-        body: 'حيّ على الصلاة، حيّ على الفلاح',
-        channelId: adhanChannel(cfg.sound),
-        smallIcon: 'ic_stat_adhan',
-        iconColor: '#0f6b5c',
-        schedule: { at, allowWhileIdle: true },
-        isExactNotification: exact,
-        extra: { prayer: p.key },
-      });
+      items.push({ id: (d.getMonth() + 1) * 100000 + d.getDate() * 1000 + idx, at: at.getTime(), name: p.name, key: p.key });
     });
   }
-  if (list.length) await LN.schedule({ notifications: list });
+  const r = await NA.schedule({ items, sound: BUNDLED_ADHANS.includes(cfg.sound) ? cfg.sound : '008' });
+  events.dispatchEvent(new CustomEvent('scheduled', { detail: r }));
 }
 
+// حالة الأذان في الجهاز: المنبّه الدقيق، والبطارية، والإشعارات، والأذان القادم
+export async function nativeAdhanStatus() {
+  const NA = nativePlugin('NurAdhan');
+  if (!NA) return null;
+  try { return await NA.status(); } catch { return null; }
+}
+export function testAdhan(seconds = 10) {
+  return nativePlugin('NurAdhan')?.test({ seconds, sound: BUNDLED_ADHANS.includes(cfg.sound) ? cfg.sound : '008', name: 'تجربة الأذان' });
+}
+export const openExactSettings = () => nativePlugin('NurAdhan')?.openExactSettings();
+export const requestIgnoreBattery = () => nativePlugin('NurAdhan')?.requestIgnoreBattery();
+
 export async function enableNativeAdhan() {
+  // إذن الإشعارات لإظهار إشعار الأذان وزر الإيقاف (الأذان يُرفع حتى بدونه)
   const LN = Notifications();
-  if (!LN) return false;
-  let perm = await LN.checkPermissions();
-  if (perm.display !== 'granted') perm = await LN.requestPermissions();
-  if (perm.display !== 'granted') { toast('لم يُسمح بالإشعارات؛ فعّلها من إعدادات الهاتف'); return false; }
-  try {
-    const ex = await LN.checkExactNotificationSetting();
-    if (ex.exact_alarm !== 'granted') {
-      toast('اسمح بالتنبيهات الدقيقة ليُرفع الأذان في وقته تمامًا');
-      await LN.changeExactNotificationSetting();
-    }
-  } catch { /* إصدارات أندرويد القديمة لا تحتاجه */ }
+  if (LN) {
+    try {
+      let perm = await LN.checkPermissions();
+      if (perm.display !== 'granted') perm = await LN.requestPermissions();
+      if (perm.display !== 'granted') toast('لم يُسمح بالإشعارات؛ سيُرفع الأذان دون إشعار');
+    } catch { /* لا شيء */ }
+  }
+  const st = await nativeAdhanStatus();
+  // نفتح إعداد المنبّهات الدقيقة تلقائيًا مرة واحدة فقط، ويبقى رابطه في صفحة المواقيت
+  if (st && !st.exact && !store.get('exactAsked')) {
+    store.set('exactAsked', true);
+    toast('اسمح لـ«نور» بالمنبّهات الدقيقة ليُرفع الأذان في وقته');
+    await openExactSettings();
+  }
   await scheduleAdhans();
   return true;
 }
