@@ -1,6 +1,10 @@
 // صفحة مواقيت الصلاة والأذان
 import { $, $$, esc, arNum, toast, icons } from '../core.js';
-import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents } from '../prayer.js';
+import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan } from '../prayer.js';
+import { isNative, BUNDLED_ADHANS } from '../native.js';
+
+// في التطبيق: أصوات الأذان المضمّنة فقط (لتعمل والتطبيق مغلق ودون اتصال)
+const voices = () => (isNative ? ADHANS.filter(a => BUNDLED_ADHANS.includes(a[0])) : ADHANS);
 
 export function heroHTML({ greeting = '', strip = true } = {}) {
   if (!cfg.loc) {
@@ -71,15 +75,17 @@ export function renderAdhan(view, args, ctx) {
       <div class="card settings">
         <div class="field"><label for="sound">صوت المؤذن (من مؤذني المسجد الحرام)</label>
           <div class="row2 tight">
-            <select class="select" id="sound">${ADHANS.map(([v, l]) => `<option value="${v}" ${v === cfg.sound ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            <select class="select" id="sound">${voices().map(([v, l]) => `<option value="${v}" ${v === cfg.sound ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <button class="btn ghost" id="preview">${icons.play} استماع</button>
           </div>
         </div>
         <label class="switch-row">
-          <span>الإشعارات<small>تنبيه عند دخول وقت كل صلاة</small></span>
+          <span>${isNative ? 'رفع الأذان والتطبيق مغلق' : 'الإشعارات'}<small>${isNative ? 'إشعار بصوت الأذان عند دخول وقت كل صلاة' : 'تنبيه عند دخول وقت كل صلاة'}</small></span>
           <span class="switch"><input type="checkbox" id="alerts" ${cfg.alerts ? 'checked' : ''}><i></i></span>
         </label>
-        <div class="note-box">${icons.info} يُرفع الأذان تلقائيًا عند دخول الوقت ما دام التطبيق مفتوحًا. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.</div>
+        <div class="note-box">${icons.info} ${isNative
+          ? 'يُرفع الأذان في وقته حتى لو كان التطبيق مغلقًا. إن تأخر الإشعار، فاستثنِ «نور» من توفير البطارية في إعدادات الهاتف. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'
+          : 'يُرفع الأذان تلقائيًا عند دخول الوقت ما دام التطبيق مفتوحًا. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'}</div>
       </div>
 
       <div class="section-head"><h2>طريقة الحساب</h2></div>
@@ -118,7 +124,7 @@ export function renderAdhan(view, args, ctx) {
     };
     $('#method').onchange = e => { cfg.method = +e.target.value; saveCfg(); reload(); };
     $('#school').onchange = e => { cfg.school = +e.target.value; saveCfg(); reload(); };
-    $('#sound').onchange = e => { cfg.sound = e.target.value; saveCfg(); prev.pause(); $('#preview').innerHTML = `${icons.play} استماع`; };
+    $('#sound').onchange = e => { cfg.sound = e.target.value; saveCfg(); prev.pause(); $('#preview').innerHTML = `${icons.play} استماع`; scheduleAdhans(); };
     $('#preview').onclick = () => {
       if (!prev.paused) { prev.pause(); $('#preview').innerHTML = `${icons.play} استماع`; return; }
       prev.src = adhanUrl(cfg.sound);
@@ -127,6 +133,12 @@ export function renderAdhan(view, args, ctx) {
     };
     $('#alerts').onchange = async e => {
       cfg.alerts = e.target.checked;
+      if (isNative) {
+        if (cfg.alerts && !(await enableNativeAdhan())) { cfg.alerts = false; e.target.checked = false; }
+        saveCfg();
+        scheduleAdhans();
+        return;
+      }
       if (cfg.alerts && 'Notification' in window && Notification.permission === 'default') {
         const p = await Notification.requestPermission();
         if (p !== 'granted') toast('لم يُسمح بالإشعارات، سيُرفع الأذان داخل التطبيق فقط');
@@ -139,6 +151,7 @@ export function renderAdhan(view, args, ctx) {
         cfg.on[k] = !cfg.on[k]; saveCfg();
         b.classList.toggle('on', cfg.on[k]);
         b.innerHTML = cfg.on[k] ? icons.bell : icons.bellOff;
+        scheduleAdhans();
         toast(cfg.on[k] ? 'تم تفعيل الأذان لهذه الصلاة' : 'تم إيقاف الأذان لهذه الصلاة');
       };
     });

@@ -1,6 +1,7 @@
 import { $, $$, store } from './core.js';
 import './player.js';
 import { cfg, loadTimes } from './prayer.js';
+import { isNative, setBarsStyle } from './native.js';
 import { renderHome } from './pages/home.js';
 import { renderMushaf, renderListen } from './pages/quran.js';
 import { renderMawaiz } from './pages/mawaiz.js';
@@ -12,6 +13,7 @@ const root = document.documentElement;
 function applyTheme(t) {
   root.dataset.theme = t;
   $('meta[name="theme-color"]').content = t === 'dark' ? '#0d1513' : '#f5f3ec';
+  setBarsStyle(t === 'dark');
 }
 applyTheme(store.get('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 $('#themeBtn').onclick = () => {
@@ -67,8 +69,9 @@ $('#backBtn').onclick = () => {
 
 render();
 if (cfg.loc) loadTimes();
+if (isNative) document.documentElement.classList.add('native');
 
 /* ── التثبيت والعمل دون اتصال ── */
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

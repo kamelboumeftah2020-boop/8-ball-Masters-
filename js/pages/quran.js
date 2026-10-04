@@ -109,8 +109,15 @@ async function searchQuran(q) {
 const surahCache = new Map();
 async function getSurah(n) {
   if (surahCache.has(n)) return surahCache.get(n);
-  const { data } = await fetchJSON(`https://api.alquran.cloud/v1/surah/${n}/quran-uthmani`);
-  const ayahs = data.ayahs.map(a => ({ number: a.number, numberInSurah: a.numberInSurah, text: a.text, page: a.page, juz: a.juz, sajda: !!a.sajda }));
+  let ayahs;
+  try {
+    // النص محفوظ مع التطبيق ليعمل المصحف دون اتصال
+    const rows = await fetchJSON(`data/quran/${n}.json`);
+    ayahs = rows.map(([number, numberInSurah, text, page, juz, sajda]) => ({ number, numberInSurah, text, page, juz, sajda: !!sajda }));
+  } catch {
+    const { data } = await fetchJSON(`https://api.alquran.cloud/v1/surah/${n}/quran-uthmani`);
+    ayahs = data.ayahs.map(a => ({ number: a.number, numberInSurah: a.numberInSurah, text: a.text.replace(/\uFEFF/g, ''), page: a.page, juz: a.juz, sajda: !!a.sajda }));
+  }
   // فصل البسملة عن الآية الأولى (عدا الفاتحة والتوبة)
   if (n !== 1 && n !== 9) {
     const w = ayahs[0].text.split(' ');

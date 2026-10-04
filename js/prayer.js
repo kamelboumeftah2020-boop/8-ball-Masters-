@@ -1,6 +1,7 @@
 // مواقيت الصلاة، ورفع الأذان، واتجاه القبلة
 import { $, store, arNum, fetchJSON, toast, icons } from './core.js';
 import { audio } from './player.js';
+import { isNative, Notifications, BUNDLED_ADHANS, adhanChannel } from './native.js';
 
 export const PRAYERS = [
   { key: 'Fajr', name: 'الفجر', icon: 'dawn' },
@@ -41,29 +42,53 @@ export const times = { today: null, tomorrow: null, hijri: null, error: false, l
 export const events = new EventTarget();
 const dateKey = d => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
 
-async function fetchDay(d) {
+// نجلب مواقيت الشهر كاملًا ونحفظها؛ فتعمل المواقيت دون اتصال، ويمكن جدولة الأذان مسبقًا
+const paramsKey = () => {
   const loc = cfg.loc;
   const tune = ['Imsak', 'Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Sunset', 'Isha', 'Midnight'].map(k => cfg.tune[k] || 0).join(',');
   const where = loc.type === 'gps' ? `${loc.lat.toFixed(3)},${loc.lng.toFixed(3)}` : `${loc.city},${loc.country}`;
-  const cacheKey = `${dateKey(d)}|${cfg.method}|${cfg.school}|${tune}|${where}`;
-  const cached = store.get('timesCache', {});
+  return { tune, key: `${cfg.method}|${cfg.school}|${tune}|${where}` };
+};
+const monthLoads = new Map();
+async function fetchMonth(y, m) {
+  const { tune, key } = paramsKey();
+  const cacheKey = `${y}-${m}|${key}`;
+  const cached = store.get('calCache', {});
   if (cached[cacheKey]) return cached[cacheKey];
+  if (monthLoads.has(cacheKey)) return monthLoads.get(cacheKey);
+  const loc = cfg.loc;
   const base = 'https://api.aladhan.com/v1/';
   const q = `method=${cfg.method}&school=${cfg.school}&tune=${tune}`;
   const url = loc.type === 'gps'
-    ? `${base}timings/${dateKey(d)}?latitude=${loc.lat}&longitude=${loc.lng}&${q}`
-    : `${base}timingsByCity/${dateKey(d)}?city=${encodeURIComponent(loc.city)}&country=${encodeURIComponent(loc.country)}&${q}`;
-  const { data } = await fetchJSON(url);
-  const h = data.date.hijri;
-  const day = {
-    timings: data.timings,
-    hijri: { day: +h.day, month: h.month.ar, monthNum: h.month.number, year: +h.year, text: `${arNum(+h.day)} ${h.month.ar} ${arNum(+h.year)} هـ` },
-    coords: { lat: data.meta.latitude, lng: data.meta.longitude },
-  };
-  const keys = Object.keys(cached);
-  if (keys.length > 6) keys.slice(0, keys.length - 6).forEach(k => delete cached[k]);
-  cached[cacheKey] = day;
-  store.set('timesCache', cached);
+    ? `${base}calendar/${y}/${m}?latitude=${loc.lat}&longitude=${loc.lng}&${q}`
+    : `${base}calendarByCity/${y}/${m}?city=${encodeURIComponent(loc.city)}&country=${encodeURIComponent(loc.country)}&${q}`;
+  const p = fetchJSON(url).then(({ data }) => {
+    const days = {};
+    for (const x of data) {
+      const h = x.date.hijri;
+      const t = {};
+      for (const k of ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']) t[k] = x.timings[k].split(' ')[0];
+      days[x.date.gregorian.date] = {
+        timings: t,
+        hijri: { day: +h.day, month: h.month.ar, monthNum: h.month.number, year: +h.year, text: `${arNum(+h.day)} ${h.month.ar} ${arNum(+h.year)} هـ` },
+        coords: { lat: x.meta.latitude, lng: x.meta.longitude },
+      };
+    }
+    const all = store.get('calCache', {});
+    const keys = Object.keys(all);
+    if (keys.length > 3) keys.slice(0, keys.length - 3).forEach(k => delete all[k]);
+    all[cacheKey] = days;
+    store.set('calCache', all);
+    return days;
+  }).finally(() => monthLoads.delete(cacheKey));
+  monthLoads.set(cacheKey, p);
+  return p;
+}
+
+export async function fetchDay(d) {
+  const days = await fetchMonth(d.getFullYear(), d.getMonth() + 1);
+  const day = days[dateKey(d)];
+  if (!day) throw new Error('no-day');
   return day;
 }
 
@@ -182,10 +207,13 @@ const AFTER_ADHAN = 'اللَّهُمَّ رَبَّ هَذِهِ الدَّعْ
 
 export function fireAdhan(p) {
   const a = $('#adhanAudio');
-  a.src = adhanUrl(cfg.sound);
   if (!audio.paused) audio.pause();
-  a.play().catch(() => {});
-  if (cfg.alerts && 'Notification' in window && Notification.permission === 'granted') {
+  // في التطبيق يُرفع الأذان بصوت الإشعار المجدول، فلا نشغّله مرتين
+  if (!isNative) {
+    a.src = adhanUrl(cfg.sound);
+    a.play().catch(() => {});
+  }
+  if (!isNative && cfg.alerts && 'Notification' in window && Notification.permission === 'granted') {
     const opts = { body: 'حيّ على الصلاة، حيّ على الفلاح', icon: 'icons/icon-192.png', tag: 'adhan', lang: 'ar', dir: 'rtl' };
     navigator.serviceWorker?.ready.then(r => r.showNotification(`حان الآن موعد صلاة ${p.name}`, opts))
       .catch(() => { try { new Notification(`حان الآن موعد صلاة ${p.name}`, opts); } catch { /* غير مدعوم */ } });
@@ -207,8 +235,16 @@ export function fireAdhan(p) {
     $('#adhanSunnah', box).innerHTML = `<b>بعد الأذان</b><p>صلِّ على النبي ﷺ، ثم قل:</p><p class="dua">${AFTER_ADHAN}</p><small>رواه البخاري — «حلّت له شفاعتي يوم القيامة»</small>`;
     $('.btn', box).textContent = 'إغلاق';
   };
-  $('.btn', box).onclick = () => { if (!a.paused) { a.pause(); showDua(); } else box.remove(); };
-  a.onended = showDua;
+  let stopped = false;
+  $('.btn', box).onclick = () => {
+    if (!stopped) {
+      stopped = true;
+      a.pause();
+      Notifications()?.removeAllDeliveredNotifications().catch(() => {});
+      showDua();
+    } else box.remove();
+  };
+  a.onended = () => { stopped = true; showDua(); };
   document.body.append(box);
 }
 
@@ -219,3 +255,91 @@ setInterval(() => {
   const txt = countdownText(np.at - new Date());
   document.querySelectorAll('[data-countdown]').forEach(el => { el.textContent = txt; });
 }, 1000);
+
+/* ── أندرويد: جدولة الأذان إشعاراتٍ بصوت المؤذن، فيُرفع والتطبيق مغلق ── */
+let scheduling = null;
+export function scheduleAdhans() {
+  if (!isNative || !cfg.loc) return Promise.resolve();
+  scheduling = (scheduling || Promise.resolve()).then(doSchedule).catch(() => {});
+  return scheduling;
+}
+async function doSchedule() {
+  const LN = Notifications();
+  if (!LN) return;
+  const pending0 = await LN.getPending();
+  if (!cfg.alerts) {
+    if (pending0.notifications.length) await LN.cancel({ notifications: pending0.notifications.map(n => ({ id: n.id })) });
+    return;
+  }
+  const perm = await LN.checkPermissions();
+  if (perm.display !== 'granted') return;
+  for (const id of BUNDLED_ADHANS) {
+    await LN.createChannel({
+      id: `adhan_${id}`, name: `الأذان — ${ADHANS.find(a => a[0] === id)?.[1] || id}`,
+      description: 'رفع الأذان عند دخول وقت الصلاة', importance: 5, visibility: 1,
+      sound: `adhan_${id}.mp3`, vibration: true, lights: true,
+    });
+  }
+  // إن لم يُسمح بالتنبيهات الدقيقة نجدول تنبيهًا تقريبيًا بدل فتح الإعدادات في كل مرة
+  let exact = true;
+  try { exact = (await LN.checkExactNotificationSetting()).exact_alarm === 'granted'; } catch { /* أندرويد قديم */ }
+  const pending = await LN.getPending();
+  if (pending.notifications.length) await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+  const now = new Date();
+  const list = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now); d.setDate(now.getDate() + i);
+    let day;
+    try { day = await fetchDay(d); } catch { continue; }
+    PRAYERS.forEach((p, idx) => {
+      if (p.noAdhan || !cfg.on[p.key]) return;
+      const at = toDate(day.timings[p.key], d);
+      if (at <= now) return;
+      list.push({
+        id: (d.getMonth() + 1) * 100000 + d.getDate() * 1000 + idx,
+        title: `حان الآن موعد صلاة ${p.name}`,
+        body: 'حيّ على الصلاة، حيّ على الفلاح',
+        channelId: adhanChannel(cfg.sound),
+        smallIcon: 'ic_stat_adhan',
+        iconColor: '#0f6b5c',
+        schedule: { at, allowWhileIdle: true },
+        isExactNotification: exact,
+        extra: { prayer: p.key },
+      });
+    });
+  }
+  if (list.length) await LN.schedule({ notifications: list });
+}
+
+export async function enableNativeAdhan() {
+  const LN = Notifications();
+  if (!LN) return false;
+  let perm = await LN.checkPermissions();
+  if (perm.display !== 'granted') perm = await LN.requestPermissions();
+  if (perm.display !== 'granted') { toast('لم يُسمح بالإشعارات؛ فعّلها من إعدادات الهاتف'); return false; }
+  try {
+    const ex = await LN.checkExactNotificationSetting();
+    if (ex.exact_alarm !== 'granted') {
+      toast('اسمح بالتنبيهات الدقيقة ليُرفع الأذان في وقته تمامًا');
+      await LN.changeExactNotificationSetting();
+    }
+  } catch { /* إصدارات أندرويد القديمة لا تحتاجه */ }
+  await scheduleAdhans();
+  return true;
+}
+
+// في التطبيق يكون الأذان مفعّلًا افتراضيًا، ونطلب الإذن مرة واحدة بعد تحديد الموقع
+if (isNative && store.get('adhan', {}).alerts === undefined) cfg.alerts = true;
+export async function initNativeAdhan() {
+  const LN = Notifications();
+  if (!LN || !cfg.loc || !cfg.alerts) return scheduleAdhans();
+  const perm = await LN.checkPermissions().catch(() => ({}));
+  if (perm.display === 'prompt' || perm.display === 'prompt-with-rationale') return enableNativeAdhan();
+  return scheduleAdhans();
+}
+
+if (isNative) {
+  events.addEventListener('update', () => { if (times.today) initNativeAdhan(); });
+  // الضغط على إشعار الأذان يفتح صفحة المواقيت
+  Notifications()?.addListener('localNotificationActionPerformed', () => { location.hash = '#/adhan'; });
+}

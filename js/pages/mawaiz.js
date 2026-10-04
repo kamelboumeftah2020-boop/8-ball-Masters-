@@ -133,7 +133,7 @@ async function renderSpeaker(view, sid, ctx) {
       <div><small>${esc(group.name)}</small><h2>${sp.group === 'haram' ? '' : 'الشيخ '}${esc(sp.name)}</h2><span>${arNum(list.length)} ${sp.group === 'haram' ? 'خطبة' : 'مادة صوتية'}</span></div>
       <button class="play-btn" id="playAll" aria-label="تشغيل الكل">${icons.play}</button>
     </div>
-    ${sid === 'rashed' ? `<p class="source-note">${icons.info} مواعظ مختارة يغلب عليها الترقيق والتذكير بالآخرة؛ استبعدنا المواد ذات الطابع السياسي.</p>` : ''}
+    ${sid === 'rashed' ? `<p class="source-note">${icons.info} جميع ما وجدناه من محاضرات الشيخ ومقاطعه وأجوبته، مجموعة من عدة مصادر في أرشيف الإنترنت، مع روابط بديلة تُستعمل تلقائيًا إن تعذّر أحدها.</p>` : ''}
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث في مواد الشيخ" autocomplete="off"></label>
     <div class="list-card" id="list"></div>`;
   const draw = () => {

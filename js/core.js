@@ -1,4 +1,5 @@
 // أدوات مشتركة
+import { share as nativeShare, copy as nativeCopy } from './native.js';
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
@@ -43,10 +44,12 @@ export async function fetchJSON(url) {
 }
 
 export async function shareText(text) {
+  if (await nativeShare(text)) return;
   if (navigator.share) { try { await navigator.share({ text }); } catch { /* أُلغيت المشاركة */ } return; }
   copyText(text);
 }
-export function copyText(text) {
+export async function copyText(text) {
+  try { if (await nativeCopy(text)) return toast('تم النسخ'); } catch { /* نجرّب طريقة المتصفح */ }
   if (!navigator.clipboard) return toast('النسخ غير متاح في هذا المتصفح');
   navigator.clipboard.writeText(text).then(() => toast('تم النسخ'), () => toast('تعذّر النسخ'));
 }

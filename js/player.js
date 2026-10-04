@@ -1,6 +1,7 @@
 // مشغّل الصوت الموحّد: سورة كاملة، أو آية بآية، أو محاضرة
 import { $, store, arNum, esc, pad3, fmtDur, toast, icons, sheet } from './core.js';
 import { SURAHS } from './data/surahs.js';
+import { isNative, mediaPlaying, mediaStopped, openExternal } from './native.js';
 
 export const RECITERS = [
   { id: 'afs', name: 'مشاري العفاسي', server: 'https://server8.mp3quran.net/afs/', ayah: 'ar.alafasy' },
@@ -31,12 +32,17 @@ export const events = new EventTarget();
 const emit = type => events.dispatchEvent(new Event(type));
 
 /* ── التشغيل ── */
-let retries = 0;
-function start(src, retry = false) {
-  if (!retry) retries = 0;
+// مصادر المقطع الحالي: الرابط الأساسي ثم الروابط البديلة، ونعيد المرور عليها مرة ثانية
+let sources = [], attempt = 0;
+function start(src, alts = []) {
+  sources = [src, ...alts];
+  attempt = 0;
+  load(src);
+}
+function load(src) {
   audio.src = src;
   audio.playbackRate = player.mode === 'lecture' ? player.speed : 1;
-  audio.play().catch(err => { if (err.name !== 'AbortError') toast('تعذّر تشغيل الصوت، تحقق من الاتصال'); });
+  audio.play().catch(err => { if (err.name === 'NotAllowedError') toast('اضغط على زر التشغيل لبدء الاستماع'); });
   refresh();
   emit('change');
 }
@@ -58,7 +64,7 @@ export function playLecture(speaker, list, idx, part = 0) {
   Object.assign(player, { mode: 'lecture', lec: { speaker, list, idx, part } });
   const item = list[idx];
   store.set('lastLecture', { sid: speaker.id, idx, title: item.t, speaker: speaker.name });
-  start(item.u[part]);
+  start(item.u[part], part === 0 ? item.a || [] : []);
 }
 
 export const toggle = () => (audio.paused ? audio.play().catch(() => {}) : audio.pause());
@@ -139,19 +145,39 @@ audio.addEventListener('ended', () => {
   if (player.mode === 'surah' && player.surah >= 114) return;
   step(1);
 });
-// خوادم الأرشيف تخفق أحيانًا؛ نعيد المحاولة قبل إظهار الخطأ
+// خوادم الأرشيف تخفق أحيانًا: ننتقل إلى الرابط البديل، ثم نعيد المرور على الروابط مرة أخرى
 audio.addEventListener('error', () => {
-  if (!player.mode || !audio.getAttribute('src')) return;
-  const src = audio.src.replace(/[?&]retry=\d+$/, '');
-  if (retries < 2) {
-    retries++;
-    setTimeout(() => start(src + (src.includes('?') ? '&' : '?') + 'retry=' + retries, true), 1200);
+  if (!player.mode || !audio.getAttribute('src') || !sources.length) return;
+  attempt++;
+  if (attempt < sources.length * 2) {
+    const src = sources[attempt % sources.length];
+    const round = Math.floor(attempt / sources.length);
+    setTimeout(() => load(round ? src + (src.includes('?') ? '&' : '?') + 'retry=' + round : src), 600 + round * 900);
   } else {
-    toast('تعذّر تشغيل هذه المادة الآن، جرّب لاحقًا أو اختر غيرها');
+    toast('تعذّر تشغيل هذه المادة الآن، تحقق من الاتصال أو جرّب لاحقًا');
   }
 });
-audio.addEventListener('play', () => { refreshState(); emit('state'); });
-audio.addEventListener('pause', () => { savePos(true); refreshState(); emit('state'); });
+// مؤشر التحميل أثناء انتظار الخادم
+const setLoading = on => { $('#player').classList.toggle('loading', on); $('#fullPlayer')?.classList.toggle('loading', on); };
+audio.addEventListener('loadstart', () => setLoading(true));
+audio.addEventListener('waiting', () => setLoading(true));
+audio.addEventListener('playing', () => setLoading(false));
+audio.addEventListener('canplay', () => setLoading(false));
+
+// في أندرويد: خدمة في الخلفية تُبقي التشغيل مستمرًا والشاشة مطفأة
+let stopTimer = null;
+audio.addEventListener('play', () => {
+  clearTimeout(stopTimer);
+  const info = trackInfo();
+  mediaPlaying(info.title, info.sub);
+  refreshState(); emit('state');
+});
+audio.addEventListener('pause', () => {
+  savePos(true); refreshState(); emit('state');
+  // مهلة قصيرة حتى لا تتوقف الخدمة بين مقطع وآخر
+  clearTimeout(stopTimer);
+  stopTimer = setTimeout(() => { if (audio.paused) mediaStopped(); }, 4000);
+});
 audio.addEventListener('timeupdate', () => {
   if (audio.duration) $('#pBar').style.width = (audio.currentTime / audio.duration * 100) + '%';
   savePos(false);
@@ -223,6 +249,7 @@ function openFullPlayer() {
       }
       if (a === 'repeat') { player.repeat = !player.repeat; toast(player.repeat ? 'تكرار المقطع الحالي' : 'أُلغي التكرار'); }
       if (a === 'sleep') cycleSleep();
+      if (a === 'download') { if (isNative) { e.preventDefault(); openExternal(b.getAttribute('href')); } return; }
       if (a === 'go') { close(); location.hash = trackInfo().link; return; }
       refreshSheet();
     },
@@ -254,7 +281,7 @@ function refreshSheet() {
     <div class="fp-opts">
       ${lec ? `<button class="opt" data-pa="speed"><b>${arNum(player.speed)}×</b><span>السرعة</span></button>` : `<button class="opt ${player.repeat ? 'on' : ''}" data-pa="repeat">${icons.repeat}<span>تكرار</span></button>`}
       <button class="opt ${sleepAt || sleepEnd ? 'on' : ''}" data-pa="sleep">${icons.moonSleep}<span>${sleepAt || sleepEnd ? sleepLabel() : 'مؤقت النوم'}</span></button>
-      ${lec ? `<a class="opt" href="${esc(item.u[player.lec.part])}" target="_blank" rel="noopener" download>${icons.download}<span>تحميل</span></a>` : ''}
+      ${lec ? `<a class="opt" data-pa="download" href="${esc(item.u[player.lec.part])}" target="_blank" rel="noopener" download>${icons.download}<span>تحميل</span></a>` : ''}
       <button class="opt" data-pa="go">${lec ? icons.mic : icons.book}<span>${lec ? 'قائمة الشيخ' : 'فتح السورة'}</span></button>
     </div>`;
   const seek = $('#fpSeek', el);

@@ -8,6 +8,7 @@
 التشغيل: python3 tools/build_lectures.py
 """
 import json
+import re
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -36,14 +37,15 @@ SCHOLARS = [
     ('husainalshaikh', 'حسين آل الشيخ', 'حسين بن عبد العزيز آل الشيخ', 'haram'),
 ]
 
-# مواعظ الشيخ خالد الراشد من أرشيف الإنترنت
-# استبعدنا ما يغلب عليه الطابع السياسي أو الحماسي، وما لم يتضح مضمونه من عنوانه، والمقاطع غير الوعظية.
-RASHED_EXCLUDE = {
-    'اضحك مع الشيخ خالد الراشد', 'البنيان المرصوص', 'الطاغوت الاكبر', 'امة المليار', 'يا أمة محمد',
-    'تدنيس القرآن', 'و كفيناك المستهزئين', 'وا معتصماه', 'قاتل ومقتول', 'و لا تهنوا و لا تحزنوا',
-    'ولا تهنوا ولا تحزنوا', 'نشرة الاخبار', 'رأيت النبي يبكي', 'قعيد أحيا الأمة', 'قصة بطل',
-    'نعم هذا البطل', 'لم يتجاوز عددهم العشرين', 'إنهم فتية آمنوا بربهم', 'رجال صدقوا', 'ابشروا لقد جاء النصر',
-}
+# مواعظ الشيخ خالد الراشد من أرشيف الإنترنت: كل المجموعات المتاحة، مع حذف المكرر.
+# الترتيب مهم: المجموعة الأولى هي الموسوعة الكاملة، وما بعدها يضيف ما ليس فيها.
+RASHED_COLLECTIONS = [
+    'kalrashed', 'khaled-alrashed-lectures_202602', 'khaled-alrashed_94_Lectures_Mp3_up-by-muslem',
+    'Khaled_Rachid_uP_bY_mUSLEm', 'Islamic_Tape-142_uP_bY_mUSLEm', 'SalafDoctrine_KhaledAlRached_Audios',
+    'Khaled-Alrashed-Lectures', 'khaledRashedmp3', 'way_669',
+]
+# نسخ مطابقة من الموسوعة نفسها (عناوينها بترميز قديم)، تُستعمل روابطَ بديلة فقط
+RASHED_MIRRORS = ['Mawsoa_Khaled-Errached_mp3', '312___________khaled-alrashed-312-dars-khotba-almawsoo3a-alsawteyya']
 
 
 def get(url):
@@ -75,28 +77,98 @@ def archive_files(identifier):
     meta = get(f'https://archive.org/metadata/{identifier}')
     files = [f for f in meta['files'] if f['name'].lower().endswith('.mp3') and f.get('source') == 'original']
     base = f'https://archive.org/download/{identifier}/'
-    return [(f['name'], base + urllib.parse.quote(f['name']), float(f.get('length') or 0)) for f in files]
+    return [(f, base + urllib.parse.quote(f['name'])) for f in files]
+
+
+# عناوين اختُصرت أكثر من اللازم عند حذف اسم الشيخ منها
+TITLE_FIX = {'إبن': 'ابن الوليد', 'لمهدي': 'المهدي', 'اضحك مع': 'اضحك مع الشيخ خالد الراشد', 'ابن الواليد': 'ابن الوليد'}
+
+
+def seconds(v):
+    if not v:
+        return 0
+    total = 0
+    for part in str(v).split(':'):
+        total = total * 60 + float(part)
+    return total
+
+
+AR = re.compile('[\u0621-\u064A]')
+
+
+def clean_title(t):
+    t = re.sub(r'\.mp3$', '', t, flags=re.I).replace('_', ' ').replace('#', '').replace('-', ' ')
+    t = re.sub(r'[ღ¸.]{2,}', ' ', t)
+    t = re.sub(r'^\s*\d+\s*', '', t)
+    t = re.sub(r'(لل)?(الشيخ\s*)?/?\s*خالد\s*(بن\s*)?الراشد', '', t)
+    t = re.sub(r'محاضر[هة]\s*(بعنوان)?|مقطع روعة|رو+عة|مؤثر(ة)? جدا|مؤثر$|\b20\d\d\b|كامل[ةه]?$', '', t)
+    t = re.sub(r'(^|\s)(الشيخ|للشيخ)(\s|$)', ' ', t)
+    t = re.sub(r'ـ+', '', t)
+    t = re.sub(r'\s+', ' ', t).strip(' -–.,|:;')
+    return t
+
+
+def norm(t):
+    t = re.sub('[\u064B-\u065F\u0670]', '', t)
+    for a, b in (('أ', 'ا'), ('إ', 'ا'), ('آ', 'ا'), ('ى', 'ي'), ('ة', 'ه')):
+        t = t.replace(a, b)
+    t = re.sub('[^\u0621-\u064A]', '', t)
+    return re.sub('^ال', '', t)
 
 
 def rashed():
-    lst, seen = [], set()
-
-    def norm(t):
-        return t.replace('ى', 'ي').replace('أ', 'ا').replace('إ', 'ا').replace('ـ', '').replace(' ', '').replace('؟', '').strip()
-
-    def add(title, url, length):
-        title = ' '.join(title.split())
-        if title in RASHED_EXCLUDE or norm(title) in seen:
-            return
-        seen.add(norm(title))
-        lst.append({'t': title, 'u': [url], 'd': round(length)})
-
-    # المجموعة الرئيسية (عناوين عربية واضحة)
-    for name, url, length in archive_files('khaled-alrashed-lectures_202602'):
-        add(name[:-4], url, length)
-    # إضافات غير موجودة في المجموعة الرئيسية
-    for name, url, length in archive_files('Khaled-Alrashed-Lectures'):
-        add(name[:-4].replace('مميز-', '').replace('-', ' '), url, length)
+    """يجمع كل المجموعات؛ والنسخ المكررة تُحفظ روابطَ بديلة (a) يلجأ إليها المشغّل إذا تعذّر الرابط الأساسي."""
+    lst, items = [], {}
+    for i, cid in enumerate(RASHED_COLLECTIONS[:1] + RASHED_MIRRORS + RASHED_COLLECTIONS[1:]):
+        mirror_only = cid in RASHED_MIRRORS
+        for f, url in archive_files(cid):
+            raw = f.get('title') or ''
+            if mirror_only:
+                try:
+                    raw = raw.encode('latin-1').decode('cp1256')
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    pass
+            if not AR.search(raw) or 'blogspot' in raw:
+                raw = f['name']
+            if not AR.search(raw):
+                continue
+            title = clean_title(raw) or raw
+            title = TITLE_FIX.get(title, title)
+            k = norm(title)
+            if len(k) < 3 or 'تمرفع' in k:
+                continue
+            same = items.get(k)
+            if not same and i > 0 and len(k) >= 5:
+                same = next((v for x, v in items.items() if len(x) >= 5 and (k in x or x in k)), None)
+            if same:
+                # نسخة أخرى من المادة نفسها: رابط بديل إن كانت مدتها متقاربة
+                d = seconds(f.get('length'))
+                if (not d or not same['d'] or abs(d - same['d']) < max(120, same['d'] * .15)) and len(same.setdefault('a', [])) < 4:
+                    same['a'].append(url)
+                continue
+            if mirror_only:
+                continue
+            item = {'t': title, 'u': [url], 'd': round(seconds(f.get('length')))}
+            items[k] = item
+            lst.append(item)
+    # ربط النسخ المطابقة بالمدة (الملف نفسه بمدة متطابقة تقريبًا)
+    for cid in RASHED_MIRRORS:
+        for f, url in archive_files(cid):
+            d = seconds(f.get('length'))
+            if d < 60:
+                continue
+            for item in lst:
+                alts = item.setdefault('a', [])
+                if abs(item['d'] - d) <= 2 and url not in alts and len(alts) < 4:
+                    alts.append(url)
+                    break
+    for item in lst:
+        if not item.get('a'):
+            item.pop('a', None)
+        else:
+            # خادم مجموعة kalrashed يخفق كثيرًا؛ نقدّم النسخ الأخرى ونجعله احتياطيًا
+            urls = sorted(item['u'] + item['a'], key=lambda u: '/kalrashed/' in u)
+            item['u'], item['a'] = urls[:1], urls[1:]
     return sorted(lst, key=lambda x: x['t'])
 
 

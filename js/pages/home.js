@@ -71,7 +71,7 @@ export function renderHome(view, args, ctx) {
       <div id="dailyBox">${wa3zCard(w, MAWAIZ.indexOf(w))}</div>
       <a class="card promo" href="#/mawaiz/s/rashed">
         <span class="avatar mawaiz">ر</span>
-        <span><small>مواعظ مسموعة</small><b>الشيخ خالد الراشد وكبار العلماء</b><small>أكثر من ١٤٠٠ محاضرة وخطبة</small></span>
+        <span><small>مواعظ مسموعة</small><b>الشيخ خالد الراشد وكبار العلماء</b><small>أكثر من ١٦٠٠ محاضرة وخطبة</small></span>
         <span class="play-btn sm">${icons.play}</span>
       </a>`;
 

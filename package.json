@@ -1,0 +1,21 @@
+{
+  "name": "nur-app",
+  "version": "2.0.0",
+  "private": true,
+  "description": "نور — القرآن والمواعظ والأذان",
+  "scripts": {
+    "build:www": "node tools/build-www.mjs",
+    "sync": "npm run build:www && npx cap sync android",
+    "apk": "npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

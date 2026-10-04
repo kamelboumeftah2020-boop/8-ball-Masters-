@@ -1,9 +1,9 @@
 // تخزين واجهة التطبيق وسور المصحف والتفسير لتعمل دون اتصال
-const SHELL = 'nur-shell-v2';
-const DATA = 'nur-data-v2';
+const SHELL = 'nur-shell-v3';
+const DATA = 'nur-data-v3';
 const FILES = [
-  './', 'index.html', 'css/style.css', 'manifest.webmanifest',
-  'js/app.js', 'js/core.js', 'js/player.js', 'js/prayer.js',
+  './', 'index.html', 'css/style.css', 'css/fonts.css', 'manifest.webmanifest',
+  'js/app.js', 'js/core.js', 'js/native.js', 'js/player.js', 'js/prayer.js',
   'js/data/surahs.js', 'js/data/mawaiz.js', 'js/data/adhkar.js',
   'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js',
   'data/lectures.json', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
