@@ -56,3 +56,24 @@ export function onBackButton(handler) {
 export function minimizeApp() {
   plugin('App')?.minimizeApp().catch(() => {});
 }
+
+// وضع القراءة بملء الشاشة: إخفاء شريط الحالة وشريط التنقل في أندرويد
+export function immersive(on) {
+  const p = plugin('SystemBars');
+  if (!p) return;
+  try { (on ? p.hide?.({}) : p.show?.({}))?.catch?.(() => {}); } catch { /* غير مدعوم */ }
+}
+
+// إبقاء الشاشة مضاءة أثناء القراءة؛ تُعيد دالة للإلغاء
+export function keepAwake() {
+  let lock = null, active = true;
+  const request = () => navigator.wakeLock?.request('screen').then(l => { if (active) lock = l; else l.release(); }).catch(() => {});
+  const onVisible = () => { if (document.visibilityState === 'visible' && active) request(); };
+  request();
+  document.addEventListener('visibilitychange', onVisible);
+  return () => {
+    active = false;
+    document.removeEventListener('visibilitychange', onVisible);
+    lock?.release().catch(() => {});
+  };
+}

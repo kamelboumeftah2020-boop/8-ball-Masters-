@@ -59,7 +59,11 @@ function render() {
     back: target => { if (id === renderId) { backTarget = target; $('#backBtn').hidden = false; } },
   };
   view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter');
-  route.render(view, parts.slice(1), ctx);
+  Promise.resolve()
+    .then(() => route.render(view, parts.slice(1), ctx))
+    .catch(() => {
+      if (id === renderId) view.innerHTML = '<div class="error-box">تعذّر فتح الصفحة. تحقق من الاتصال ثم أعد المحاولة.</div>';
+    });
 }
 
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });

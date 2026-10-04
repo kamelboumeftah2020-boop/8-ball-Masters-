@@ -2,6 +2,8 @@
 import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, sheet } from '../core.js';
 import { SURAHS } from '../data/surahs.js';
 import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub } from '../player.js';
+import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll } from '../mushafFont.js';
+import { immersive, keepAwake } from '../native.js';
 
 // بداية كل جزء [السورة، الآية]
 const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
@@ -46,6 +48,11 @@ export async function renderMushaf(view, args, ctx) {
       </a>`}
       <button class="card goto-page" id="gotoPage"><b>${icons.layers}</b><span>صفحة</span></button>
     </div>
+    <div class="card dl-card" id="dlCard">
+      <span class="tile-ic gold sm">${icons.download}</span>
+      <div><strong>المصحف دون إنترنت</strong><small id="dlText">…</small><div class="bar"><i id="dlBar"></i></div></div>
+      <button class="btn" id="dlBtn">تحميل</button>
+    </div>
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث عن سورة أو كلمة في القرآن" autocomplete="off"></label>
     <div id="qsearch"></div>
     <div class="tabs" id="tabs">
@@ -79,6 +86,26 @@ export async function renderMushaf(view, args, ctx) {
     }
   };
   $('#gotoPage').onclick = () => goToPageSheet(last?.p || 1);
+  // تحميل خطوط صفحات المصحف كلها (نحو ٩٠ م.ب) للقراءة دون اتصال
+  let dlRunning = false;
+  const dlShow = (done, failed) => {
+    if (!ctx.alive()) return;
+    $('#dlBar').style.width = (done / 604 * 100) + '%';
+    $('#dlText').textContent = done >= 604 ? 'المصحف كاملًا محفوظ في جهازك' : `محفوظ ${arNum(done)} من ٦٠٤ صفحة${failed ? ` · تعذّر ${arNum(failed)}` : ''}`;
+    $('#dlBtn').hidden = done >= 604;
+  };
+  cachedCount().then(c => dlShow(c, 0));
+  $('#dlBtn').onclick = async () => {
+    if (dlRunning) { dlRunning = false; $('#dlBtn').textContent = 'تحميل'; return; }
+    dlRunning = true;
+    $('#dlBtn').textContent = 'إيقاف';
+    const r = await downloadAll(dlShow, () => !dlRunning || !ctx.alive());
+    dlRunning = false;
+    if (!ctx.alive()) return;
+    $('#dlBtn').textContent = 'تحميل';
+    if (r.failed) toast('تعذّر تحميل بعض الصفحات، أعد المحاولة');
+    else if (r.done >= 604) toast('تم حفظ المصحف كاملًا للقراءة دون إنترنت');
+  };
   $('#tabs').onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -182,7 +209,8 @@ async function renderReader(view, n, goto, ctx) {
 
 const BASMALA = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
 
-export async function renderPage(view, args, ctx) {
+// نسخة احتياطية بالنص (خط أميري) إن تعذّر تحميل خط الصفحة دون اتصال
+async function renderTextPage(view, args, ctx) {
   const n = Math.min(604, Math.max(1, +args[0] || 1));
   const flashS = +args[1] || 0, flashA = +args[2] || 0;
   ctx.back('#/mushaf');
@@ -328,6 +356,199 @@ export async function renderPage(view, args, ctx) {
   ctx.cleanup(() => document.removeEventListener('keydown', onKey));
 }
 
+/* ── المصحف بصفحات مصحف المدينة (خطوط مجمع الملك فهد) بملء الشاشة ── */
+const mushafLines = new Map();
+async function getLines(p) {
+  if (!mushafLines.has(p)) mushafLines.set(p, fetchJSON(`data/mushaf/${p}.json`).catch(e => { mushafLines.delete(p); throw e; }));
+  return mushafLines.get(p);
+}
+// أول صفحة تظهر فيها الآية، من فهرس الصفحات
+async function pageOfKey(s, a) { return pageOf(s, a); }
+
+export async function renderPage(view, args, ctx) {
+  const n = Math.min(604, Math.max(1, +args[0] || 1));
+  const flashKey = args[1] ? `${+args[1]}:${+args[2] || 1}` : '';
+  ctx.back('#/mushaf');
+  view.innerHTML = '<div class="qr-loading"><div class="spinner"></div></div>';
+  let lines, pages;
+  try {
+    [lines, pages] = await Promise.all([getLines(n), getPages()]);
+    await loadPageFont(n);
+  } catch {
+    if (!ctx.alive()) return;
+    return renderTextPage(view, args, ctx);
+  }
+  if (!ctx.alive()) return;
+  prefetch(n);
+  if (n < 604) getLines(n + 1).catch(() => {});
+
+  // ملء الشاشة: إخفاء أشرطة التطبيق وشريط الحالة، وإبقاء الشاشة مضاءة
+  document.body.classList.add('reader-full');
+  immersive(true);
+  const release = keepAwake();
+  ctx.cleanup(() => {
+    // لا نعيد الأشرطة إن كان الانتقال إلى صفحة أخرى من المصحف
+    setTimeout(() => {
+      if (!location.hash.startsWith('#/page/')) { document.body.classList.remove('reader-full'); immersive(false); }
+    }, 0);
+    release();
+  });
+
+  const [parts, juz, hizb] = pages[n - 1];
+  const firstS = parts[0][0];
+  ctx.title('سورة ' + surahName(firstS));
+  store.set('lastRead', { p: n, s: firstS, a: parts[0][1] });
+  const marked = pageMarks().some(x => x.p === n);
+  const opening = n <= 2;
+  const fam = fontFamily(n);
+
+  const lineHTML = l => {
+    if (l[0] === 'h') return `<div class="ql qh"><span>سورة ${surahName(l[1])}</span></div>`;
+    if (l[0] === 'b') return `<div class="ql qb">${BASMALA}</div>`;
+    return `<div class="ql">${l.map(([c, k]) => `<span class="w" data-k="${k}">${c}</span>`).join('')}</div>`;
+  };
+
+  view.innerHTML = `
+    <div class="qr ${opening ? 'opening' : ''}" id="qr">
+      <header class="qr-head">
+        <button class="qr-pill" id="qrIndex">سورة ${surahName(firstS)}</button>
+        <span class="qr-pill">الجزء ${arNum(juz)}</span>
+        <button class="qr-mark ${marked ? 'on' : ''}" id="qrMark" aria-label="علامة الصفحة">${icons.bookmark}</button>
+      </header>
+      <div class="qr-page" id="qpage" style="font-family:'${fam}'">${lines.map(lineHTML).join('')}</div>
+      <footer class="qr-foot"><span class="qr-pill qr-num">${arNum(n)}</span></footer>
+      <div class="qr-tools" id="qrTools" hidden>
+        <button data-t="exit">${icons.book}<span>الفهرس</span></button>
+        <button data-t="prev" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}<span>السابقة</span></button>
+        <button data-t="listen">${icons.headphones}<span>استماع</span></button>
+        <button data-t="goto">${icons.layers}<span>صفحة</span></button>
+        <button data-t="next" ${n >= 604 ? 'disabled' : ''}>${icons.chevron}<span>التالية</span></button>
+      </div>
+    </div>`;
+
+  const qr = $('#qr'), page = $('#qpage');
+
+  // حجم الخط: ١٥ سطرًا تملأ الارتفاع، ولا يتجاوز أطول سطر عرض الصفحة
+  const fit = () => {
+    const h = page.clientHeight, w = page.clientWidth;
+    if (!h || !w) return;
+    const lineH = h / 15;
+    let fs = lineH / 1.62;
+    page.style.setProperty('--qfs', fs + 'px');
+    page.style.setProperty('--qlh', lineH + 'px');
+    page.classList.add('measure');
+    let widest = 0;
+    const natural = [];
+    $$('.ql:not(.qh):not(.qb)', page).forEach(l => { natural.push([l, l.scrollWidth]); widest = Math.max(widest, l.scrollWidth); });
+    page.classList.remove('measure');
+    // الأسطر القصيرة (كأواخر السور القصار) تُوسَّط كما في المصحف المطبوع بدل مدّها
+    natural.forEach(([l, nw]) => l.classList.toggle('short', nw < widest * 0.72));
+    if (widest > w * 0.985) { fs *= (w * 0.985) / widest; page.style.setProperty('--qfs', fs + 'px'); }
+    // تحقق أخير: لا يتجاوز أي سطر عرض الصفحة بعد الضبط
+    for (let k = 0; k < 4; k++) {
+      let over = 0;
+      $$('.ql:not(.qh):not(.qb)', page).forEach(l => { over = Math.max(over, l.scrollWidth / l.clientWidth); });
+      if (over <= 1.002) break;
+      fs /= over * 1.005;
+      page.style.setProperty('--qfs', fs + 'px');
+    }
+  };
+  fit();
+  // يُعاد الحساب كلما تغيّر حجم الصفحة (تدوير الشاشة، ظهور الأشرطة وإخفاؤها)
+  let lastSize = '';
+  const ro = new ResizeObserver(() => {
+    const size = page.clientWidth + 'x' + page.clientHeight;
+    if (size !== lastSize) { lastSize = size; fit(); }
+  });
+  ro.observe(page);
+  ctx.cleanup(() => ro.disconnect());
+
+  // تمييز آية (للانتقال من البحث أو أثناء التلاوة)
+  const mark = (key, cls) => {
+    $$(`.w.${cls}`, page).forEach(el => el.classList.remove(cls));
+    if (key) $$(`.w[data-k="${key}"]`, page).forEach(el => el.classList.add(cls));
+  };
+  if (flashKey) { mark(flashKey, 'flash'); setTimeout(() => mark('', 'flash'), 2600); }
+  const curKey = () => (player.mode === 'ayah' ? `${player.surah}:${player.ayahs[player.ayahIdx].numberInSurah}` : '');
+  const onChange = async () => {
+    const key = curKey();
+    if (!key) return mark('', 'active');
+    if ($(`.w[data-k="${key}"]`, page)) return mark(key, 'active');
+    const [s, a] = key.split(':').map(Number);
+    const p = await pageOfKey(s, a);
+    if (ctx.alive() && p !== n) location.replace(`#/page/${p}`);
+  };
+  const onEnd = async () => {
+    if (player.surah >= 114) return;
+    const next = player.surah + 1;
+    playAyahs(next, await getSurah(next), 0);
+  };
+  mark(curKey(), 'active');
+  pEvents.addEventListener('change', onChange);
+  pEvents.addEventListener('ayahs-end', onEnd);
+  ctx.cleanup(() => { pEvents.removeEventListener('change', onChange); pEvents.removeEventListener('ayahs-end', onEnd); });
+
+  const go = (p, dir) => {
+    if (p < 1 || p > 604 || p === n) return;
+    page.classList.add(dir > 0 ? 'out-next' : 'out-prev');
+    setTimeout(() => { if (ctx.alive()) location.replace(`#/page/${p}`); }, 140);
+  };
+
+  // أدوات الصفحة تظهر بلمسة وتختفي تلقائيًا
+  let hideTimer;
+  const tools = $('#qrTools');
+  const showTools = on => {
+    clearTimeout(hideTimer);
+    tools.hidden = !on;
+    if (on) hideTimer = setTimeout(() => { tools.hidden = true; }, 5000);
+  };
+  ctx.cleanup(() => clearTimeout(hideTimer));
+
+  page.onclick = async e => {
+    const w = e.target.closest('.w');
+    if (!w) return showTools(tools.hidden);
+    const [s, a] = w.dataset.k.split(':').map(Number);
+    mark(w.dataset.k, 'sel');
+    const ayahs = await getSurah(s);
+    ayahSheet(s, ayahs, a - 1, n, () => mark('', 'sel'));
+  };
+  $('#qrIndex').onclick = () => { location.hash = '#/mushaf'; };
+  $('#qrMark').onclick = () => {
+    const on = togglePageMark(n);
+    $('#qrMark').classList.toggle('on', on);
+    toast(on ? `وُضعت العلامة عند الصفحة ${arNum(n)}` : 'أُزيلت العلامة');
+  };
+  tools.onclick = async e => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    showTools(true);
+    const t = b.dataset.t;
+    if (t === 'exit') location.hash = '#/mushaf';
+    if (t === 'prev') go(n - 1, -1);
+    if (t === 'next') go(n + 1, 1);
+    if (t === 'goto') goToPageSheet(n);
+    if (t === 'listen') {
+      if (player.mode === 'ayah' && $(`.w[data-k="${curKey()}"]`, page)) return toggle();
+      const [s, a] = parts[0];
+      playAyahs(s, await getSurah(s), a - 1);
+    }
+  };
+
+  // السحب لتقليب الصفحات: إلى اليمين للتالية كما في المصحف الورقي
+  let sx = 0, sy = 0, st = 0;
+  qr.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); }, { passive: true });
+  qr.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - st < 800) go(dx > 0 ? n + 1 : n - 1, dx > 0 ? 1 : -1);
+  }, { passive: true });
+  const onKey = e => {
+    if (e.key === 'ArrowLeft') go(n + 1, 1);
+    if (e.key === 'ArrowRight') go(n - 1, -1);
+  };
+  document.addEventListener('keydown', onKey);
+  ctx.cleanup(() => document.removeEventListener('keydown', onKey));
+}
+
 function goToPageSheet(current) {
   const { el, close } = sheet(`
     <div class="sheet-head"><h3>الانتقال إلى صفحة</h3><small class="muted">من ١ إلى ٦٠٤</small></div>
@@ -345,7 +566,7 @@ function goToPageSheet(current) {
   setTimeout(() => inp.select(), 250);
 }
 
-function ayahSheet(n, ayahs, i, page) {
+function ayahSheet(n, ayahs, i, page, onClose) {
   const a = ayahs[i];
   const marked = pageMarks().some(x => x.p === page);
   const ref = `[سورة ${surahName(n)}: ${a.numberInSurah}]`;
@@ -361,12 +582,13 @@ function ayahSheet(n, ayahs, i, page) {
     </div>
     <div id="tafsirBox"></div>`, {
     label: 'خيارات الآية',
+    onClose,
     onClick: async (e, close) => {
       const b = e.target.closest('[data-a]');
       if (!b) return;
       const act = b.dataset.a;
       if (act === 'play') { playAyahs(n, ayahs, i); close(); }
-      if (act === 'mark') { close(); $('#pgMark')?.click(); }
+      if (act === 'mark') { close(); ($('#qrMark') || $('#pgMark'))?.click(); }
       if (act === 'copy') { copyText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'share') { shareText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'tafsir') {

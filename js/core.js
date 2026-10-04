@@ -57,11 +57,11 @@ export async function copyText(text) {
 export function vibrate(p) { try { navigator.vibrate?.(p); } catch { /* غير مدعوم */ } }
 
 // نافذة سفلية عامة
-export function sheet(html, { onClick, label = 'نافذة' } = {}) {
+export function sheet(html, { onClick, onClose, label = 'نافذة' } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'sheet-wrap';
   wrap.innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(label)}"><div class="grab"></div>${html}</div>`;
-  const close = () => { wrap.classList.add('closing'); setTimeout(() => wrap.remove(), 180); };
+  const close = () => { onClose?.(); wrap.classList.add('closing'); setTimeout(() => wrap.remove(), 180); };
   wrap.addEventListener('click', e => {
     if (e.target === wrap) return close();
     onClick?.(e, close);
