@@ -3,7 +3,7 @@ import { $, $$, store, arNum, toast, fetchJSON, copyText, shareText, icons, shee
 import { surahName } from '../player.js';
 import { immersive, keepAwake } from '../native.js';
 import { trackPage } from '../khatma.js';
-import { goToPageSheet } from './quran.js';
+import { goToPageSheet, partFooter } from './quran.js';
 import { loadWarsh, download, WARSH_SIZE_MB } from '../warshData.js';
 
 const BASMALA = 'بِسْمِ اِ۬للَّهِ اِ۬لرَّحْمَٰنِ اِ۬لرَّحِيمِ';
@@ -85,11 +85,10 @@ export async function renderWarsh(view, args, ctx) {
       <header class="qr-head">
         <button class="qr-pill" id="qrIndex">سورة ${surahName(firstS)}</button>
         <span class="qr-pill wr-tag">ورش</span>
-        <span class="qr-pill">الجزء ${arNum(data.j)}</span>
         <button class="qr-mark ${marked ? 'on' : ''}" id="qrMark" aria-label="علامة الصفحة">${icons.bookmark}</button>
       </header>
       <div class="qr-page wr-page ${o.color ? 'colored' : ''} ${o.hide ? 'hide' : ''}" id="qpage">${data.b.map(blockHTML).join('')}</div>
-      <footer class="qr-foot"><span class="qr-pill qr-num">${arNum(n)}</span></footer>
+      ${partFooter(n, data.j, ...(index.q ? index.q[n - 1] : [Math.ceil(n / 10), 0, 0]))}
       <div class="qr-tools wr-tools" id="qrTools" hidden>
         <button data-t="exit">${icons.book}<span>الفهرس</span></button>
         <button data-t="prev" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}<span>السابقة</span></button>

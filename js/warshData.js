@@ -1,9 +1,11 @@
 // مصحف ورش: يُقرأ من الإنترنت، ويمكن تحميله للقراءة دون اتصال.
-// المصدر: بيانات مجمع الملك فهد (KFGQPC Warsh v10) وخطه، ولكل آية رقم صفحتها وسطرا بدايتها ونهايتها.
-const BASE = 'https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/warsh/';
-const SRC = BASE + 'data/warshData_v10.json';
-const FONT = BASE + 'font/warsh.10.woff2';
-const CACHE = 'nur-warsh-v1';
+// المصدر: نص ورش من مجمع الملك فهد (KFGQPC Warsh v10)، ولكل آية رقم صفحتها وسطرا بدايتها ونهايتها.
+// ويُعرض بخط المصحف العثماني لمجمع الملك فهد (خط حفص v18) فتظهر الحروف منقوطة كاملة على طريقة المشرق
+// (الفاء بنقطة فوقها، والقاف بنقطتين، والنون والياء منقوطتان) بدل النقط المغربي في خط ورش.
+const BASE = 'https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/';
+const SRC = BASE + 'warsh/data/warshData_v10.json';
+const FONT = BASE + 'hafs/font/hafs.18.woff2';
+const CACHE = 'nur-warsh-v2';
 export const WARSH_SIZE_MB = 3;
 
 let job = null;
@@ -26,6 +28,7 @@ export async function isDownloaded() {
 }
 
 export async function download() {
+  if ('caches' in window) caches.delete('nur-warsh-v1').catch(() => {}); // النسخة السابقة بالخط المغربي
   const c = await caches.open(CACHE);
   for (const url of [FONT, SRC]) {
     if (await c.match(url)) continue;
@@ -36,10 +39,15 @@ export async function download() {
 }
 
 export async function removeDownload() {
-  if ('caches' in window) await caches.delete(CACHE);
+  if ('caches' in window) await Promise.all([caches.delete(CACHE), caches.delete('nur-warsh-v1')]);
 }
 
-const clean = t => t.replace(/‏/g, '').trim().replace(/[ \t]+/g, ' ');
+// تحويل ما يختص به النقط المغربي إلى نظيره المشرقي: الياء المتطرفة غير المنقوطة (ے) ياءً،
+// والصفر المستدير على همزة الوصل المحرّكة علامةَ الوصل المعتادة؛ ثم التركيب (ي + همزة ← ئ)
+const clean = t => t.replace(/\u200f/g, '').trim().replace(/[ \t]+/g, ' ')
+  .replace(/\u06D2/g, '\u064A')
+  .replace(/([\u0627\u0623][\u064E\u064F\u0650])\u06DF/g, '$1\u06EC')
+  .normalize('NFC');
 
 // آية ممتدة بين صفحتين: تُقسم كلماتها بنسبة عدد أسطرها في كل صفحة
 function splitWords(text, first, second) {

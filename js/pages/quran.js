@@ -1,5 +1,5 @@
 // المصحف والاستماع
-import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, sheet } from '../core.js';
+import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, sheet, quarterLabel } from '../core.js';
 import { SURAHS } from '../data/surahs.js';
 import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub, surahUrl, downloadSurah } from '../player.js';
 import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './downloads.js';
@@ -275,7 +275,7 @@ async function renderTextPage(view, args, ctx) {
     return;
   }
   if (!ctx.alive()) return;
-  const [, juz, hizb] = pages[n - 1];
+  const [, juz, , [q, qNew]] = pages[n - 1];
   const first = parts[0];
   ctx.title('سورة ' + surahName(first.s));
   store.set('lastRead', { p: n, s: first.s, a: first.from });
@@ -301,7 +301,7 @@ async function renderTextPage(view, args, ctx) {
     <div class="m-book" id="book">
       <article class="m-page ${opening ? 'opening' : ''} ${marked ? 'marked' : ''}" id="mpage">
         <span class="ribbon" aria-hidden="true"></span>
-        <header class="m-head"><span>سورة ${surahName(first.s)}</span><span>الجزء ${arNum(juz)} · الحزب ${arNum(hizb)}</span></header>
+        <header class="m-head"><span>سورة ${surahName(first.s)}</span><span>الجزء ${arNum(juz)} · ${qNew ? '۞ ' : ''}${quarterLabel(Math.ceil(q / 4), (q - 1) % 4)}</span></header>
         <div class="m-body" id="mbody">${body}</div>
         <footer class="m-foot"><span>${arNum(n)}</span></footer>
       </article>
@@ -443,7 +443,7 @@ export async function renderPage(view, args, ctx) {
     release();
   });
 
-  const [parts, juz, hizb] = pages[n - 1];
+  const [parts, juz, , [q, qNew]] = pages[n - 1];
   const firstS = parts[0][0];
   ctx.title('سورة ' + surahName(firstS));
   store.set('lastRead', { p: n, s: firstS, a: parts[0][1] });
@@ -461,11 +461,10 @@ export async function renderPage(view, args, ctx) {
     <div class="qr ${opening ? 'opening' : ''}" id="qr">
       <header class="qr-head">
         <button class="qr-pill" id="qrIndex">سورة ${surahName(firstS)}</button>
-        <span class="qr-pill">الجزء ${arNum(juz)}</span>
         <button class="qr-mark ${marked ? 'on' : ''}" id="qrMark" aria-label="علامة الصفحة">${icons.bookmark}</button>
       </header>
       <div class="qr-page" id="qpage" style="font-family:'${fam}'">${lines.map(lineHTML).join('')}</div>
-      <footer class="qr-foot"><span class="qr-pill qr-num">${arNum(n)}</span></footer>
+      ${partFooter(n, juz, Math.ceil(q / 4), (q - 1) % 4, qNew)}
       <div class="qr-tools" id="qrTools" hidden>
         <button data-t="exit">${icons.book}<span>الفهرس</span></button>
         <button data-t="prev" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}<span>السابقة</span></button>
@@ -599,6 +598,15 @@ export async function renderPage(view, args, ctx) {
   };
   document.addEventListener('keydown', onKey);
   ctx.cleanup(() => document.removeEventListener('keydown', onKey));
+}
+
+// تذييل الصفحة: الجزء، ورقم الصفحة، وموضعها من الحزب (۞ إذا بدأ ربع جديد في الصفحة)
+export function partFooter(n, juz, hizb, qi, isNew) {
+  return `<footer class="qr-foot">
+    <span class="qr-part">الجزء ${arNum(juz)}</span>
+    <span class="qr-pill qr-num">${arNum(n)}</span>
+    <span class="qr-part ${isNew ? 'new' : ''}">${isNew ? '<b>۞</b>' : ''}${quarterLabel(hizb, qi)}</span>
+  </footer>`;
 }
 
 export function goToPageSheet(current, base = '#/page/') {

@@ -13,7 +13,8 @@
     ["t", عدد الأسطر, [[سورة, آية, نص, ختم], ...]]   كتلة آيات تملأ عددًا من الأسطر
       ختم = 1 إن كان النص ينتهي بعلامة الآية (0 لجزء أول من آية تكمل في الصفحة التالية)
   data/warsh-index.json  →  {"p": [[سورة, آية, جزء] لأول آية في كل صفحة],
-                              "s": [صفحة بداية كل سورة], "j": [صفحة بداية كل جزء]}
+                              "s": [صفحة بداية كل سورة], "j": [صفحة بداية كل جزء],
+                              "q": [[الحزب, الربع ٠–٣, يبدأ في الصفحة ١/٠] لكل صفحة]}
 """
 import json, os, re, sys, urllib.request
 
@@ -46,6 +47,84 @@ def split_words(text, first_lines, second_lines):
         acc += len(words[k]) + 1
         k += 1
     return ' '.join(words[:k]), ' '.join(words[k:]) + '\xa0' + num
+
+
+def quarters(data):
+    """الأحزاب وأرباعها في رواية ورش، من علامات الأثمان (۞) في نص مجمع الملك فهد.
+
+    في كل جزء حزبان، وفي كل حزب ثمانية أثمان، والربع ثمنان. والعلامة لا تُكتب غالبًا إذا بدأ الثمن
+    مع أول سورة (وقليلًا ما تسقط في غيره)، فنكمل الناقص بحيث تتقارب أطوال الأثمان، مقدّمين بدايات السور.
+    """
+    offs, pos = [], 0
+    for x in data:
+        offs.append(pos)
+        pos += len(x['aya_text']) + 1
+    first_page = lambda x: int(str(x['page']).split('-')[0])
+    bounds = []  # (الموضع، الصفحة) لبداية كل ثمن
+    for j in range(1, 31):
+        idx = [i for i, x in enumerate(data) if x['jozz'] == j]
+        start, end = offs[idx[0]], offs[idx[-1]] + len(data[idx[-1]]['aya_text'])
+        fixed = [(start, first_page(data[idx[0]]))]
+        cand = []
+        for i in idx:
+            t = data[i]['aya_text']
+            if '۞' in t and not (i == idx[0] and t.index('۞') <= 2):
+                fixed.append((offs[i] + t.index('۞'), first_page(data[i])))
+            elif i != idx[0]:
+                cand.append((offs[i], first_page(data[i]), data[i]['aya_no'] == 1))
+        need = 16 - len(fixed)
+        assert need >= 0, (j, len(fixed))
+        chosen = pick(sorted(fixed), cand, need, end) if need else []
+        b = sorted(fixed + chosen)
+        assert len(b) == 16, (j, len(b))
+        for e, (o, pg) in enumerate(b):
+            bounds.append((o, pg, 2 * j - 1 + e // 8, (e % 8) // 2, e % 2 == 0))
+    # لكل صفحة: الربع الذي يبدأ فيها إن وُجد، وإلا الربع الجاري عند أولها
+    out = []
+    for p in range(1, 605):
+        first = min(offs[i] for i, x in enumerate(data) if first_page(x) == p)
+        here = [b for b in bounds if b[1] == p and b[4]]
+        if here:
+            out.append([here[0][2], here[0][3], 1])
+        else:
+            cur = [b for b in bounds if b[0] <= first and b[4]][-1]
+            out.append([cur[2], cur[3], 0])
+    return out
+
+
+def pick(fixed, cand, k, end):
+    """يختار k من بدايات الآيات حدودًا للأثمان الناقصة، بأقل تباين في أطوالها، مع تفضيل بدايات السور."""
+    span = (end - fixed[0][0]) / 16
+    penalty = {True: 0, False: (span * 0.6) ** 2}
+    pts = sorted([(o, pg, True, 0) for o, pg in fixed] + [(o, pg, False, penalty[s1]) for o, pg, s1 in cand])
+    n = len(pts)
+    INF = float('inf')
+    # best[i][c]: أقل كلفة إذا كان pts[i] حدًّا مختارًا واستُعمل c من المرشحين حتى i
+    best = [[INF] * (k + 1) for _ in range(n)]
+    back = [[None] * (k + 1) for _ in range(n)]
+    best[0][0] = 0
+    for i in range(1, n):
+        for c in range(k + 1):
+            cc = c - (0 if pts[i][2] else 1)
+            if cc < 0:
+                continue
+            for h in range(i - 1, -1, -1):
+                if best[h][cc] < INF:
+                    v = best[h][cc] + (pts[i][0] - pts[h][0]) ** 2 + pts[i][3]
+                    if v < best[i][c]:
+                        best[i][c], back[i][c] = v, (h, cc)
+                if pts[h][2]:
+                    break  # لا يُتخطّى حدّ ثابت
+    # آخر حدّ: الثابت الأخير أو مرشح بعده
+    last_fixed = max(i for i in range(n) if pts[i][2])
+    end_cost = [(best[i][k] + (end - pts[i][0]) ** 2, i) for i in range(last_fixed, n) if best[i][k] < INF]
+    _, i = min(end_cost)
+    chosen, c = [], k
+    while i is not None and back[i][c] is not None:
+        if not pts[i][2]:
+            chosen.append(pts[i][:2])
+        i, c = back[i][c]
+    return chosen
 
 
 def main():
@@ -93,7 +172,7 @@ def main():
         for it in items:
             sura_page.setdefault(it['s'], p)
             juz_page.setdefault(it['j'], p)
-    index = {'p': index, 's': [sura_page[i] for i in range(1, 115)], 'j': [juz_page[i] for i in range(1, 31)]}
+    index = {'p': index, 's': [sura_page[i] for i in range(1, 115)], 'j': [juz_page[i] for i in range(1, 31)], 'q': quarters(data)}
     json.dump(index, open(os.path.join(ROOT, 'data', 'warsh-index.json'), 'w', encoding='utf-8'), separators=(',', ':'))
     print('pages:', len(index['p']), 'ayat:', len(data))
 

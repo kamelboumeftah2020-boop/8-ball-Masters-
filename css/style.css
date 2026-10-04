@@ -810,3 +810,10 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .lecture .resume { color: var(--primary) !important; }
 #playFav { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
 #playFav svg { width: 18px; height: 18px; }
+/* الجزء والحزب وأرباعه في تذييل الصفحة */
+.qr-foot { justify-content: space-between; gap: 6px; padding: 0 2px; }
+.qr-foot .qr-num { flex: none; }
+.qr-part { flex: 1 1 0; min-width: 0; font-family: var(--naskh); font-size: 14px; font-weight: 700; color: #7a5a1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+.qr-part:last-child { justify-content: flex-end; }
+.qr-part.new b { color: #b8913a; font-size: 17px; font-weight: 400; }
+:root[data-theme="dark"] .qr-part { color: #d9bd7c; }

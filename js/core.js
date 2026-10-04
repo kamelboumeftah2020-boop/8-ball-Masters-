@@ -11,6 +11,8 @@ export const store = {
 export const arNum = n => Number(n).toLocaleString('ar-EG', { useGrouping: false });
 export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const pad3 = n => String(n).padStart(3, '0');
+// موضع الصفحة من الحزب: الحزب، ربعه، نصفه، ثلاثة أرباعه (qi من ٠ إلى ٣)
+export const quarterLabel = (hizb, qi) => `${['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'][qi]} ${arNum(hizb)}`;
 export const normalize = s => String(s)
   .replace(/[ً-ٰٟۖ-ۭـ]/g, '')
   .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').toLowerCase().trim();
