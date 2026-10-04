@@ -1,7 +1,7 @@
 import { $, $$, store } from './core.js';
 import './player.js';
 import { cfg, loadTimes } from './prayer.js';
-import { isNative, setBarsStyle, onBackButton, minimizeApp } from './native.js';
+import { isNative, setBarsStyle, onBackButton, minimizeApp, onRoute } from './native.js';
 import { renderHome } from './pages/home.js';
 import { renderMushaf, renderListen, renderPage } from './pages/quran.js';
 import { renderMawaiz } from './pages/mawaiz.js';
@@ -9,6 +9,8 @@ import { renderAdhkar, renderTasbih, renderQibla } from './pages/adhkar.js';
 import { renderAdhan } from './pages/adhan.js';
 import { renderDownloads } from './pages/downloads.js';
 import { renderWarsh } from './pages/warsh.js';
+import { renderKhatma, renderReminders } from './pages/khatma.js';
+import { renderHadith } from './pages/hadith.js';
 
 /* ── المظهر ── */
 const root = document.documentElement;
@@ -31,6 +33,9 @@ const ROUTES = {
   listen: { render: renderListen, title: 'القرآن الكريم', tab: 'quran' },
   page: { render: renderPage, title: 'المصحف', tab: 'quran' },
   warsh: { render: renderWarsh, title: 'مصحف ورش', tab: 'quran' },
+  khatma: { render: renderKhatma, title: 'الختمة والورد', tab: 'quran' },
+  reminders: { render: renderReminders, title: 'التذكيرات', tab: 'home' },
+  hadith: { render: renderHadith, title: 'الحديث', tab: 'mawaiz' },
   mawaiz: { render: renderMawaiz, title: 'المواعظ', tab: 'mawaiz' },
   adhkar: { render: renderAdhkar, title: 'الأذكار', tab: 'adhkar' },
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },
@@ -92,6 +97,8 @@ onBackButton(() => {
   location.hash = '#/';
 });
 if (isNative) document.documentElement.classList.add('native');
+// لمس إشعار (تذكير أو أذان) أو الويدجت يفتح الصفحة المناسبة
+onRoute(r => { location.hash = r; });
 
 /* ── التثبيت والعمل دون اتصال ── */
 if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {

@@ -1,10 +1,16 @@
 // صفحة مواقيت الصلاة والأذان
 import { $, $$, esc, arNum, toast, icons } from '../core.js';
-import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, placeName, testAdhan, openExactSettings, requestIgnoreBattery } from '../prayer.js';
+import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, placeName, testAdhan, openExactSettings, requestIgnoreBattery, openFullScreenSettings, openAutostart } from '../prayer.js';
 import { isNative, BUNDLED_ADHANS } from '../native.js';
 
 // في التطبيق: أصوات الأذان المضمّنة فقط (لتعمل والتطبيق مغلق ودون اتصال)
 const voices = () => (isNative ? ADHANS.filter(a => BUNDLED_ADHANS.includes(a[0])) : ADHANS);
+
+const OEM = [
+  [/xiaomi|redmi|poco/, 'شاومي'], [/oppo|realme|oneplus/, 'أوبو وريلمي'], [/vivo|iqoo/, 'فيفو'],
+  [/huawei|honor/, 'هواوي وهونر'], [/samsung/, 'سامسونج'], [/tecno|infinix|itel|transsion/, 'تكنو وإنفينكس'],
+  [/asus/, 'أسوس'], [/meizu/, 'ميزو'], [/lenovo|motorola/, 'لينوفو وموتورولا'],
+];
 
 export function heroHTML({ greeting = '', strip = true } = {}) {
   if (!cfg.loc) {
@@ -84,7 +90,8 @@ export function renderAdhan(view, args, ctx) {
           <span class="switch"><input type="checkbox" id="alerts" ${cfg.alerts ? 'checked' : ''}><i></i></span>
         </label>
         ${isNative ? `<div class="adhan-status" id="adhanStatus"><div class="loader small"><div class="spinner"></div></div></div>
-        <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان الآن (بعد ١٠ ثوانٍ)</button>` : ''}
+        <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان والهاتف مقفل (بعد ٣٠ ثانية)</button>
+        <a class="btn ghost block" href="#/reminders">${icons.bell} التذكيرات: الأذكار والكهف والصيام والورد</a>` : ''}
         <div class="note-box">${icons.info} ${isNative
           ? 'يُرفع الأذان على صوت المنبّه، فيُسمع حتى في الوضع الصامت؛ ويمكنك إيقافه من الإشعار. ويمكنك إيقاف الأذان لصلاة معيّنة من زر الجرس بجانبها.'
           : 'يُرفع الأذان تلقائيًا عند دخول الوقت ما دام التطبيق مفتوحًا. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'}</div>
@@ -187,8 +194,20 @@ export function renderAdhan(view, args, ctx) {
       rows.push(['ok', `الأذان القادم: <b>${st.nextName}</b> ${day} ${fmt12(hm)} — ومجدول ${arNum(st.upcoming)} أذانًا مقدّمًا`]);
     } else rows.push(['warn', 'لا يوجد أذان مجدول بعد. حدّد موقعك ليُجدول الأذان.']);
     rows.push(st.exact ? ['ok', 'المنبّهات الدقيقة مسموحة'] : ['warn', 'المنبّهات الدقيقة غير مسموحة، فقد يتأخر الأذان. <button class="link" data-fix="exact">السماح</button>']);
-    rows.push(st.batteryIgnored ? ['ok', 'التطبيق مستثنى من توفير البطارية'] : ['warn', 'قد يؤخّر توفير البطارية الأذان في بعض الهواتف. <button class="link" data-fix="battery">استثناء التطبيق</button>']);
+    rows.push(st.batteryIgnored ? ['ok', 'التطبيق مستثنى من توفير البطارية'] : ['warn', 'توفير البطارية قد يمنع الأذان والهاتف مقفل. <button class="link" data-fix="battery">استثناء التطبيق</button>']);
+    if (st.fullScreen === false) rows.push(['warn', 'شاشة الأذان فوق قفل الشاشة غير مسموحة. <button class="link" data-fix="fullscreen">السماح</button>']);
     if (!st.notifications) rows.push(['warn', 'الإشعارات متوقفة؛ سيُرفع الأذان دون إشعار وزر إيقاف.']);
+    // هواتف تمنع المنبّهات للتطبيقات غير المسموح لها بالتشغيل التلقائي
+    const brand = OEM.find(([re]) => re.test(st.manufacturer || ''));
+    if (brand) rows.push(['warn', `في هواتف ${brand[1]} يجب السماح لـ«نور» بـ«التشغيل التلقائي» وجعل البطارية «بلا قيود»، وإلا منع النظام الأذان والهاتف مقفل. <button class="link" data-fix="autostart">فتح الإعداد</button>`]);
+    // آخر أذان رُفع، لمعرفة ما جرى
+    const last = (st.log || [])[0];
+    if (last) {
+      const d = new Date(last.at);
+      const when = `${d.toDateString() === new Date().toDateString() ? 'اليوم' : `${arNum(d.getDate())}/${arNum(d.getMonth() + 1)}`} ${fmt12(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)}`;
+      const res = { played: ['ok', 'رُفع'], fired: ['ok', 'بدأ'], fallback: ['warn', 'رُفع بإشعار احتياطي لأن النظام منع خدمة الأذان؛ اسمح بالتشغيل التلقائي'], error: ['warn', 'تعذّر تشغيل الصوت'] }[last.r] || ['ok', last.r];
+      rows.push([res[0], `آخر أذان: ${esc(last.name)} ${when} — ${res[1]}`]);
+    }
     box.innerHTML = rows.map(([k, t]) => `<div class="st ${k}">${k === 'ok' ? icons.check : icons.info}<span>${t}</span></div>`).join('');
   };
   const onFocus = () => { if (document.visibilityState === 'visible') showStatus(); };
@@ -199,10 +218,10 @@ export function renderAdhan(view, args, ctx) {
     ctx.cleanup(() => { prEvents.removeEventListener('scheduled', showStatus); document.removeEventListener('visibilitychange', onFocus); });
     const onClick = e => {
       const f = e.target.closest('[data-fix]');
-      if (f) (f.dataset.fix === 'exact' ? openExactSettings() : requestIgnoreBattery());
+      if (f) ({ exact: openExactSettings, battery: requestIgnoreBattery, fullscreen: openFullScreenSettings, autostart: openAutostart }[f.dataset.fix])?.();
       if (e.target.closest('#testAdhan')) {
-        testAdhan(10);
-        toast('سيُرفع أذان التجربة بعد ١٠ ثوانٍ؛ يمكنك إغلاق التطبيق للتأكد');
+        testAdhan(30);
+        toast('اقفل الهاتف الآن؛ سيُرفع أذان التجربة بعد ٣٠ ثانية');
       }
     };
     view.addEventListener('click', onClick);

@@ -38,6 +38,27 @@
             android:name=".AdhanService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!-- شاشة الأذان فوق قفل الشاشة -->
+        <activity
+            android:name=".AdhanActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="app.nur.quran.adhan"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
+        <!-- التذكيرات -->
+        <receiver android:name=".ReminderReceiver" android:exported="false" />
+
+        <!-- ويدجت مواقيت الصلاة -->
+        <receiver android:name=".PrayerWidget" android:exported="false" android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/prayer_widget_info" />
+        </receiver>
 
         <!-- خدمة التشغيل في الخلفية -->
         <service
@@ -76,4 +97,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- شاشة الأذان تظهر فوق قفل الشاشة كالمنبّه -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 </manifest>

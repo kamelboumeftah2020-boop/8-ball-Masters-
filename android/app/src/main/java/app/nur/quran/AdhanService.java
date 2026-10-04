@@ -17,14 +17,20 @@ import android.os.PowerManager;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 
-/** يرفع الأذان بصوت المؤذن على قناة المنبّه، مع إشعار فيه زر «إيقاف الأذان». */
+/**
+ * يرفع الأذان بصوت المؤذن على قناة المنبّه، مع إشعار فيه زر «إيقاف الأذان»،
+ * وشاشة أذان تظهر فوق قفل الشاشة (كالمنبّه).
+ */
 public class AdhanService extends Service {
 
     static final String CHANNEL = "nur_adhan_alert";
     static final String ACTION_STOP = "app.nur.quran.ADHAN_STOP";
-    private static final int NOTIFICATION_ID = 7101;
+    static final String ACTION_DONE = "app.nur.quran.ADHAN_DONE";
+    static final int NOTIFICATION_ID = 7101;
+    static final int FALLBACK_ID = 7102;
     private MediaPlayer player;
     private PowerManager.WakeLock wakeLock;
+    private String name = "";
 
     static void createChannel(Context c) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
@@ -34,36 +40,78 @@ public class AdhanService extends Service {
             ch.setDescription("رفع الأذان عند دخول وقت الصلاة");
             ch.setSound(null, null); // الصوت يُشغَّل من الخدمة نفسها
             ch.enableVibration(true);
+            ch.setBypassDnd(true);
             ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(ch);
         }
     }
 
-    static Notification build(Context c, String name, boolean withStop) {
-        createChannel(c);
-        Intent open = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    /** قناة احتياطية صوتها الأذان نفسه، تُستعمل إن منع النظام بدء الخدمة. */
+    static String soundChannel(Context c, String sound) {
+        String id = "nur_adhan_sound_" + sound;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return id;
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm.getNotificationChannel(id) == null) {
+            NotificationChannel ch = new NotificationChannel(id, "الأذان (احتياطي)", NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription("يُستعمل إن تعذّر تشغيل خدمة الأذان");
+            ch.setSound(rawUri(c, sound), new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build());
+            ch.enableVibration(true);
+            ch.setBypassDnd(true);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            nm.createNotificationChannel(ch);
+        }
+        return id;
+    }
+
+    static int rawRes(Context c, String sound) {
+        int res = c.getResources().getIdentifier("adhan_" + sound, "raw", c.getPackageName());
+        return res != 0 ? res : c.getResources().getIdentifier("adhan_008", "raw", c.getPackageName());
+    }
+
+    static Uri rawUri(Context c, String sound) {
+        return Uri.parse("android.resource://" + c.getPackageName() + "/" + rawRes(c, sound));
+    }
+
+    static NotificationCompat.Builder base(Context c, String channel, String name) {
+        Intent open = new Intent(c, MainActivity.class).putExtra("route", "#/adhan")
+            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent content = PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
+        Intent screen = new Intent(c, AdhanActivity.class).putExtra("name", name)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+        PendingIntent full = PendingIntent.getActivity(c, 4, screen, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return new NotificationCompat.Builder(c, channel)
             .setSmallIcon(R.drawable.ic_stat_adhan)
             .setColor(0xFF0F6B5C)
-            .setContentTitle("حان الآن موعد صلاة " + (name == null || name.isEmpty() ? "" : name))
+            .setContentTitle("حان الآن موعد صلاة " + (name == null ? "" : name))
             .setContentText("حيّ على الصلاة، حيّ على الفلاح")
             .setContentIntent(content)
+            .setFullScreenIntent(full, true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true);
-        if (withStop) {
-            Intent stop = new Intent(c, AdhanService.class).setAction(ACTION_STOP);
-            PendingIntent ps = PendingIntent.getService(c, 2, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            b.addAction(R.drawable.ic_stat_adhan, "إيقاف الأذان", ps).setDeleteIntent(ps).setOngoing(false);
-        }
-        return b.build();
     }
 
-    static void showFallbackNotification(Context c, String name) {
+    static Notification build(Context c, String name) {
+        createChannel(c);
+        Intent stop = new Intent(c, AdhanService.class).setAction(ACTION_STOP);
+        PendingIntent ps = PendingIntent.getService(c, 2, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return base(c, CHANNEL, name)
+            .addAction(R.drawable.ic_stat_adhan, "إيقاف الأذان", ps)
+            .setDeleteIntent(ps)
+            .build();
+    }
+
+    static void showFallbackNotification(Context c, String name, String sound) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(NOTIFICATION_ID + 1, build(c, name, false));
+        if (nm == null) return;
+        Notification n = base(c, soundChannel(c, sound), name)
+            .setSound(rawUri(c, sound), android.media.AudioManager.STREAM_ALARM)
+            .build();
+        nm.notify(FALLBACK_ID, n);
     }
 
     @Override
@@ -72,11 +120,20 @@ public class AdhanService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
-        String name = intent != null ? intent.getStringExtra("name") : "";
-        String sound = intent != null ? intent.getStringExtra("sound") : "008";
+        name = intent != null && intent.getStringExtra("name") != null ? intent.getStringExtra("name") : "";
+        String sound = intent != null && intent.getStringExtra("sound") != null ? intent.getStringExtra("sound") : "008";
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0;
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, build(this, name, true), type);
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, build(this, name), type);
+        } catch (Exception e) {
+            AdhanScheduler.log(this, name, "fallback");
+            showFallbackNotification(this, name, sound);
+            AdhanScheduler.releaseWake();
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         play(sound);
+        AdhanScheduler.releaseWake();
         return START_NOT_STICKY;
     }
 
@@ -85,20 +142,24 @@ public class AdhanService extends Service {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nur:adhan");
         wakeLock.acquire(10 * 60 * 1000L);
-        int res = getResources().getIdentifier("adhan_" + sound, "raw", getPackageName());
-        if (res == 0) res = getResources().getIdentifier("adhan_008", "raw", getPackageName());
         try {
             player = new MediaPlayer();
             player.setAudioAttributes(new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build());
-            player.setDataSource(this, Uri.parse("android.resource://" + getPackageName() + "/" + res));
+            player.setDataSource(this, rawUri(this, sound));
             player.setOnCompletionListener(mp -> stopSelf());
-            player.setOnErrorListener((mp, what, extra) -> { stopSelf(); return true; });
+            player.setOnErrorListener((mp, what, extra) -> {
+                AdhanScheduler.log(this, name, "error");
+                stopSelf();
+                return true;
+            });
             player.prepare();
             player.start();
+            AdhanScheduler.log(this, name, "played");
         } catch (Exception e) {
+            AdhanScheduler.log(this, name, "error");
             stopSelf();
         }
     }
@@ -115,8 +176,9 @@ public class AdhanService extends Service {
     @Override
     public void onDestroy() {
         release();
-        // يبقى الإشعار ظاهرًا بعد انتهاء الأذان دون زر الإيقاف
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
+        // إغلاق شاشة الأذان إن كانت ظاهرة
+        sendBroadcast(new Intent(ACTION_DONE).setPackage(getPackageName()));
         super.onDestroy();
     }
 

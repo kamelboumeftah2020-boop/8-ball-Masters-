@@ -2,6 +2,7 @@
 import { $, store, arNum, fetchJSON, toast, icons } from './core.js';
 import { audio } from './player.js';
 import { isNative, Notifications, BUNDLED_ADHANS, nativePlugin } from './native.js';
+import { scheduleReminders } from './reminders.js';
 
 export const PRAYERS = [
   { key: 'Fajr', name: 'الفجر', icon: 'dawn' },
@@ -127,6 +128,7 @@ function resolvePlace() {
     if (d.countryName) loc.country = d.countryName;
     saveCfg();
     events.dispatchEvent(new Event('update'));
+    scheduleAdhans();
   }).catch(() => {}).finally(() => { placeJob = null; });
 }
 
@@ -297,21 +299,28 @@ async function doSchedule() {
     } catch { /* لا شيء */ }
   }
   if (!NA) return;
-  if (!cfg.alerts) { await NA.cancelAll(); return; }
   const now = new Date();
-  const items = [];
-  // نجدول ٣٠ يومًا مقدّمًا، فيستمر الأذان ولو لم يُفتح التطبيق مدة طويلة
+  // مواقيت ٣٠ يومًا مقدّمًا (من الشهر المحفوظ)، فيستمر الأذان ولو لم يُفتح التطبيق مدة طويلة
+  const days = [];
   for (let i = 0; i < 30; i++) {
     const d = new Date(now); d.setDate(now.getDate() + i);
-    let day;
-    try { day = await fetchDay(d); } catch { continue; }
+    try { days.push({ date: d, day: await fetchDay(d) }); } catch { /* شهر غير محفوظ بعد */ }
+  }
+  const items = [], all = [];
+  for (const { date: d, day } of days) {
     PRAYERS.forEach((p, idx) => {
-      if (p.noAdhan || !cfg.on[p.key]) return;
+      if (p.noAdhan) return;
       const at = toDate(day.timings[p.key], d);
       if (at <= now) return;
-      items.push({ id: (d.getMonth() + 1) * 100000 + d.getDate() * 1000 + idx, at: at.getTime(), name: p.name, key: p.key });
+      all.push({ at: at.getTime(), name: p.name, key: p.key });
+      if (cfg.on[p.key]) items.push({ id: (d.getMonth() + 1) * 100000 + d.getDate() * 1000 + idx, at: at.getTime(), name: p.name, key: p.key });
     });
   }
+  // ويدجت الشاشة الرئيسية: كل المواقيت، ولو كان الأذان متوقفًا
+  NA.widget?.({ items: all, city: placeName() }).catch(() => {});
+  // التذكيرات تُحسب من المواقيت نفسها
+  scheduleReminders(days).catch(() => {});
+  if (!cfg.alerts) { await NA.cancelAll(); events.dispatchEvent(new CustomEvent('scheduled', { detail: {} })); return; }
   const r = await NA.schedule({ items, sound: BUNDLED_ADHANS.includes(cfg.sound) ? cfg.sound : '008' });
   events.dispatchEvent(new CustomEvent('scheduled', { detail: r }));
 }
@@ -326,6 +335,8 @@ export function testAdhan(seconds = 10) {
   return nativePlugin('NurAdhan')?.test({ seconds, sound: BUNDLED_ADHANS.includes(cfg.sound) ? cfg.sound : '008', name: 'تجربة الأذان' });
 }
 export const openExactSettings = () => nativePlugin('NurAdhan')?.openExactSettings();
+export const openFullScreenSettings = () => nativePlugin('NurAdhan')?.openFullScreenSettings();
+export const openAutostart = () => nativePlugin('NurAdhan')?.openAutostart();
 export const requestIgnoreBattery = () => nativePlugin('NurAdhan')?.requestIgnoreBattery();
 
 export async function enableNativeAdhan() {

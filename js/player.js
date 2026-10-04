@@ -1,7 +1,7 @@
 // مشغّل الصوت الموحّد: سورة كاملة، أو آية بآية، أو محاضرة
 import { $, store, arNum, esc, pad3, fmtDur, toast, icons, sheet } from './core.js';
 import { SURAHS } from './data/surahs.js';
-import { mediaPlaying, mediaStopped } from './native.js';
+import { mediaUpdate, mediaStopped, onMediaAction } from './native.js';
 import * as dl from './downloads.js';
 
 // server: السور كاملة (mp3quran) — ayah: مجلد التلاوة آية بآية (everyayah)، وإن لم يوجد فبصوت العفاسي
@@ -124,7 +124,8 @@ export function playAyahs(surah, ayahs, idx) {
 export function playLecture(speaker, list, idx, part = 0) {
   Object.assign(player, { mode: 'lecture', lec: { speaker, list, idx, part } });
   const item = list[idx];
-  store.set('lastLecture', { sid: speaker.id, idx, title: item.t, speaker: speaker.name });
+  // في قوائم التشغيل (المفضلة) يحمل كل عنصر شيخه الأصلي وموضعه في قائمته
+  store.set('lastLecture', { sid: item.sid || speaker.id, idx: item.si ?? idx, title: item.t, speaker: item.sp || speaker.name });
   startPreferLocal(item.u[part], part === 0 ? item.a || [] : []);
 }
 
@@ -225,19 +226,62 @@ audio.addEventListener('waiting', () => setLoading(true));
 audio.addEventListener('playing', () => setLoading(false));
 audio.addEventListener('canplay', () => setLoading(false));
 
-// في أندرويد: خدمة في الخلفية تُبقي التشغيل مستمرًا والشاشة مطفأة
+// في أندرويد: مشغّل في الإشعارات وشاشة القفل، يبقى ظاهرًا عند الإيقاف المؤقت
 let stopTimer = null;
+function hasNeighbor(dir) {
+  if (player.mode === 'surah') return player.surah + dir >= 1 && player.surah + dir <= 114;
+  if (player.mode === 'ayah') return true;
+  if (player.mode === 'lecture') {
+    const { list, idx, part } = player.lec;
+    return dir > 0 ? (part < list[idx].u.length - 1 || idx < list.length - 1) : (part > 0 || idx > 0);
+  }
+  return false;
+}
+export function syncMedia() {
+  if (!player.mode) return;
+  const info = trackInfo();
+  mediaUpdate({
+    title: info.title, text: info.sub, playing: !audio.paused, repeat: player.repeat,
+    hasPrev: hasNeighbor(-1), hasNext: hasNeighbor(1),
+    position: audio.currentTime || 0, duration: isFinite(audio.duration) ? audio.duration : 0,
+  });
+}
 audio.addEventListener('play', () => {
   clearTimeout(stopTimer);
-  const info = trackInfo();
-  mediaPlaying(info.title, info.sub);
+  syncMedia();
   refreshState(); emit('state');
 });
 audio.addEventListener('pause', () => {
   savePos(true); refreshState(); emit('state');
-  // مهلة قصيرة حتى لا تتوقف الخدمة بين مقطع وآخر
+  // مهلة قصيرة بين مقطع وآخر، ثم يُعرض زر التشغيل؛ وبعد ٣٠ دقيقة من التوقف يُغلق الإشعار
   clearTimeout(stopTimer);
-  stopTimer = setTimeout(() => { if (audio.paused) mediaStopped(); }, 4000);
+  stopTimer = setTimeout(() => {
+    if (!audio.paused) return;
+    syncMedia();
+    stopTimer = setTimeout(() => { if (audio.paused) mediaStopped(); }, 30 * 60 * 1000);
+  }, 1500);
+});
+audio.addEventListener('loadedmetadata', () => { if (!audio.paused) syncMedia(); });
+audio.addEventListener('seeked', () => syncMedia());
+
+// أوامر الإشعار وشاشة القفل وأزرار السماعة
+export function closePlayer() {
+  audio.pause(); audio.removeAttribute('src'); audio.load();
+  player.mode = null;
+  $('#player').hidden = true; document.body.classList.remove('has-player');
+  clearTimeout(stopTimer);
+  mediaStopped();
+  emit('change');
+}
+onMediaAction(({ action, position }) => {
+  if (action === 'toggle') toggle();
+  else if (action === 'play') audio.play().catch(() => {});
+  else if (action === 'pause') audio.pause();
+  else if (action === 'next') step(1);
+  else if (action === 'prev') step(-1);
+  else if (action === 'seek' && audio.duration) audio.currentTime = Math.min(audio.duration - 1, position / 1000);
+  else if (action === 'repeat') { player.repeat = !player.repeat; refreshSheet(); syncMedia(); }
+  else if (action === 'close') closePlayer();
 });
 audio.addEventListener('timeupdate', () => {
   if (audio.duration) $('#pBar').style.width = (audio.currentTime / audio.duration * 100) + '%';
@@ -250,7 +294,7 @@ $('#pPlay').onclick = toggle;
 $('#pPrev').onclick = () => step(-1);
 $('#pNext').onclick = () => step(1);
 $('#pInfo').onclick = openFullPlayer;
-$('#pClose').onclick = () => { audio.pause(); audio.removeAttribute('src'); audio.load(); player.mode = null; $('#player').hidden = true; document.body.classList.remove('has-player'); emit('change'); };
+$('#pClose').onclick = closePlayer;
 
 export function trackInfo() {
   if (player.mode === 'surah') return { title: 'سورة ' + surahName(player.surah), sub: reciterById(player.reciter).name, link: '#/listen' };
@@ -261,7 +305,7 @@ export function trackInfo() {
   if (player.mode === 'lecture') {
     const { speaker, list, idx, part } = player.lec;
     const item = list[idx];
-    return { title: item.t, sub: speaker.name + (item.u.length > 1 ? ` · الجزء ${arNum(part + 1)} من ${arNum(item.u.length)}` : ''), link: `#/mawaiz/s/${speaker.id}` };
+    return { title: item.t, sub: (item.sp || speaker.name) + (item.u.length > 1 ? ` · الجزء ${arNum(part + 1)} من ${arNum(item.u.length)}` : ''), link: `#/mawaiz/s/${speaker.id}` };
   }
   return { title: '', sub: '', link: '#/' };
 }
@@ -308,7 +352,7 @@ function openFullPlayer() {
         player.speed = speeds[(speeds.indexOf(player.speed) + 1) % speeds.length];
         audio.playbackRate = player.speed;
       }
-      if (a === 'repeat') { player.repeat = !player.repeat; toast(player.repeat ? 'تكرار المقطع الحالي' : 'أُلغي التكرار'); }
+      if (a === 'repeat') { player.repeat = !player.repeat; toast(player.repeat ? 'تكرار المقطع الحالي' : 'أُلغي التكرار'); syncMedia(); }
       if (a === 'sleep') cycleSleep();
       if (a === 'download') {
         const key = currentKey();

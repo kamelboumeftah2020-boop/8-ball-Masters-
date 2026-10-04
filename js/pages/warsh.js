@@ -2,6 +2,7 @@
 import { $, $$, store, arNum, toast, fetchJSON, copyText, shareText, icons, sheet } from '../core.js';
 import { surahName } from '../player.js';
 import { immersive, keepAwake } from '../native.js';
+import { trackPage } from '../khatma.js';
 import { goToPageSheet } from './quran.js';
 import { loadWarsh, download, WARSH_SIZE_MB } from '../warshData.js';
 
@@ -126,8 +127,11 @@ export async function renderWarsh(view, args, ctx) {
   ro.observe(page);
   ctx.cleanup(() => ro.disconnect());
 
+  // الختمة: تُحتسب الصفحة بالبقاء عليها أو بالانتقال منها إلى التالية
+  const advance = trackPage(n, ctx);
   const go = (p, dir) => {
     if (p < 1 || p > 604 || p === n) return;
+    if (p === n + 1) advance();
     page.classList.add(dir > 0 ? 'out-next' : 'out-prev');
     setTimeout(() => { if (ctx.alive()) location.replace(`#/warsh/${p}`); }, 140);
   };

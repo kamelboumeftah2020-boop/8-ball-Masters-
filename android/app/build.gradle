@@ -7,8 +7,8 @@ android {
         applicationId "app.nur.quran"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "2.5"
+        versionCode 8
+        versionName "2.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -53,6 +53,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.media:media:1.7.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     testImplementation 'org.robolectric:robolectric:4.14.1'

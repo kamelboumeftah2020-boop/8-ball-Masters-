@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.PowerManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -62,15 +63,60 @@ public final class AdhanScheduler {
         return am != null && am.canScheduleExactAlarms();
     }
 
+    /**
+     * منبّه «ساعة» (setAlarmClock): أوثق أنواع المنبّهات، لا يؤخّره وضع السكون ولا توفير الطاقة
+     * في أغلب الهواتف، ويسمح للتطبيق ببدء خدمة الأذان والهاتف مقفل.
+     */
     static void setAlarm(Context c, int id, long at, String name, String key) {
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
         PendingIntent pi = pending(c, id, name, key, PendingIntent.FLAG_UPDATE_CURRENT);
         try {
-            if (canExact(c)) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
-            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            if (canExact(c)) {
+                Intent open = new Intent(c, MainActivity.class).putExtra("route", "#/adhan");
+                PendingIntent show = PendingIntent.getActivity(c, 3, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                am.setAlarmClock(new AlarmManager.AlarmClockInfo(at, show), pi);
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            }
         } catch (SecurityException e) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+        }
+    }
+
+    /* ── قفل يُبقي المعالج مستيقظًا بين وصول المنبّه وبدء خدمة الأذان ── */
+    private static PowerManager.WakeLock bridgeLock;
+
+    static synchronized void holdWake(Context c) {
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+        if (bridgeLock == null) {
+            bridgeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nur:adhan-start");
+            bridgeLock.setReferenceCounted(false);
+        }
+        bridgeLock.acquire(60 * 1000L);
+    }
+
+    static synchronized void releaseWake() {
+        if (bridgeLock != null && bridgeLock.isHeld()) bridgeLock.release();
+    }
+
+    /* ── سجل آخر مرات رفع الأذان، لمعرفة ما جرى إن لم يُسمع ── */
+    static void log(Context c, String name, String result) {
+        try {
+            JSONArray old = new JSONArray(prefs(c).getString("log", "[]"));
+            JSONArray out = new JSONArray();
+            out.put(new JSONObject().put("at", System.currentTimeMillis()).put("name", name == null ? "" : name).put("r", result));
+            for (int i = 0; i < old.length() && i < 9; i++) out.put(old.get(i));
+            prefs(c).edit().putString("log", out.toString()).apply();
+        } catch (Exception ignored) { }
+    }
+
+    static JSONArray logs(Context c) {
+        try {
+            return new JSONArray(prefs(c).getString("log", "[]"));
+        } catch (Exception e) {
+            return new JSONArray();
         }
     }
 

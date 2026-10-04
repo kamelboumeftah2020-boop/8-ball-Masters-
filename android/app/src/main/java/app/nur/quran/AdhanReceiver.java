@@ -12,18 +12,25 @@ public class AdhanReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         if (AdhanScheduler.ACTION_ADHAN.equals(action)) {
-            Intent svc = new Intent(context, AdhanService.class)
-                .putExtra("name", intent.getStringExtra("name"))
-                .putExtra("sound", AdhanScheduler.sound(context));
+            String name = intent.getStringExtra("name");
+            String sound = AdhanScheduler.sound(context);
+            // يبقى المعالج مستيقظًا حتى تبدأ الخدمة (تُفلته الخدمة بعد أخذ قفلها)
+            AdhanScheduler.holdWake(context);
+            Intent svc = new Intent(context, AdhanService.class).putExtra("name", name).putExtra("sound", sound);
             try {
                 ContextCompat.startForegroundService(context, svc);
+                AdhanScheduler.log(context, name, "fired");
             } catch (Exception e) {
-                // إن منع النظام الخدمة نعرض إشعارًا على الأقل
-                AdhanService.showFallbackNotification(context, intent.getStringExtra("name"));
+                // منع النظامُ الخدمة: إشعار بصوت الأذان نفسه وشاشة الأذان فوق القفل
+                AdhanScheduler.log(context, name, "fallback");
+                AdhanService.showFallbackNotification(context, name, sound);
+                AdhanScheduler.releaseWake();
             }
             return;
         }
         // BOOT_COMPLETED وTIME_SET وTIMEZONE_CHANGED وتحديث التطبيق
         AdhanScheduler.scheduleStored(context);
+        ReminderScheduler.scheduleStored(context);
+        PrayerWidget.updateAll(context);
     }
 }

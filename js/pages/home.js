@@ -6,6 +6,7 @@ import { times, currentPeriod, useGps, events as prEvents } from '../prayer.js';
 import { player, audio, playSurah, playLecture, toggle, isCurrentLecture, reciterById, surahName } from '../player.js';
 import { heroHTML } from './adhan.js';
 import { wa3zCard, bindWa3zActions, getLectures } from './mawaiz.js';
+import { wirdCardHTML } from './khatma.js';
 
 function dailyWa3z() {
   const d = new Date();
@@ -65,13 +66,17 @@ export function renderHome(view, args, ctx) {
         <a class="tile" href="#/adhkar"><span class="tile-ic gold">${icons.hands}</span><strong>الأذكار</strong></a>
         <a class="tile" href="#/qibla"><span class="tile-ic">${icons.compass}</span><strong>القبلة</strong></a>
         <a class="tile" href="#/tasbih"><span class="tile-ic gold">${icons.beads}</span><strong>السبحة</strong></a>
+        <a class="tile" href="#/khatma"><span class="tile-ic">${icons.target}</span><strong>الختمة</strong></a>
+        <a class="tile" href="#/hadith"><span class="tile-ic gold">${icons.scroll}</span><strong>الحديث</strong></a>
+        <a class="tile" href="#/reminders"><span class="tile-ic">${icons.bell}</span><strong>التذكيرات</strong></a>
       </div>
+      <div id="wirdBox"></div>
       ${cont.length ? `<div class="section-head"><h2>تابع من حيث توقفت</h2></div><div class="mini-cards">${cont.join('')}</div>` : ''}
       <div class="section-head"><h2>موعظة اليوم</h2><a href="#/mawaiz/written">المزيد</a></div>
       <div id="dailyBox">${wa3zCard(w, MAWAIZ.indexOf(w))}</div>
       <a class="card promo" href="#/mawaiz/s/rashed">
         <span class="avatar mawaiz">ر</span>
-        <span><small>مواعظ مسموعة</small><b>الشيخ خالد الراشد وكبار العلماء</b><small>أكثر من ١٦٠٠ محاضرة وخطبة</small></span>
+        <span><small>مواعظ مسموعة</small><b>الشيخ خالد الراشد وكبار المشايخ</b><small>أكثر من ٤٣٠٠ موعظة ومحاضرة</small></span>
         <span class="play-btn sm">${icons.play}</span>
       </a>`;
 
@@ -87,6 +92,7 @@ export function renderHome(view, args, ctx) {
       } catch { /* غير متصل */ }
     });
     bindWa3zActions($('#dailyBox'));
+    wirdCardHTML().then(h => { if (ctx.alive() && $('#wirdBox')) $('#wirdBox').innerHTML = h; });
   };
   draw();
   prEvents.addEventListener('update', draw);

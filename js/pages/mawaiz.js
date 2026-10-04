@@ -1,5 +1,5 @@
 // المواعظ: المسموعة (محاضرات وخطب) والمكتوبة (آيات وأحاديث وآثار)
-import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, durLabel } from '../core.js';
+import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, durLabel, fmtDur } from '../core.js';
 import { MAWAIZ, CATEGORIES, TYPE_NAMES } from '../data/mawaiz.js';
 import { player, audio, events as pEvents, playLecture, toggle, isCurrentLecture, lecturePos, downloadLecture } from '../player.js';
 import { dlButton, bindDlButtons, downloadsLink } from './downloads.js';
@@ -19,6 +19,7 @@ const segment = active => `
 export function renderMawaiz(view, args, ctx) {
   if (args[0] === 'written') return renderWritten(view, ctx);
   if (args[0] === 's' && args[1]) return renderSpeaker(view, args[1], ctx);
+  if (args[0] === 'fav' || args[0] === 'continue') return renderLibrary(view, args[0], ctx);
   return renderAudio(view, ctx);
 }
 
@@ -40,6 +41,10 @@ async function renderAudio(view, ctx) {
       <div><small class="muted">تابع الاستماع</small><strong>${esc(last.title)}</strong><small class="muted">${esc(last.speaker)}</small></div>
       <span class="play-btn sm">${icons.play}</span>
     </button>` : ''}
+    <div class="lib-cards">
+      <a class="card lib" href="#/mawaiz/fav"><span class="tile-ic sm gold">${icons.starFill}</span><span><b>المفضلة</b><small>${arNum(lecFavs().length)} مادة · تشغيل متتابع</small></span></a>
+      <a class="card lib" href="#/mawaiz/continue"><span class="tile-ic sm">${icons.play}</span><span><b>أكمل الاستماع</b><small>${arNum(Object.keys(store.get('lecPos', {})).length)} مادة لم تكتمل</small></span></a>
+    </div>
     <div class="dl-bar">${downloadsLink()}</div>
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث في ${arNum(total)} محاضرة وخطبة" autocomplete="off"></label>
     <div id="results"></div>
@@ -84,6 +89,7 @@ async function renderAudio(view, ctx) {
     return true;
   };
   bindDlButtons($('#results'), ctx, startDl);
+  bindFavButtons($('#results'));
   $('#results').onclick = e => {
     const b = e.target.closest('[data-sid]');
     if (!b) return;
@@ -103,8 +109,95 @@ function lectureRow(sp, i, it, showSpeaker) {
   return `<button class="row lecture" data-sid="${sp.id}" data-i="${i}">
     <span class="play-ic">${icons.play}</span>
     <span class="meta"><strong>${esc(it.t)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</span>
+    <span class="fav-btn ${isLecFav(sp.id, it.u[0]) ? 'on' : ''}" role="button" tabindex="0" data-fav="${sp.id}" data-u="${esc(it.u[0])}" aria-label="المفضلة">${isLecFav(sp.id, it.u[0]) ? icons.starFill : icons.star2}</span>
     ${dlButton(it.u[0])}
   </button>`;
+}
+
+/* ── المفضلة: تُحفظ بالشيخ ورابط المادة (ثابت ولو تغيّر ترتيب القائمة) ── */
+export const lecFavs = () => store.get('lecFav', []);
+const isLecFav = (sid, u) => lecFavs().some(f => f.sid === sid && f.u === u);
+function toggleLecFav(sid, u) {
+  const f = lecFavs();
+  const on = !f.some(x => x.sid === sid && x.u === u);
+  store.set('lecFav', on ? [{ sid, u }, ...f] : f.filter(x => !(x.sid === sid && x.u === u)));
+  return on;
+}
+function bindFavButtons(container, onChange) {
+  container.addEventListener('click', e => {
+    const b = e.target.closest('.fav-btn');
+    if (!b) return;
+    e.stopPropagation();
+    const on = toggleLecFav(b.dataset.fav, b.dataset.u);
+    $$(`.fav-btn[data-u="${CSS.escape(b.dataset.u)}"]`).forEach(x => { x.classList.toggle('on', on); x.innerHTML = on ? icons.starFill : icons.star2; });
+    toast(on ? 'أُضيفت إلى المفضلة' : 'أُزيلت من المفضلة');
+    onChange?.();
+  }, true);
+}
+
+/* ── المفضلة وأكمل الاستماع ── */
+async function renderLibrary(view, kind, ctx) {
+  ctx.back('#/mawaiz');
+  ctx.title(kind === 'fav' ? 'المفضلة' : 'أكمل الاستماع');
+  view.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  let data;
+  try { data = await getLectures(); } catch {
+    view.innerHTML = '<div class="error-box">تعذّر تحميل المواعظ.</div>';
+    return;
+  }
+  if (!ctx.alive()) return;
+  const bySid = Object.fromEntries(data.speakers.map(s => [s.id, s]));
+  const resolve = () => {
+    if (kind === 'fav') {
+      return lecFavs().map(f => {
+        const list = data.items[f.sid] || [];
+        const i = list.findIndex(it => it.u[0] === f.u);
+        return i >= 0 ? [bySid[f.sid], i, list[i]] : null;
+      }).filter(Boolean);
+    }
+    // المواد التي توقفت في أثنائها، بترتيب آخر استماع
+    const pos = store.get('lecPos', {});
+    const out = [];
+    for (const url of Object.keys(pos).reverse()) {
+      for (const sp of data.speakers) {
+        const i = data.items[sp.id].findIndex(it => it.u.includes(url));
+        if (i >= 0) { if (!out.some(([s, j]) => s.id === sp.id && j === i)) out.push([sp, i, data.items[sp.id][i], pos[url], data.items[sp.id][i].u.indexOf(url)]); break; }
+      }
+    }
+    return out;
+  };
+  const draw = () => {
+    const rows = resolve();
+    view.innerHTML = rows.length ? `
+      ${kind === 'fav' ? `<button class="btn block" id="playFav">${icons.play} تشغيل المفضلة متتابعة (${arNum(rows.length)})</button>` : `<p class="muted lib-note">${icons.info} تُستكمل كل مادة من حيث توقفت.</p>`}
+      <div class="list-card" id="list">${rows.map(([sp, i, it, p, part]) => lectureRow(sp, i, it, true).replace('</strong>', `</strong>${p ? `<small class="resume">توقفت عند ${fmtDur(p)}${part > 0 ? ` من الجزء ${arNum(part + 1)}` : ''}</small>` : ''}`)).join('')}</div>`
+      : `<div class="empty">${kind === 'fav' ? 'لا توجد مواد في المفضلة بعد.<br>اضغط النجمة بجانب أي موعظة لإضافتها.' : 'لا توجد مواد لم تكتمل.'}</div>`;
+    markLectures();
+    $('#playFav')?.addEventListener('click', () => {
+      // قائمة تشغيل: كل عنصر يحمل شيخه الأصلي
+      const items = rows.map(([sp, i, it]) => ({ ...it, sp: sp.name, sid: sp.id, si: i }));
+      playLecture({ id: 'fav', name: 'المفضلة', group: 'mawaiz' }, items, 0);
+    });
+    const list = $('#list');
+    if (!list) return;
+    bindFavButtons(list, () => { if (kind === 'fav') draw(); });
+    bindDlButtons(list, ctx, (key, btn) => {
+      const row = btn.closest('.lecture');
+      const sp = bySid[row.dataset.sid];
+      const it = data.items[sp.id][+row.dataset.i];
+      it.u.forEach((_, part) => downloadLecture(sp, it, part));
+      return true;
+    });
+    list.onclick = e => {
+      const b = e.target.closest('.lecture');
+      if (!b) return;
+      const sp = bySid[b.dataset.sid];
+      const r = rows.find(([s, i]) => s.id === sp.id && i === +b.dataset.i);
+      if (isCurrentLecture(sp.id, +b.dataset.i)) toggle(); else playLecture(sp, data.items[sp.id], +b.dataset.i, r?.[4] > 0 ? r[4] : 0);
+    };
+  };
+  draw();
+  bindMarks(ctx);
 }
 
 function clickLecture(sp, list, i) {
@@ -160,6 +253,7 @@ async function renderSpeaker(view, sid, ctx) {
     it.u.forEach((_, part) => downloadLecture(sp, it, part));
     return true;
   });
+  bindFavButtons($('#list'));
   $('#list').onclick = e => {
     const b = e.target.closest('.lecture');
     if (b) clickLecture(sp, list, +b.dataset.i);

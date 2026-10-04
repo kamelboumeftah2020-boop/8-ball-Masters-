@@ -6,6 +6,7 @@ import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './dow
 import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll, isBundled } from '../mushafFont.js';
 import { isDownloaded as warshDownloaded, download as downloadWarsh, removeDownload as removeWarsh, WARSH_SIZE_MB } from '../warshData.js';
 import { immersive, keepAwake } from '../native.js';
+import { trackPage } from '../khatma.js';
 import { getWarshIndex, warshMarks } from './warsh.js';
 
 // بداية كل جزء [السورة، الآية]
@@ -536,8 +537,11 @@ export async function renderPage(view, args, ctx) {
   pEvents.addEventListener('ayahs-end', onEnd);
   ctx.cleanup(() => { pEvents.removeEventListener('change', onChange); pEvents.removeEventListener('ayahs-end', onEnd); });
 
+  // الختمة: تُحتسب الصفحة بالبقاء عليها أو بالانتقال منها إلى التالية
+  const advance = trackPage(n, ctx);
   const go = (p, dir) => {
     if (p < 1 || p > 604 || p === n) return;
+    if (p === n + 1) advance();
     page.classList.add(dir > 0 ? 'out-next' : 'out-prev');
     setTimeout(() => { if (ctx.alive()) location.replace(`#/page/${p}`); }, 140);
   };
@@ -639,16 +643,47 @@ function ayahSheet(n, ayahs, i, page, onClose) {
       if (act === 'mark') { close(); ($('#qrMark') || $('#pgMark'))?.click(); }
       if (act === 'copy') { copyText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'share') { shareText(`﴿${a.text}﴾ ${ref}`); close(); }
-      if (act === 'tafsir') {
-        const box = $('#tafsirBox');
-        box.innerHTML = '<div class="loader small"><div class="spinner"></div></div>';
-        try {
-          const { data } = await fetchJSON(`https://api.alquran.cloud/v1/ayah/${a.number}/ar.muyassar`);
-          box.innerHTML = `<div class="tafsir"><b>التفسير الميسّر</b><p>${esc(data.text)}</p><small>إعداد نخبة من العلماء — مجمع الملك فهد لطباعة المصحف الشريف</small></div>`;
-        } catch { box.innerHTML = '<div class="empty">تعذّر تحميل التفسير. تحقق من الاتصال.</div>'; }
-      }
+      if (act === 'tafsir') showTafsir($('#tafsirBox'), n, i);
     },
   });
+}
+
+/* ── التفسير (مضمّن في التطبيق، يعمل دون إنترنت) ── */
+const TAFASIR = [
+  { id: 'muyassar', name: 'الميسّر', src: 'التفسير الميسّر — نخبة من العلماء، مجمع الملك فهد لطباعة المصحف الشريف' },
+  { id: 'saadi', name: 'السعدي', src: 'تيسير الكريم الرحمن في تفسير كلام المنان — الشيخ عبد الرحمن بن ناصر السعدي' },
+];
+const tafsirCache = new Map();
+const getTafsir = (id, s) => {
+  const k = `${id}/${s}`;
+  if (!tafsirCache.has(k)) tafsirCache.set(k, fetchJSON(`data/tafsir/${k}.json`).catch(e => { tafsirCache.delete(k); throw e; }));
+  return tafsirCache.get(k);
+};
+async function showTafsir(box, s, i) {
+  let which = store.get('tafsir', 'muyassar');
+  const draw = async () => {
+    const t = TAFASIR.find(x => x.id === which) || TAFASIR[0];
+    box.innerHTML = `<div class="tafsir">
+      <div class="seg-mini">${TAFASIR.map(x => `<button data-tf="${x.id}" class="${x.id === t.id ? 'active' : ''}">${x.name}</button>`).join('')}</div>
+      <div id="tfBody"><div class="loader small"><div class="spinner"></div></div></div></div>`;
+    let body;
+    try {
+      const all = await getTafsir(t.id, s);
+      // تفسير بعض الآيات مجموع مع ما قبلها
+      let j = i;
+      while (j > 0 && !all[j]) j--;
+      body = `${j < i ? `<small class="muted">تفسير هذه الآية مع ${j === i - 1 ? 'الآية السابقة' : `الآيات من ${arNum(j + 1)}`}:</small>` : ''}
+        <p>${esc(all[j] || '').replace(/\n/g, '<br>').replace(/﴿([^﴾]*)﴾/g, '<q>﴿$1﴾</q>')}</p><small>${t.src}</small>`;
+    } catch { body = '<div class="empty">تعذّر فتح التفسير.</div>'; }
+    const el = box.querySelector('#tfBody');
+    if (el) el.innerHTML = body;
+  };
+  box.onclick = e => {
+    const b = e.target.closest('[data-tf]');
+    if (!b) return;
+    which = b.dataset.tf; store.set('tafsir', which); draw();
+  };
+  draw();
 }
 
 /* ── الاستماع ── */

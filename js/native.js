@@ -30,19 +30,31 @@ export function openExternal(url) {
   else window.open(url, '_blank', 'noopener');
 }
 
-// خدمة تشغيل في الخلفية تُبقي الصوت يعمل والشاشة مطفأة
+// مشغّل الإشعارات وشاشة القفل: خدمة في الخلفية تُبقي الصوت يعمل والشاشة مطفأة،
+// وتعرض السابق/التشغيل/التالي/التكرار/الإغلاق، وتعيد أوامرها إلى التطبيق
 let mediaOn = false;
-export function mediaPlaying(title, text) {
+export function mediaUpdate(state) {
   const p = plugin('NurMedia');
   if (!p) return;
   mediaOn = true;
-  p.start({ title, text }).catch(() => {});
+  p.update(state).catch(() => {});
 }
 export function mediaStopped() {
   const p = plugin('NurMedia');
   if (!p || !mediaOn) return;
   mediaOn = false;
   p.stop().catch(() => {});
+}
+export function onMediaAction(handler) {
+  plugin('NurMedia')?.addListener('action', handler);
+}
+
+// فتح صفحة من إشعار (تذكير أو أذان أو الويدجت)
+export function onRoute(handler) {
+  const p = plugin('NurAdhan');
+  if (!p) return;
+  p.takeRoute().then(r => r?.route && handler(r.route)).catch(() => {});
+  p.addListener('route', d => d?.route && handler(d.route));
 }
 
 // لون أيقونات شريط الحالة بحسب مظهر التطبيق (DARK = أيقونات فاتحة على خلفية داكنة)

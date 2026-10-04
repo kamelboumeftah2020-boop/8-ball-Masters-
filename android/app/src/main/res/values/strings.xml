@@ -4,4 +4,6 @@
     <string name="title_activity_main">نور</string>
     <string name="package_name">app.nur.quran</string>
     <string name="custom_url_scheme">app.nur.quran</string>
+    <string name="widget_name">مواقيت الصلاة</string>
+    <string name="widget_description">الصلاة القادمة والوقت المتبقي ومواقيت اليوم</string>
 </resources>

@@ -1,11 +1,11 @@
 // تخزين واجهة التطبيق وسور المصحف والتفسير لتعمل دون اتصال
-const SHELL = 'nur-shell-v7';
+const SHELL = 'nur-shell-v8';
 const DATA = 'nur-data-v3';
 const FILES = [
   './', 'index.html', 'css/style.css', 'css/fonts.css', 'manifest.webmanifest',
-  'js/app.js', 'js/core.js', 'js/native.js', 'js/mushafFont.js', 'js/warshData.js', 'js/downloads.js', 'js/player.js', 'js/prayer.js',
+  'js/app.js', 'js/core.js', 'js/native.js', 'js/mushafFont.js', 'js/warshData.js', 'js/khatma.js', 'js/reminders.js', 'js/downloads.js', 'js/player.js', 'js/prayer.js',
   'js/data/surahs.js', 'js/data/mawaiz.js', 'js/data/adhkar.js',
-  'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js', 'js/pages/downloads.js', 'js/pages/warsh.js',
+  'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js', 'js/pages/downloads.js', 'js/pages/warsh.js', 'js/pages/khatma.js', 'js/pages/hadith.js',
   'data/lectures.json', 'data/warsh-index.json', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

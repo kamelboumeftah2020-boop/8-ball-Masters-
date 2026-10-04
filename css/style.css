@@ -739,3 +739,74 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .hero-date > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .hero-date b { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
 .hero-date b svg { width: 14px; height: 14px; flex: none; }
+
+/* ── الختمة والورد ── */
+.ring { --p: 0; flex: none; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; text-align: center;
+  background: radial-gradient(closest-side, var(--surface) 78%, transparent 80% 100%), conic-gradient(var(--primary) calc(var(--p) * 1%), var(--surface-2) 0); }
+.ring b { font-size: 13px; line-height: 1.1; }
+.ring.big { width: 96px; height: 96px; }
+.ring.big b { font-size: 22px; display: block; }
+.ring.big small { font-size: 11px; color: var(--muted); display: block; }
+.wird-card { display: flex; align-items: center; gap: 12px; padding: 14px; margin-top: 14px; }
+.wird-card .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wird-card .meta b { font-size: 15px; }
+.wird-card .meta small { color: var(--muted); font-size: 12.5px; }
+.khatma-intro { text-align: center; padding: 22px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.khatma-intro h2 { margin: 4px 0 0; font-size: 19px; }
+.khatma-intro p { margin: 0; line-height: 1.8; }
+.done-count { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-weight: 600; }
+.done-count svg { width: 18px; height: 18px; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.plan-grid button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 12px 6px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--surface); color: var(--text); }
+.plan-grid button b { font-size: 22px; }
+.plan-grid button span { font-size: 13px; }
+.plan-grid button small { font-size: 11px; color: var(--muted); }
+.plan-grid button.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 9%, var(--surface)); }
+.khatma-head { display: flex; align-items: center; gap: 16px; padding: 16px; margin-bottom: 14px; }
+.khatma-head > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.khatma-head strong { font-size: 17px; }
+.khatma-head small { font-size: 12.5px; }
+.wird-today { padding: 16px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.wird-today > b { font-size: 18px; }
+.wird-today.done > b { color: var(--primary); }
+.wird-today .bar { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; margin: 6px 0; }
+.wird-today .bar i { display: block; height: 100%; background: var(--primary); }
+.wird-today .behind { display: flex; gap: 6px; align-items: center; margin: 4px 0 0; color: #a1661c; font-size: 13px; }
+.wird-today .behind svg { width: 16px; height: 16px; flex: none; }
+.wird-today .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.wird-today .row2 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.wird-today .row2 .btn svg { width: 18px; height: 18px; }
+.wird-today .tip { font-size: 11.5px; }
+
+/* ── الحديث ── */
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips button { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 13.5px; white-space: nowrap; }
+.chips button.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.hd-card { padding: 16px; margin-bottom: 12px; }
+.hd-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.hd-top small { color: var(--muted); font-size: 12px; }
+.hd-num { min-width: 30px; height: 26px; padding: 0 8px; border-radius: 999px; display: inline-grid; place-items: center; background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); font-weight: 700; font-size: 13px; }
+.hd-text { margin: 0; font-family: var(--naskh); font-size: 19px; line-height: 2; }
+.hd-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+.icon-btn.on { color: var(--gold); }
+.count { margin: 0 0 10px; font-size: 13px; }
+.seg-mini { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--surface-2); margin-bottom: 10px; }
+.seg-mini button { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+.seg-mini button.active { background: var(--surface); color: var(--primary); font-weight: 600; box-shadow: var(--shadow); }
+.tafsir q { quotes: none; color: var(--primary); font-family: var(--quran); }
+
+/* ── المفضلة وأكمل الاستماع ── */
+.fav-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); }
+.fav-btn svg { width: 20px; height: 20px; }
+.fav-btn.on { color: var(--gold); }
+.lib-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.card.lib { display: flex; align-items: center; gap: 10px; padding: 12px; }
+.card.lib span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.card.lib b { font-size: 14.5px; }
+.card.lib small { font-size: 12px; color: var(--muted); }
+.lib-note { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 10px; }
+.lib-note svg { width: 16px; height: 16px; }
+.lecture .resume { color: var(--primary) !important; }
+#playFav { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
+#playFav svg { width: 18px; height: 18px; }
