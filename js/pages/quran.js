@@ -1,7 +1,8 @@
 // المصحف والاستماع
 import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, sheet } from '../core.js';
 import { SURAHS } from '../data/surahs.js';
-import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub } from '../player.js';
+import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub, surahUrl, downloadSurah } from '../player.js';
+import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './downloads.js';
 import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll } from '../mushafFont.js';
 import { immersive, keepAwake } from '../native.js';
 
@@ -21,7 +22,7 @@ function surahRows(filter, mode) {
   return rows.map(([s, n]) => `<button class="row surah" data-n="${n}">
       <span class="num">${arNum(n)}</span>
       <span class="meta"><strong>سورة ${s[0]}</strong><small>${surahSub(n)}</small></span>
-      ${mode === 'listen' ? `<span class="play-ic">${icons.play}</span>` : `<span class="chev">${icons.chevron}</span>`}
+      ${mode === 'listen' ? `${dlButton(surahUrl(player.reciter, n))}<span class="play-ic">${icons.play}</span>` : `<span class="chev">${icons.chevron}</span>`}
     </button>`).join('');
 }
 
@@ -617,8 +618,14 @@ export function renderListen(view, args, ctx) {
         </select>
       </div>
     </div>
+    <div class="dl-bar">${downloadsLink()}<button class="dl-link" id="dlAll">${icons.download}<span>تحميل كل السور</span></button></div>
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث عن سورة بالاسم أو الرقم" autocomplete="off"></label>
     <div class="list-card" data-listen id="list">${surahRows('', 'listen')}</div>`;
+  $('#dlAll').onclick = () => downloadAllSurahs(player.reciter);
+  bindDlButtons($('#list'), ctx, key => {
+    const n = SURAHS.findIndex((_, i) => surahUrl(player.reciter, i + 1) === key) + 1;
+    return n > 0 && downloadSurah(n, player.reciter);
+  });
   const mark = () => {
     $$('#list .surah').forEach(el => {
       const isCur = player.mode === 'surah' && +el.dataset.n === player.surah;
@@ -630,6 +637,9 @@ export function renderListen(view, args, ctx) {
     player.reciter = e.target.value;
     store.set('reciter', player.reciter);
     $('#rAvatar').textContent = reciterById(player.reciter).name[0];
+    // أزرار التحميل تتبع القارئ المختار
+    $('#list').innerHTML = surahRows($('#q').value, 'listen') || '<div class="empty">لا توجد نتائج</div>';
+    mark();
     if (player.mode === 'surah') playSurah(player.surah);
   };
   $('#q').oninput = e => { $('#list').innerHTML = surahRows(e.target.value, 'listen') || '<div class="empty">لا توجد نتائج</div>'; mark(); };

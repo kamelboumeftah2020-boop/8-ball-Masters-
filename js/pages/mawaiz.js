@@ -1,7 +1,8 @@
 // المواعظ: المسموعة (محاضرات وخطب) والمكتوبة (آيات وأحاديث وآثار)
 import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, durLabel } from '../core.js';
 import { MAWAIZ, CATEGORIES, TYPE_NAMES } from '../data/mawaiz.js';
-import { player, audio, events as pEvents, playLecture, toggle, isCurrentLecture, lecturePos } from '../player.js';
+import { player, audio, events as pEvents, playLecture, toggle, isCurrentLecture, lecturePos, downloadLecture } from '../player.js';
+import { dlButton, bindDlButtons, downloadsLink } from './downloads.js';
 
 let lecturesData = null;
 export async function getLectures() {
@@ -39,6 +40,7 @@ async function renderAudio(view, ctx) {
       <div><small class="muted">تابع الاستماع</small><strong>${esc(last.title)}</strong><small class="muted">${esc(last.speaker)}</small></div>
       <span class="play-btn sm">${icons.play}</span>
     </button>` : ''}
+    <div class="dl-bar">${downloadsLink()}</div>
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث في ${arNum(total)} محاضرة وخطبة" autocomplete="off"></label>
     <div id="results"></div>
     <div id="groups">
@@ -73,6 +75,15 @@ async function renderAudio(view, ctx) {
       : '<div class="empty">لا توجد نتائج</div>';
     markLectures();
   };
+  // تحميل محاضرة (بكل أجزائها) للاستماع دون اتصال
+  const startDl = (key, btn) => {
+    const row = btn.closest('.lecture');
+    const sp = data.speakers.find(s => s.id === row.dataset.sid);
+    const it = data.items[sp.id][+row.dataset.i];
+    it.u.forEach((_, part) => downloadLecture(sp, it, part));
+    return true;
+  };
+  bindDlButtons($('#results'), ctx, startDl);
   $('#results').onclick = e => {
     const b = e.target.closest('[data-sid]');
     if (!b) return;
@@ -92,6 +103,7 @@ function lectureRow(sp, i, it, showSpeaker) {
   return `<button class="row lecture" data-sid="${sp.id}" data-i="${i}">
     <span class="play-ic">${icons.play}</span>
     <span class="meta"><strong>${esc(it.t)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</span>
+    ${dlButton(it.u[0])}
   </button>`;
 }
 
@@ -143,6 +155,11 @@ async function renderSpeaker(view, sid, ctx) {
     markLectures();
   };
   $('#q').oninput = draw;
+  bindDlButtons($('#list'), ctx, (key, btn) => {
+    const it = list[+btn.closest('.lecture').dataset.i];
+    it.u.forEach((_, part) => downloadLecture(sp, it, part));
+    return true;
+  });
   $('#list').onclick = e => {
     const b = e.target.closest('.lecture');
     if (b) clickLecture(sp, list, +b.dataset.i);

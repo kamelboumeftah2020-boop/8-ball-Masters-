@@ -2,6 +2,7 @@
 const Cap = window.Capacitor;
 export const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
 const plugin = name => (isNative && Cap.Plugins ? Cap.Plugins[name] : null);
+export const nativePlugin = plugin;
 
 export const Notifications = () => plugin('LocalNotifications');
 

@@ -7,6 +7,7 @@ import { renderMushaf, renderListen, renderPage } from './pages/quran.js';
 import { renderMawaiz } from './pages/mawaiz.js';
 import { renderAdhkar, renderTasbih, renderQibla } from './pages/adhkar.js';
 import { renderAdhan } from './pages/adhan.js';
+import { renderDownloads } from './pages/downloads.js';
 
 /* ── المظهر ── */
 const root = document.documentElement;
@@ -33,6 +34,7 @@ const ROUTES = {
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },
   qibla: { render: renderQibla, title: 'اتجاه القبلة', tab: 'adhan' },
   adhan: { render: renderAdhan, title: 'مواقيت الصلاة', tab: 'adhan' },
+  downloads: { render: renderDownloads, title: 'التنزيلات', tab: 'mawaiz' },
 };
 
 const view = $('#view');

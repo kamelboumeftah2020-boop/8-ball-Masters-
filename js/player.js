@@ -1,7 +1,8 @@
 // مشغّل الصوت الموحّد: سورة كاملة، أو آية بآية، أو محاضرة
 import { $, store, arNum, esc, pad3, fmtDur, toast, icons, sheet } from './core.js';
 import { SURAHS } from './data/surahs.js';
-import { isNative, mediaPlaying, mediaStopped, openExternal } from './native.js';
+import { mediaPlaying, mediaStopped } from './native.js';
+import * as dl from './downloads.js';
 
 // server: السور كاملة (mp3quran) — ayah: مجلد التلاوة آية بآية (everyayah)
 export const RECITERS = [
@@ -35,8 +36,9 @@ const emit = type => events.dispatchEvent(new Event(type));
 
 /* ── التشغيل ── */
 // مصادر المقطع الحالي: الرابط الأساسي ثم الروابط البديلة، ونعيد المرور عليها مرة ثانية
-let sources = [], attempt = 0;
+let sources = [], attempt = 0, startToken = 0;
 function start(src, alts = []) {
+  startToken++;
   sources = [src, ...alts];
   attempt = 0;
   load(src);
@@ -49,11 +51,35 @@ function load(src) {
   emit('change');
 }
 
+// يشغّل الملف المحمّل إن وُجد، وإلا من الإنترنت
+function startPreferLocal(key, alts = []) {
+  const t = ++startToken;
+  dl.localSource(key).then(local => {
+    if (t !== startToken) return; // بدأ مقطع آخر في الأثناء
+    if (local) start(local); else start(key, alts);
+  });
+}
+
+export const surahUrl = (reciterId, n) => reciterById(reciterId).server + pad3(n) + '.mp3';
+
 export function playSurah(n, reciterId = player.reciter) {
   Object.assign(player, { mode: 'surah', surah: n, reciter: reciterId, ayahs: null, lec: null });
   store.set('reciter', reciterId);
   store.set('lastListen', { surah: n, reciter: reciterId });
-  start(reciterById(reciterId).server + pad3(n) + '.mp3');
+  startPreferLocal(surahUrl(reciterId, n));
+}
+
+// تحميل سورة بصوت قارئ
+export function downloadSurah(n, reciterId = player.reciter) {
+  const r = reciterById(reciterId);
+  return dl.enqueue(surahUrl(reciterId, n), [surahUrl(reciterId, n)], { kind: 'surah', title: 'سورة ' + surahName(n), sub: r.name, ref: { surah: n, reciter: reciterId } });
+}
+// تحميل محاضرة (أو جزء منها)
+export function downloadLecture(speaker, item, part = 0) {
+  const key = item.u[part];
+  const urls = [key, ...(part === 0 ? item.a || [] : [])];
+  const title = item.t + (item.u.length > 1 ? ` (الجزء ${arNum(part + 1)})` : '');
+  return dl.enqueue(key, urls, { kind: 'lecture', title, sub: speaker.name, ref: { sid: speaker.id, key, part } });
 }
 
 // رابط الآية بصوت القارئ المختار، ثم بديل احتياطي بصوت العفاسي
@@ -76,7 +102,7 @@ export function playLecture(speaker, list, idx, part = 0) {
   Object.assign(player, { mode: 'lecture', lec: { speaker, list, idx, part } });
   const item = list[idx];
   store.set('lastLecture', { sid: speaker.id, idx, title: item.t, speaker: speaker.name });
-  start(item.u[part], part === 0 ? item.a || [] : []);
+  startPreferLocal(item.u[part], part === 0 ? item.a || [] : []);
 }
 
 export const toggle = () => (audio.paused ? audio.play().catch(() => {}) : audio.pause());
@@ -261,7 +287,13 @@ function openFullPlayer() {
       }
       if (a === 'repeat') { player.repeat = !player.repeat; toast(player.repeat ? 'تكرار المقطع الحالي' : 'أُلغي التكرار'); }
       if (a === 'sleep') cycleSleep();
-      if (a === 'download') { if (isNative) { e.preventDefault(); openExternal(b.getAttribute('href')); } return; }
+      if (a === 'download') {
+        const key = currentKey();
+        if (dl.isDownloaded(key)) toast('هذه المادة محمّلة، وتجدها في «التنزيلات»');
+        else if (dl.job(key)) toast('جارٍ التحميل…');
+        else if (player.mode === 'surah') { downloadSurah(player.surah, player.reciter); toast('بدأ التحميل'); }
+        else { downloadLecture(player.lec.speaker, player.lec.list[player.lec.idx], player.lec.part); toast('بدأ التحميل'); }
+      }
       if (a === 'go') { close(); location.hash = trackInfo().link; return; }
       refreshSheet();
     },
@@ -269,6 +301,19 @@ function openFullPlayer() {
   refreshSheet();
 }
 let seeking = false;
+
+const currentKey = () => (player.mode === 'surah' ? surahUrl(player.reciter, player.surah) : player.lec.list[player.lec.idx].u[player.lec.part]);
+function dlOpt() {
+  const key = currentKey();
+  if (dl.isDownloaded(key)) return `<button class="opt on" data-pa="download">${icons.check}<span>محمّلة</span></button>`;
+  const j = dl.job(key);
+  if (j) return `<button class="opt on" data-pa="download">${icons.download}<span>${j.total ? arNum(Math.floor(j.received / j.total * 100)) + '٪' : 'جارٍ…'}</span></button>`;
+  return `<button class="opt" data-pa="download">${icons.download}<span>تحميل</span></button>`;
+}
+dl.events.addEventListener('change', () => {
+  const b = document.querySelector('#fullPlayer [data-pa="download"]');
+  if (b && player.mode && player.mode !== 'ayah') b.outerHTML = dlOpt();
+});
 
 function refreshSheet() {
   const el = $('#fullPlayer');
@@ -293,7 +338,7 @@ function refreshSheet() {
     <div class="fp-opts">
       ${lec ? `<button class="opt" data-pa="speed"><b>${arNum(player.speed)}×</b><span>السرعة</span></button>` : `<button class="opt ${player.repeat ? 'on' : ''}" data-pa="repeat">${icons.repeat}<span>تكرار</span></button>`}
       <button class="opt ${sleepAt || sleepEnd ? 'on' : ''}" data-pa="sleep">${icons.moonSleep}<span>${sleepAt || sleepEnd ? sleepLabel() : 'مؤقت النوم'}</span></button>
-      ${lec ? `<a class="opt" data-pa="download" href="${esc(item.u[player.lec.part])}" target="_blank" rel="noopener" download>${icons.download}<span>تحميل</span></a>` : ''}
+      ${player.mode !== 'ayah' ? dlOpt() : ''}
       <button class="opt" data-pa="go">${lec ? icons.mic : icons.book}<span>${lec ? 'قائمة الشيخ' : 'فتح السورة'}</span></button>
     </div>`;
   const seek = $('#fpSeek', el);
