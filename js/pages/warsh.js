@@ -1,6 +1,6 @@
 // مصحف ورش عن نافع — بخط مجمع الملك فهد، ملوّن للحفظ، مع وضع التسميع
 import { $, $$, store, arNum, toast, fetchJSON, copyText, shareText, icons, sheet } from '../core.js';
-import { surahName } from '../player.js';
+import { surahName, RECITERS, reciterById, player, playSurah, toggle, audio } from '../player.js';
 import { immersive, keepAwake } from '../native.js';
 import { trackPage } from '../khatma.js';
 import { goToPageSheet, partFooter } from './quran.js';
@@ -94,6 +94,7 @@ export async function renderWarsh(view, args, ctx) {
         <button data-t="prev" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}<span>السابقة</span></button>
         <button data-t="color" class="${o.color ? 'on' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8l-.4-.9c-.4-1 .3-2.3 1.4-2.3H17a4 4 0 0 0 4-4c0-5-4-9-9-9Z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="14.5" cy="7" r="1.2"/></svg><span>الألوان</span></button>
         <button data-t="hide" class="${o.hide ? 'on' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3 3.8M6.6 6.6C3.9 8.3 2.5 12 2.5 12S6 19 12 19a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>التسميع</span></button>
+        <button data-t="listen">${icons.headphones}<span>استماع</span></button>
         <button data-t="goto">${icons.layers}<span>صفحة</span></button>
         <button data-t="next" ${n >= 604 ? 'disabled' : ''}>${icons.chevron}<span>التالية</span></button>
       </div>
@@ -172,6 +173,7 @@ export async function renderWarsh(view, args, ctx) {
     if (t === 'prev') go(n - 1, -1);
     if (t === 'next') go(n + 1, 1);
     if (t === 'goto') goToPageSheet(n, '#/warsh/');
+    if (t === 'listen') listenSheet([...new Set(data.b.flatMap(x => (x[0] === 't' ? x[2].map(a => a[0]) : x[0] === 'h' ? [x[1]] : [])))]);
     if (t === 'color') {
       const on = !opts().color;
       setOpts({ color: on });
@@ -201,6 +203,29 @@ export async function renderWarsh(view, args, ctx) {
   };
   document.addEventListener('keydown', onKey);
   ctx.cleanup(() => document.removeEventListener('keydown', onKey));
+}
+
+// الاستماع برواية ورش: السورة كاملة بصوت قارئ من قرّاء ورش
+function listenSheet(surahs) {
+  const W = RECITERS.filter(r => r.warsh);
+  let rid = store.get('warshReciter', W[0].id);
+  const playing = s => player.mode === 'surah' && player.surah === s && player.reciter === rid && !audio.paused;
+  const html = () => `
+    <div class="sheet-head"><h3>الاستماع برواية ورش</h3><small class="muted">السورة كاملة بصوت القارئ</small></div>
+    <select class="select" id="wRec" aria-label="القارئ">${W.map(r => `<option value="${r.id}" ${r.id === rid ? 'selected' : ''}>${r.name}</option>`).join('')}</select>
+    <div class="list-card w-listen">${surahs.map(s => `<button class="row" data-s="${s}"><span class="play-ic">${playing(s) ? icons.pause : icons.play}</span><span class="meta"><strong>سورة ${surahName(s)}</strong></span></button>`).join('')}</div>`;
+  const { el, close } = sheet(html(), {
+    label: 'الاستماع برواية ورش',
+    onClick: e => {
+      const b = e.target.closest('[data-s]');
+      if (!b) return;
+      const s = +b.dataset.s;
+      if (player.mode === 'surah' && player.surah === s && player.reciter === rid) toggle();
+      else { playSurah(s, rid); store.set('warshReciter', rid); }
+      close();
+    },
+  });
+  $('#wRec', el).onchange = e => { rid = e.target.value; store.set('warshReciter', rid); };
 }
 
 function ayahSheet(s, a, page, text, onClose) {

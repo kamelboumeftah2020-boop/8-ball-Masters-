@@ -235,7 +235,7 @@ async function renderSpeaker(view, sid, ctx) {
   view.innerHTML = `
     <div class="speaker-hero">
       <span class="avatar xl ${sp.group}">${esc(initials(sp.name))}</span>
-      <div><small>${esc(group.name)}</small><h2>${sp.group === 'haram' ? '' : 'الشيخ '}${esc(sp.name)}</h2><span>${arNum(list.length)} ${sp.group === 'haram' ? 'خطبة' : 'مادة صوتية'}</span></div>
+      <div><small>${esc(group.name)}</small><h2>${sp.group === 'haram' || sp.group === 'ruqya' ? '' : 'الشيخ '}${esc(sp.name)}</h2><span>${arNum(list.length)} ${sp.group === 'haram' ? 'خطبة' : 'مادة صوتية'}</span></div>
       <button class="play-btn" id="playAll" aria-label="تشغيل الكل">${icons.play}</button>
     </div>
     ${sid === 'rashed' ? `<p class="source-note">${icons.info} جميع ما وجدناه من محاضرات الشيخ ومقاطعه وأجوبته، مجموعة من عدة مصادر في أرشيف الإنترنت، مع روابط بديلة تُستعمل تلقائيًا إن تعذّر أحدها.</p>` : ''}

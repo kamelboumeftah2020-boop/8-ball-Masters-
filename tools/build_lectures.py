@@ -71,6 +71,25 @@ NOT_MAWIZA = re.compile(
 PART = re.compile(r'[\(\[]\s*(\d+)\s*[\)\]]|(?:الجزء|ج)\s*(\d+)|\s(\d+)\s*$')
 
 
+# الرقية الشرعية: آيات الرقية بأصوات قرّاء معروفين (من أرشيف الإنترنت، ولكل منها نسخة بديلة)
+RUQYA_A = 'https://archive.org/download/way2sona_20160320_1433/'
+RUQYA_B = 'https://archive.org/download/Roquia_23/'
+RUQYA = [
+    ('مشاري العفاسي', 'Alroqyah_Mshary.mp3', 4419),
+    ('سعد الغامدي', 'Alroqyah_Alqamdy.mp3', 3751),
+    ('أحمد العجمي', 'Alroqyah_Al3gmy.mp3', 3748),
+    ('ناصر القطامي', '36869.mp3', 4614),
+    ('ماهر المعيقلي', '02-maher.mp3', 2385),
+    ('إدريس أبكر', '03-Abkar.mp3', 2025),
+    ('فارس عباد', '01-Fares.mp3', 1232),
+    ('محمد صديق المنشاوي (آيات العين)', '43_Minshawe.mp3', 2586),
+]
+
+
+def ruqya():
+    return [{'t': f'الرقية الشرعية بصوت {n}', 'u': [RUQYA_A + f], 'a': [RUQYA_B + f], 'd': d} for n, f, d in RUQYA]
+
+
 def decode_title(t):
     # بعض المجموعات عناوينها بترميز ويندوز العربي القديم
     if not AR.search(t):
@@ -248,6 +267,8 @@ def main():
         items[sid] = preacher(name_re, cols)
         speakers.append({'id': sid, 'name': name, 'group': 'mawaiz', 'src': 'archive.org'})
     speakers += [{'id': s, 'name': n, 'group': g, 'src': 'islamhouse.com'} for s, n, _, g in SCHOLARS]
+    items['ruqya'] = ruqya()
+    speakers.append({'id': 'ruqya', 'name': 'الرقية الشرعية', 'group': 'ruqya', 'src': 'archive.org'})
     for s in speakers:
         s['count'] = len(items[s['id']])
     data = {
@@ -256,6 +277,7 @@ def main():
             {'id': 'ulama', 'name': 'كبار العلماء'},
             {'id': 'haram', 'name': 'خطب الحرمين'},
             {'id': 'duroos', 'name': 'دروس ومواعظ'},
+            {'id': 'ruqya', 'name': 'الرقية الشرعية'},
         ],
         'speakers': speakers,
         'items': items,

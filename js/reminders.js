@@ -2,6 +2,7 @@
 import { store, arNum } from './core.js';
 import { nativePlugin } from './native.js';
 import { getKhatma, wirdToday } from './khatma.js';
+import { toHijri } from './hijri.js';
 
 export const REMINDERS = [
   { key: 'morning', name: 'أذكار الصباح', hint: 'بعد الفجر بعشرين دقيقة' },
@@ -9,9 +10,10 @@ export const REMINDERS = [
   { key: 'kahf', name: 'سورة الكهف يوم الجمعة', hint: 'صباح الجمعة قبل الظهر بساعة ونصف' },
   { key: 'fast', name: 'صيام الاثنين والخميس', hint: 'ليلة الأحد والأربعاء بعد العشاء' },
   { key: 'white', name: 'صيام الأيام البيض', hint: 'ليالي ١٢ و١٣ و١٤ من الشهر الهجري بعد العشاء' },
+  { key: 'seasons', name: 'المواسم', hint: 'قبل عاشوراء وعرفة، وأول عشر ذي الحجة، والعشر الأواخر، وست شوّال، واقتراب رمضان' },
   { key: 'wird', name: 'الورد اليومي من الختمة', hint: 'في الوقت الذي تختاره، ما دامت لك ختمة' },
 ];
-const DEFAULTS = { morning: true, evening: true, kahf: true, fast: true, white: true, wird: true, wirdTime: '20:00' };
+const DEFAULTS = { morning: true, evening: true, kahf: true, fast: true, white: true, seasons: true, wird: true, wirdTime: '20:00' };
 export const remCfg = () => ({ ...DEFAULTS, ...store.get('reminders', {}) });
 export const setRem = o => store.set('reminders', { ...remCfg(), ...o });
 
@@ -41,8 +43,20 @@ export async function scheduleReminders(days) {
     if (c.evening) add(2, at(t.Asr, d, 20), 'أذكار المساء', 'حان وقت أذكار المساء.', '#/adhkar/evening');
     if (c.kahf && dow === 5) add(3, at(t.Dhuhr, d, -90), 'يوم الجمعة: سورة الكهف', '«من قرأ سورة الكهف يوم الجمعة أضاء له من النور ما بين الجمعتين» — صححه الألباني. وأكثروا من الصلاة على النبي ﷺ.', '#/mushaf/18');
     if (c.fast && (dow === 0 || dow === 3)) add(4, at(t.Isha, d, 30), `غدًا يوم ${dow === 0 ? 'الاثنين' : 'الخميس'}`, '«تُعرض الأعمال يوم الاثنين والخميس، فأحب أن يُعرض عملي وأنا صائم» — صححه الألباني. لا تنسَ السحور.', '#/');
-    const hd = day.hijri?.day;
-    if (c.white && hd >= 12 && hd <= 14) add(5, at(t.Isha, d, 35), 'غدًا من الأيام البيض', `غدًا اليوم ${arNum(hd + 1)} من ${day.hijri.month}. صيام ثلاثة أيام من كل شهر صيام الدهر كله (متفق عليه).`, '#/');
+    // التاريخ الهجري لليوم التالي (بتقويم أم القرى مع تعديل المستخدم، كما في صفحة التقويم)
+    const tm = new Date(d); tm.setDate(d.getDate() + 1);
+    const nh = toHijri(tm), h = toHijri(d);
+    if (c.white && nh.d >= 13 && nh.d <= 15) add(5, at(t.Isha, d, 35), 'غدًا من الأيام البيض', `غدًا اليوم ${arNum(nh.d)} من الشهر الهجري. صيام ثلاثة أيام من كل شهر صيام الدهر كله (متفق عليه).`, '#/calendar');
+    if (c.seasons) {
+      const eve = (title, text) => add(7, at(t.Isha, d, 40), title, text, '#/calendar');
+      const morn = (title, text) => add(8, at(t.Fajr, d, 30), title, text, '#/calendar');
+      if (nh.m === 1 && nh.d === 9) eve('غدًا تاسوعاء وبعده عاشوراء', 'صيام عاشوراء يكفّر السنة التي قبله، ويُستحب صيام التاسع معه (رواه مسلم).');
+      if (nh.m === 12 && nh.d === 9) eve('غدًا يوم عرفة', 'صيامه يكفّر السنة الماضية والباقية لغير الحاج (رواه مسلم). وأكثر من الدعاء والتهليل.');
+      if (h.m === 12 && h.d === 1) morn('بدأت عشر ذي الحجة', '«ما من أيامٍ العملُ الصالح فيهن أحبّ إلى الله من هذه الأيام العشر» (رواه البخاري). أكثروا من التكبير.');
+      if (nh.m === 9 && nh.d === 21) eve('الليلة أول العشر الأواخر', '«تحرّوا ليلة القدر في الوتر من العشر الأواخر من رمضان» (رواه البخاري).');
+      if (h.m === 10 && h.d === 2) morn('ست من شوّال', '«من صام رمضان ثم أتبعه ستًّا من شوّال كان كصيام الدهر» (رواه مسلم).');
+      if (h.m === 8 && h.d === 25) morn('اقترب رمضان', 'بقي على رمضان أيام قليلة؛ فاستعد له بالتوبة وقضاء ما عليك من صيام.');
+    }
     if (c.wird && k && !w?.finished) {
       const isToday = d.toDateString() === now.toDateString();
       if (!(isToday && w?.doneToday)) add(6, at(c.wirdTime, d), 'وردك من القرآن', isToday && w ? `وردك اليوم من صفحة ${arNum(w.from)} إلى ${arNum(w.to)}.` : 'حان وقت وردك اليومي من القرآن.', '#/khatma');

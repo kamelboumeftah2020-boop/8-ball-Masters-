@@ -35,6 +35,18 @@ export const RECITERS = [
   { id: 'abkar', name: 'إدريس أبكر', server: 'https://cdn.mp3quran.net/audio/idrees-abkar/r1/' },
   { id: 'jalil', name: 'خالد الجليل', server: 'https://cdn.mp3quran.net/audio/khalid-jalil/r1/' },
   { id: 'luhaidan', name: 'محمد اللحيدان', server: 'https://cdn.mp3quran.net/audio/muhammad-luhaidan/r1/' },
+  // برواية ورش عن نافع: السور كاملة (لا تتوفر لها تلاوة آية بآية بترقيم ورش)
+  { id: 'w_yassin', name: 'ياسين الجزائري', server: 'https://cdn.mp3quran.net/audio/yassen-jazairi/r1/', warsh: true },
+  { id: 'w_dosari', name: 'إبراهيم الدوسري', server: 'https://cdn.mp3quran.net/audio/ibrahim-dosari/r1/', warsh: true },
+  { id: 'w_basit', name: 'عبد الباسط عبد الصمد', server: 'https://cdn.mp3quran.net/audio/abdulbasit-abdulsamad/r2/', warsh: true },
+  { id: 'w_husr', name: 'محمود خليل الحصري', server: 'https://cdn.mp3quran.net/audio/mahmoud-husary/r3/', warsh: true },
+  { id: 'w_belalia', name: 'رشيد بلعالية', server: 'https://cdn.mp3quran.net/audio/rachid-belalia/r1/', warsh: true },
+  { id: 'w_kouchi', name: 'العيون الكوشي', server: 'https://cdn.mp3quran.net/audio/laayoun-kouchi/r1/', warsh: true },
+  { id: 'w_kazabri', name: 'عمر القزابري', server: 'https://cdn.mp3quran.net/audio/omar-kazabri/r1/', warsh: true },
+  { id: 'w_saayed', name: 'محمد سايد', server: 'https://cdn.mp3quran.net/audio/muhammad-saayed/r1/', warsh: true },
+  { id: 'w_benkirane', name: 'عبد المجيب بنكيران', server: 'https://cdn.mp3quran.net/audio/abdelmoujib-benkirane/r1/', warsh: true },
+  { id: 'w_deeban', name: 'أحمد ديبان (طريق الأزرق)', server: 'https://cdn.mp3quran.net/audio/ahmad-deeban/r7/', warsh: true },
+  { id: 'w_abdulkareem', name: 'محمد عبد الكريم (طريق الأصبهاني)', server: 'https://cdn.mp3quran.net/audio/muhammad-abdulkareem/r2/', warsh: true },
 ];
 export const reciterById = id => RECITERS.find(r => r.id === id) || RECITERS[0];
 export const surahName = n => SURAHS[n - 1][0];
@@ -81,6 +93,7 @@ function startPreferLocal(key, alts = []) {
 export const surahUrl = (reciterId, n) => reciterById(reciterId).server + pad3(n) + '.mp3';
 
 export function playSurah(n, reciterId = player.reciter) {
+  if (!reciterById(reciterId).warsh) store.set('hafsReciter', reciterId);
   Object.assign(player, { mode: 'surah', surah: n, reciter: reciterId, voice: reciterId, ayahs: null, lec: null });
   store.set('reciter', reciterId);
   store.set('lastListen', { surah: n, reciter: reciterId });
@@ -113,13 +126,30 @@ function ayahSources(surah, a) {
   ];
 }
 let noAyahNoted = '';
-export function playAyahs(surah, ayahs, idx) {
+export function playAyahs(surah, ayahs, idx, keepMemo = false) {
+  if (!keepMemo) player.memo = null;
+  // التلاوة آية بآية في مصحف حفص: بصوت آخر قارئ برواية حفص اختاره المستخدم
+  if (reciterById(player.reciter).warsh) player.reciter = store.get('hafsReciter', 'afs');
   Object.assign(player, { mode: 'ayah', surah, ayahs, ayahIdx: idx, lec: null, voice: player.reciter });
   const r = reciterById(player.reciter);
   if (!r.ayah && noAyahNoted !== r.id) { noAyahNoted = r.id; toast(`التلاوة آية بآية غير متوفرة بصوت ${r.name}، فتُتلى بصوت مشاري العفاسي`); }
   const [src, ...alts] = ayahSources(surah, ayahs[idx]);
   start(src, alts);
 }
+
+/**
+ * التكرار للحفظ: من آية إلى آية في السورة، تُكرَّر كل آية each مرة، ويُعاد المقطع كله times مرة (٠ = بلا حد).
+ */
+export function playMemo(surah, ayahs, from, to, each, times) {
+  playAyahs(surah, ayahs, from);
+  player.memo = { from, to, each, times, eachLeft: each, round: 1 };
+  emit('change');
+}
+export const memoLabel = () => {
+  const m = player.memo;
+  if (!m) return '';
+  return `تكرار للحفظ: الآيات ${arNum(m.from + 1)}–${arNum(m.to + 1)} · الجولة ${arNum(m.round)}${m.times ? ` من ${arNum(m.times)}` : ''}`;
+};
 
 export function playLecture(speaker, list, idx, part = 0) {
   Object.assign(player, { mode: 'lecture', lec: { speaker, list, idx, part } });
@@ -138,7 +168,8 @@ export function step(dir) {
     if (n >= 1 && n <= 114) playSurah(n);
   } else if (player.mode === 'ayah') {
     const i = player.ayahIdx + dir;
-    if (i >= 0 && i < player.ayahs.length) playAyahs(player.surah, player.ayahs, i);
+    const m = player.memo;
+    if (i >= 0 && i < player.ayahs.length) playAyahs(player.surah, player.ayahs, i, !!(m && i >= m.from && i <= m.to));
   } else if (player.mode === 'lecture') {
     const { speaker, list, idx, part } = player.lec;
     const item = list[idx];
@@ -203,6 +234,18 @@ audio.addEventListener('ended', () => {
   savePos(true);
   if (sleepEnd) { sleepEnd = false; refreshSheet(); return; }
   if (player.repeat) { audio.currentTime = 0; audio.play(); return; }
+  // التكرار للحفظ
+  const m = player.mode === 'ayah' && player.memo;
+  if (m) {
+    if (m.eachLeft > 1) { m.eachLeft--; audio.currentTime = 0; audio.play(); return; }
+    m.eachLeft = m.each;
+    if (player.ayahIdx < m.to) { playAyahs(player.surah, player.ayahs, player.ayahIdx + 1, true); return; }
+    if (!m.times || m.round < m.times) { m.round++; toast(memoLabel()); playAyahs(player.surah, player.ayahs, m.from, true); return; }
+    player.memo = null;
+    toast('انتهى التكرار، بارك الله في حفظك');
+    emit('change');
+    return;
+  }
   if (player.mode === 'ayah' && player.ayahIdx >= player.ayahs.length - 1) { emit('ayahs-end'); return; }
   if (player.mode === 'surah' && player.surah >= 114) return;
   step(1);
@@ -297,10 +340,10 @@ $('#pInfo').onclick = openFullPlayer;
 $('#pClose').onclick = closePlayer;
 
 export function trackInfo() {
-  if (player.mode === 'surah') return { title: 'سورة ' + surahName(player.surah), sub: reciterById(player.reciter).name, link: '#/listen' };
+  if (player.mode === 'surah') { const r = reciterById(player.reciter); return { title: 'سورة ' + surahName(player.surah), sub: r.name + (r.warsh ? ' · رواية ورش' : ''), link: '#/listen' }; }
   if (player.mode === 'ayah') {
     const r = reciterById(player.reciter);
-    return { title: 'سورة ' + surahName(player.surah), sub: `الآية ${arNum(player.ayahs[player.ayahIdx].numberInSurah)} · ${r.name}`, link: `#/mushaf/${player.surah}` };
+    return { title: 'سورة ' + surahName(player.surah), sub: `الآية ${arNum(player.ayahs[player.ayahIdx].numberInSurah)} · ${player.memo ? memoLabel().replace('تكرار للحفظ: ', 'تكرار ') : r.name}`, link: `#/mushaf/${player.surah}` };
   }
   if (player.mode === 'lecture') {
     const { speaker, list, idx, part } = player.lec;

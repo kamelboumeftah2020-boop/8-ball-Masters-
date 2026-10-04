@@ -721,7 +721,9 @@ body.reader-full .view { animation: none !important; transform: none !important;
 :root[data-theme="dark"] .wr-page.hide .wa:not(.shown) .wn { color: #d9b866; }
 .wr-page.hide .wa.shown { background: color-mix(in srgb, #0f6b5c 9%, transparent); }
 .wr-tag { color: #fff !important; background: #0f6b5c !important; border-color: #0f6b5c !important; font-size: 13.5px; padding: 0 10px; }
-.wr-tools { grid-template-columns: repeat(6, 1fr); }
+.wr-tools { grid-template-columns: repeat(7, 1fr); }
+.wr-tools button span { font-size: 10.5px; }
+.w-listen { margin-top: 12px; max-height: 40vh; overflow: auto; }
 .wr-tools button.on { background: color-mix(in srgb, var(--primary) 14%, transparent); }
 
 /* اختيار المصحف */
@@ -817,3 +819,50 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .qr-part:last-child { justify-content: flex-end; }
 .qr-part.new b { color: #b8913a; font-size: 17px; font-weight: 400; }
 :root[data-theme="dark"] .qr-part { color: #d9bd7c; }
+
+/* ── التسميع والتكرار في مصحف حفص ── */
+.qr-tools:not(.wr-tools) { grid-template-columns: repeat(6, 1fr); }
+.qr-tools button.on { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+.qr-page.hide .w:not(.e):not(.shown) { color: transparent; background: color-mix(in srgb, #b8913a 13%, transparent); border-radius: 4px; }
+.qr-page.hide .w.shown:not(.e) { background: color-mix(in srgb, #0f6b5c 9%, transparent); }
+.memo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.memo-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+#mGo { display: flex; align-items: center; justify-content: center; gap: 8px; }
+#mGo svg { width: 18px; height: 18px; }
+.result .q-snippet.warsh { font-family: 'KFGQPC Warsh', var(--naskh); font-size: 20px; }
+
+/* ── التقويم الهجري ── */
+.cal { padding: 14px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-head div { display: flex; flex-direction: column; align-items: center; }
+.cal-head strong { font-size: 18px; }
+.cal-head small { color: var(--muted); font-size: 12.5px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-grid .dow { text-align: center; font-size: 11.5px; color: var(--muted); padding: 2px 0 4px; }
+.cal-day { position: relative; aspect-ratio: 1; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; background: var(--surface-2); color: var(--text); }
+.cal-day b { font-size: 16px; line-height: 1.1; }
+.cal-day small { font-size: 10px; color: var(--muted); }
+.cal-day.today { outline: 2px solid var(--primary); outline-offset: -2px; }
+.cal-day.fast { background: color-mix(in srgb, #0f6b5c 18%, var(--surface)); }
+.cal-day.eid { background: color-mix(in srgb, #c9a24a 30%, var(--surface)); }
+.cal-day.virtue, .cal-day.ramadan { background: color-mix(in srgb, #1d4f8c 15%, var(--surface)); }
+.cal-day.white { background: color-mix(in srgb, #8a7a5a 12%, var(--surface)); }
+.cal-day .mt, .cal-legend .mt { position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--primary); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.cal-legend i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.cal-legend i.fast { background: color-mix(in srgb, #0f6b5c 35%, var(--surface)); }
+.cal-legend i.eid { background: color-mix(in srgb, #c9a24a 55%, var(--surface)); }
+.cal-legend i.virtue { background: color-mix(in srgb, #1d4f8c 30%, var(--surface)); }
+.cal-legend i.white { background: color-mix(in srgb, #8a7a5a 25%, var(--surface)); }
+.cal-legend i.mt.dot { position: static; width: 7px; height: 7px; border-radius: 50%; }
+.cal .btn { margin-top: 10px; }
+.cal-day-info { padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.cal-day-info p { margin: 6px 0 0; line-height: 1.8; font-size: 14px; }
+.row.season { align-items: flex-start; gap: 10px; }
+.row.season .meta small { white-space: normal; line-height: 1.7; }
+.row.season .src { color: var(--gold) !important; font-size: 11.5px !important; }
+.row.season .cd { flex: none; min-width: 64px; text-align: center; padding: 5px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--primary); }
+.row.season .cd.now { background: var(--primary); color: #fff; }
+.avatar.ruqya { background: linear-gradient(135deg, #6b2a78, #3f1847); }
+.note-box.warn { background: color-mix(in srgb, #c9a24a 14%, var(--surface)); }

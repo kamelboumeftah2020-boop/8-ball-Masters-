@@ -1,13 +1,14 @@
 // المصحف والاستماع
 import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareText, icons, sheet, quarterLabel } from '../core.js';
 import { SURAHS } from '../data/surahs.js';
-import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub, surahUrl, downloadSurah } from '../player.js';
+import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, playMemo, toggle, surahName, surahSub, surahUrl, downloadSurah } from '../player.js';
 import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './downloads.js';
 import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll, isBundled } from '../mushafFont.js';
 import { isDownloaded as warshDownloaded, download as downloadWarsh, removeDownload as removeWarsh, WARSH_SIZE_MB } from '../warshData.js';
 import { immersive, keepAwake } from '../native.js';
 import { trackPage } from '../khatma.js';
 import { getWarshIndex, warshMarks } from './warsh.js';
+import { searchMushaf } from '../search.js';
 
 // بداية كل جزء [السورة، الآية]
 const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
@@ -67,7 +68,7 @@ export async function renderMushaf(view, args, ctx) {
       <div><strong>المصحف دون إنترنت</strong><small id="dlText">…</small><div class="bar"><i id="dlBar"></i></div></div>
       <button class="btn" id="dlBtn">تحميل</button>
     </div>
-    <label class="search">${icons.search}<input id="q" type="search" placeholder="${warsh ? 'ابحث عن سورة بالاسم أو الرقم' : 'ابحث عن سورة أو كلمة في القرآن'}" autocomplete="off"></label>
+    <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث عن سورة أو كلمة في القرآن" autocomplete="off"></label>
     <div id="qsearch"></div>
     <div class="tabs" id="tabs">
       <button data-t="surahs">السور</button><button data-t="juz">الأجزاء</button><button data-t="marks">العلامات</button>
@@ -164,9 +165,9 @@ export async function renderMushaf(view, args, ctx) {
     const q = $('#q').value.trim();
     if (tab !== 'surahs') { tab = 'surahs'; }
     draw();
-    $('#qsearch').innerHTML = q.length >= 3 && !/^\d+$/.test(q) && !warsh
+    $('#qsearch').innerHTML = q.length >= 3 && !/^\d+$/.test(q)
       ? `<button class="btn ghost block" id="qBtn">${icons.search} البحث عن «${esc(q)}» في آيات القرآن</button>` : '';
-    $('#qBtn')?.addEventListener('click', () => searchQuran(q));
+    $('#qBtn')?.addEventListener('click', () => searchQuran(q, warsh));
   };
   $('#list').onclick = e => {
     const b = e.target.closest('.surah');
@@ -175,17 +176,18 @@ export async function renderMushaf(view, args, ctx) {
   draw();
 }
 
-async function searchQuran(q) {
+// البحث في آيات المصحف المختار، دون إنترنت
+async function searchQuran(q, warsh) {
   const box = $('#qsearch');
   box.innerHTML = '<div class="loader small"><div class="spinner"></div></div>';
   try {
-    const { data } = await fetchJSON(`https://api.alquran.cloud/v1/search/${encodeURIComponent(q.replace(/[\u064B-\u065F\u0670]/g, ''))}/all/quran-simple-clean`);
-    const m = data.matches.slice(0, 50);
-    box.innerHTML = `<div class="section-head"><h2>نتائج البحث</h2><span class="muted">${arNum(data.count)} نتيجة${data.count > 50 ? ' (أول ٥٠)' : ''}</span></div>
-      <div class="list-card">${m.map(x => `<a class="row result" href="#/mushaf/${x.surah.number}/${x.numberInSurah}">
-        <span class="meta"><span class="q-snippet">${esc(x.text)}</span><small>سورة ${surahName(x.surah.number)} · الآية ${arNum(x.numberInSurah)}</small></span></a>`).join('')}</div>`;
+    const r = await searchMushaf(q, warsh);
+    if (!r.count) { box.innerHTML = '<div class="empty">لا توجد نتائج</div>'; return; }
+    box.innerHTML = `<div class="section-head"><h2>نتائج البحث${warsh ? ' في مصحف ورش' : ''}</h2><span class="muted">${arNum(r.count)} نتيجة${r.count > r.items.length ? ` (أول ${arNum(r.items.length)})` : ''}</span></div>
+      <div class="list-card">${r.items.map(x => `<a class="row result" href="${warsh ? `#/warsh/${x.p}` : `#/mushaf/${x.s}/${x.a}`}">
+        <span class="meta"><span class="q-snippet ${warsh ? 'warsh' : ''}">${esc(x.t)}</span><small>سورة ${surahName(x.s)} · الآية ${arNum(x.a)}${warsh ? ` · الصفحة ${arNum(x.p)}` : ''}</small></span></a>`).join('')}</div>`;
   } catch {
-    box.innerHTML = '<div class="empty">لا توجد نتائج، أو تعذّر الاتصال.</div>';
+    box.innerHTML = `<div class="empty">${warsh ? 'تعذّر البحث: مصحف ورش يحتاج إلى الإنترنت أو تحميله.' : 'تعذّر البحث.'}</div>`;
   }
 }
 
@@ -469,12 +471,24 @@ export async function renderPage(view, args, ctx) {
         <button data-t="exit">${icons.book}<span>الفهرس</span></button>
         <button data-t="prev" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}<span>السابقة</span></button>
         <button data-t="listen">${icons.headphones}<span>استماع</span></button>
+        <button data-t="hide" class="${store.get('hafsHide', false) ? 'on' : ''}">${icons.eyeOff}<span>التسميع</span></button>
         <button data-t="goto">${icons.layers}<span>صفحة</span></button>
         <button data-t="next" ${n >= 604 ? 'disabled' : ''}>${icons.chevron}<span>التالية</span></button>
       </div>
     </div>`;
 
   const qr = $('#qr'), page = $('#qpage');
+  // علامة نهاية كل آية: آخر رمز منها في الصفحة، إلا الآية التي تكمل في الصفحة التالية
+  {
+    const last = new Map();
+    $$('.w', page).forEach(w => last.set(w.dataset.k, w));
+    const nx = pages[n]?.[0]?.[0];
+    const lp = parts[parts.length - 1];
+    const cont = nx && n < 604 && nx[0] === lp[0] && nx[1] === lp[2] ? `${lp[0]}:${lp[2]}` : '';
+    last.forEach((w, k) => { if (k !== cont) w.classList.add('e'); });
+  }
+  // وضع التسميع: تُخفى الآيات وتبقى أرقامها، وتُكشف الآية باللمس
+  page.classList.toggle('hide', store.get('hafsHide', false));
 
   // حجم الخط: ١٥ سطرًا تملأ الارتفاع، ولا يتجاوز أطول سطر عرض الصفحة
   const fit = () => {
@@ -558,6 +572,10 @@ export async function renderPage(view, args, ctx) {
   page.onclick = async e => {
     const w = e.target.closest('.w');
     if (!w) return showTools(tools.hidden);
+    if (page.classList.contains('hide')) {
+      $$(`.w[data-k="${w.dataset.k}"]`, page).forEach(x => x.classList.toggle('shown'));
+      return;
+    }
     const [s, a] = w.dataset.k.split(':').map(Number);
     mark(w.dataset.k, 'sel');
     const ayahs = await getSurah(s);
@@ -578,6 +596,14 @@ export async function renderPage(view, args, ctx) {
     if (t === 'prev') go(n - 1, -1);
     if (t === 'next') go(n + 1, 1);
     if (t === 'goto') goToPageSheet(n);
+    if (t === 'hide') {
+      const on = !page.classList.contains('hide');
+      store.set('hafsHide', on);
+      page.classList.toggle('hide', on);
+      $$('.w.shown', page).forEach(x => x.classList.remove('shown'));
+      b.classList.toggle('on', on);
+      toast(on ? 'وضع التسميع: المس الآية لكشفها' : 'أُظهرت الآيات');
+    }
     if (t === 'listen') {
       if (player.mode === 'ayah' && player.voice === player.reciter && $(`.w[data-k="${curKey()}"]`, page)) return toggle();
       const [s, a] = parts[0];
@@ -635,6 +661,7 @@ function ayahSheet(n, ayahs, i, page, onClose) {
     <small class="muted">الصفحة ${arNum(a.page)} · الجزء ${arNum(a.juz)}${a.sajda ? ' · موضع سجدة' : ''}</small></div>
     <div class="sheet-actions">
       <button data-a="play">${icons.play}<span>استمع من هنا</span></button>
+      <button data-a="memo">${icons.repeat}<span>تكرار للحفظ</span></button>
       <button data-a="tafsir">${icons.book}<span>التفسير</span></button>
       <button data-a="mark">${icons.bookmark}<span>${marked ? 'إزالة العلامة' : 'علامة الصفحة'}</span></button>
       <button data-a="copy">${icons.copy}<span>نسخ</span></button>
@@ -648,12 +675,38 @@ function ayahSheet(n, ayahs, i, page, onClose) {
       if (!b) return;
       const act = b.dataset.a;
       if (act === 'play') { playAyahs(n, ayahs, i); close(); }
+      if (act === 'memo') { close(); setTimeout(() => memoSheet(n, ayahs, i), 250); }
       if (act === 'mark') { close(); ($('#qrMark') || $('#pgMark'))?.click(); }
       if (act === 'copy') { copyText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'share') { shareText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'tafsir') showTafsir($('#tafsirBox'), n, i);
     },
   });
+}
+
+/* ── التكرار للحفظ: مقطع من آية إلى آية، وعدد تكرار كل آية والمقطع ── */
+function memoSheet(n, ayahs, i) {
+  const last = Math.min(ayahs.length - 1, i + 4);
+  const opt = (vals, sel, lbl) => vals.map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${lbl(v)}</option>`).join('');
+  const c = store.get('memoCfg', { each: 3, times: 3 });
+  const { el, close } = sheet(`
+    <div class="sheet-head"><h3>التكرار للحفظ</h3><small class="muted">سورة ${surahName(n)} · بصوت ${esc(reciterById(reciterById(player.reciter).warsh ? store.get('hafsReciter', 'afs') : player.reciter).name)}</small></div>
+    <div class="memo-grid">
+      <label>من الآية<select class="select" id="mFrom">${opt(ayahs.map((_, k) => k), i, k => arNum(k + 1))}</select></label>
+      <label>إلى الآية<select class="select" id="mTo">${opt(ayahs.map((_, k) => k), last, k => arNum(k + 1))}</select></label>
+      <label>تكرار كل آية<select class="select" id="mEach">${opt([1, 2, 3, 5, 7, 10], c.each, v => `${arNum(v)} ${v === 1 ? 'مرة' : 'مرات'}`)}</select></label>
+      <label>تكرار المقطع<select class="select" id="mTimes">${opt([1, 2, 3, 5, 10, 0], c.times, v => (v ? `${arNum(v)} ${v === 1 ? 'مرة' : 'مرات'}` : 'بلا حد'))}</select></label>
+    </div>
+    <button class="btn block" id="mGo">${icons.play} ابدأ التكرار</button>`, { label: 'التكرار للحفظ' });
+  $('#mGo', el).onclick = () => {
+    let from = +$('#mFrom', el).value, to = +$('#mTo', el).value;
+    if (to < from) [from, to] = [to, from];
+    const each = +$('#mEach', el).value, times = +$('#mTimes', el).value;
+    store.set('memoCfg', { each, times });
+    close();
+    playMemo(n, ayahs, from, to, each, times);
+    toast(`تكرار الآيات ${arNum(from + 1)}–${arNum(to + 1)}`);
+  };
 }
 
 /* ── التفسير (مضمّن في التطبيق، يعمل دون إنترنت) ── */
@@ -704,7 +757,8 @@ export function renderListen(view, args, ctx) {
       <div class="grow">
         <small class="muted">القارئ</small>
         <select class="select" id="reciterSel" aria-label="اختيار القارئ">
-          ${RECITERS.map(x => `<option value="${x.id}" ${x.id === r.id ? 'selected' : ''}>${x.name}</option>`).join('')}
+          <optgroup label="رواية حفص عن عاصم">${RECITERS.filter(x => !x.warsh).map(x => `<option value="${x.id}" ${x.id === r.id ? 'selected' : ''}>${x.name}</option>`).join('')}</optgroup>
+          <optgroup label="رواية ورش عن نافع">${RECITERS.filter(x => x.warsh).map(x => `<option value="${x.id}" ${x.id === r.id ? 'selected' : ''}>${x.name} — ورش</option>`).join('')}</optgroup>
         </select>
       </div>
     </div>

@@ -11,6 +11,8 @@ import { renderDownloads } from './pages/downloads.js';
 import { renderWarsh } from './pages/warsh.js';
 import { renderKhatma, renderReminders } from './pages/khatma.js';
 import { renderHadith } from './pages/hadith.js';
+import { renderCalendar } from './pages/calendar.js';
+import { renderRuqya } from './pages/ruqya.js';
 
 /* ── المظهر ── */
 const root = document.documentElement;
@@ -36,6 +38,8 @@ const ROUTES = {
   khatma: { render: renderKhatma, title: 'الختمة والورد', tab: 'quran' },
   reminders: { render: renderReminders, title: 'التذكيرات', tab: 'home' },
   hadith: { render: renderHadith, title: 'الحديث', tab: 'mawaiz' },
+  calendar: { render: renderCalendar, title: 'التقويم الهجري', tab: 'home' },
+  ruqya: { render: renderRuqya, title: 'الرقية الشرعية', tab: 'adhkar' },
   mawaiz: { render: renderMawaiz, title: 'المواعظ', tab: 'mawaiz' },
   adhkar: { render: renderAdhkar, title: 'الأذكار', tab: 'adhkar' },
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },
