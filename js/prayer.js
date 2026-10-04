@@ -105,7 +105,29 @@ export function loadTimes(force) {
     times.loading = null;
     events.dispatchEvent(new Event('update'));
   });
+  resolvePlace();
   return times.loading;
+}
+
+// اسم المدينة: المكتوب يدويًا، أو المستخرج من إحداثيات GPS (يُحفظ فيعمل دون اتصال)
+export function placeName() {
+  const loc = cfg.loc;
+  if (!loc) return '';
+  return loc.type === 'city' ? loc.city : loc.name || '';
+}
+let placeJob = null;
+function resolvePlace() {
+  const loc = cfg.loc;
+  if (!loc || loc.type !== 'gps' || loc.name || placeJob) return;
+  const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${loc.lat}&longitude=${loc.lng}&localityLanguage=ar`;
+  placeJob = fetchJSON(url).then(d => {
+    const name = d.city || d.locality || d.principalSubdivision || '';
+    if (!name || cfg.loc !== loc) return;
+    loc.name = name;
+    if (d.countryName) loc.country = d.countryName;
+    saveCfg();
+    events.dispatchEvent(new Event('update'));
+  }).catch(() => {}).finally(() => { placeJob = null; });
 }
 
 export function toDate(hm, base = new Date(), addDay = 0) {

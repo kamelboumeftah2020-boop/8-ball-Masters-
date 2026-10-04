@@ -1,6 +1,6 @@
 // صفحة مواقيت الصلاة والأذان
 import { $, $$, esc, arNum, toast, icons } from '../core.js';
-import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, testAdhan, openExactSettings, requestIgnoreBattery } from '../prayer.js';
+import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, placeName, testAdhan, openExactSettings, requestIgnoreBattery } from '../prayer.js';
 import { isNative, BUNDLED_ADHANS } from '../native.js';
 
 // في التطبيق: أصوات الأذان المضمّنة فقط (لتعمل والتطبيق مغلق ودون اتصال)
@@ -23,7 +23,7 @@ export function heroHTML({ greeting = '', strip = true } = {}) {
   const np = nextPrayer();
   const stripHTML = PRAYERS.filter(p => !p.noAdhan).map(p => `<div class="${p.key === np.key && !np.tomorrow ? 'now' : ''}">${p.name}<b>${fmt12(times.today.timings[p.key], false)}</b></div>`).join('');
   return `<a href="#/adhan" class="hero">
-    <div class="hero-top"><span>${greeting}</span><span>${times.hijri.text}</span></div>
+    <div class="hero-top"><span>${greeting}</span><span class="hero-date">${placeName() ? `<b>${icons.pin}${esc(placeName())}</b>` : ''}<span>${times.hijri.text}</span></span></div>
     <div class="hero-main">
       <div>
         <div class="hero-label">الصلاة القادمة</div>
@@ -61,7 +61,7 @@ export function renderAdhan(view, args, ctx) {
 
       <div class="section-head"><h2>الموقع</h2></div>
       <div class="card settings">
-        ${loc ? `<div class="location-line">${icons.pin} ${loc.type === 'gps' ? 'موقعي الحالي (GPS)' : esc(loc.city + '، ' + loc.country)}</div>` : ''}
+        ${loc ? `<div class="location-line">${icons.pin} ${loc.type === 'gps' ? (loc.name ? `${esc(loc.name)}${loc.country ? '، ' + esc(loc.country) : ''} (GPS)` : 'موقعي الحالي (GPS)') : esc(loc.city + '، ' + loc.country)}</div>` : ''}
         <button class="btn block" data-gps>${icons.pin} تحديد موقعي تلقائيًا</button>
         <div class="or"><span>أو أدخل المدينة يدويًا</span></div>
         <div class="row2">

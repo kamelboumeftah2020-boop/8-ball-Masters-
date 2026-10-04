@@ -1,12 +1,24 @@
-// خطوط صفحات مصحف المدينة (مجمع الملك فهد، الإصدار الثاني) عبر quran.com.
-// لكل صفحة خط خاص؛ يُحمَّل عند أول فتح ثم يُحفظ في الجهاز ليعمل دون اتصال.
+// خطوط صفحات مصحف المدينة (مجمع الملك فهد، الإصدار الثاني).
+// في تطبيق أندرويد تأتي الخطوط الـ٦٠٤ مضمّنة (fonts/qcf) فيعمل المصحف دون إنترنت من أول فتح؛
+// وفي نسخة الويب تُحمَّل من quran.com عند أول فتح ثم تُحفظ في الجهاز.
+const LOCAL_URL = p => `fonts/qcf/p${p}.woff2`;
 const FONT_URL = p => `https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/p${p}.woff2`;
 const CACHE = 'nur-mushaf-fonts-v2';
 const loaded = new Map();
 
 export const fontFamily = p => `QCF2_P${p}`;
 
+let bundledP = null;
+export function isBundled() {
+  if (!bundledP) bundledP = fetch(LOCAL_URL(1)).then(r => r.ok, () => false);
+  return bundledP;
+}
+
 async function fontData(p) {
+  if (await isBundled()) {
+    const r = await fetch(LOCAL_URL(p));
+    if (r.ok) return r.arrayBuffer();
+  }
   const url = FONT_URL(p);
   if ('caches' in window) {
     try {
@@ -45,6 +57,7 @@ export function prefetch(p) {
 }
 
 export async function cachedCount() {
+  if (await isBundled()) return 604;
   if (!('caches' in window)) return 0;
   try { return (await (await caches.open(CACHE)).keys()).length; } catch { return 0; }
 }

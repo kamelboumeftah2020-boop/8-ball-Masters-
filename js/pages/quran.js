@@ -3,7 +3,8 @@ import { $, $$, store, arNum, esc, normalize, toast, fetchJSON, copyText, shareT
 import { SURAHS } from '../data/surahs.js';
 import { RECITERS, reciterById, player, audio, events as pEvents, playSurah, playAyahs, toggle, surahName, surahSub, surahUrl, downloadSurah } from '../player.js';
 import { dlButton, bindDlButtons, downloadsLink, downloadAllSurahs } from './downloads.js';
-import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll } from '../mushafFont.js';
+import { loadPageFont, fontFamily, prefetch, cachedCount, downloadAll, isBundled } from '../mushafFont.js';
+import { isDownloaded as warshDownloaded, download as downloadWarsh, removeDownload as removeWarsh, WARSH_SIZE_MB } from '../warshData.js';
 import { immersive, keepAwake } from '../native.js';
 import { getWarshIndex, warshMarks } from './warsh.js';
 
@@ -60,7 +61,7 @@ export async function renderMushaf(view, args, ctx) {
       </a>`}
       <button class="card goto-page" id="gotoPage"><b>${icons.layers}</b><span>صفحة</span></button>
     </div>
-    <div class="card dl-card" id="dlCard" ${warsh ? 'hidden' : ''}>
+    <div class="card dl-card" id="dlCard" hidden>
       <span class="tile-ic gold sm">${icons.download}</span>
       <div><strong>المصحف دون إنترنت</strong><small id="dlText">…</small><div class="bar"><i id="dlBar"></i></div></div>
       <button class="btn" id="dlBtn">تحميل</button>
@@ -112,8 +113,37 @@ export async function renderMushaf(view, args, ctx) {
     $('#dlText').textContent = done >= 604 ? 'المصحف كاملًا محفوظ في جهازك' : `محفوظ ${arNum(done)} من ٦٠٤ صفحة${failed ? ` · تعذّر ${arNum(failed)}` : ''}`;
     $('#dlBtn').hidden = done >= 604;
   };
-  cachedCount().then(c => dlShow(c, 0));
-  $('#dlBtn').onclick = async () => {
+  // حفص: مضمّن في التطبيق فلا حاجة لبطاقة التحميل. ورش: يُقرأ من الإنترنت ويمكن تحميله
+  if (warsh) {
+    const showWarsh = async () => {
+      const have = await warshDownloaded();
+      if (!ctx.alive()) return;
+      $('#dlCard').hidden = false;
+      $('#dlCard strong').textContent = 'مصحف ورش دون إنترنت';
+      $('#dlBar').style.width = have ? '100%' : '0';
+      $('#dlText').textContent = have ? 'محفوظ في جهازك ويعمل دون إنترنت' : `يُقرأ من الإنترنت · حمّله (نحو ${arNum(WARSH_SIZE_MB)} م.ب) ليعمل دون اتصال`;
+      $('#dlBtn').hidden = false;
+      $('#dlBtn').textContent = have ? 'حذف' : 'تحميل';
+      $('#dlBtn').classList.toggle('ghost', have);
+      $('#dlBtn').onclick = async () => {
+        if (have) { await removeWarsh(); toast('حُذف مصحف ورش من الجهاز'); return showWarsh(); }
+        $('#dlBtn').disabled = true; $('#dlBtn').textContent = '…';
+        $('#dlText').textContent = 'جارٍ التحميل…';
+        try { await downloadWarsh(); toast('حُفظ مصحف ورش للقراءة دون إنترنت'); } catch { toast('تعذّر التحميل، تحقق من الاتصال'); }
+        if (!ctx.alive()) return;
+        $('#dlBtn').disabled = false;
+        showWarsh();
+      };
+    };
+    showWarsh();
+  } else {
+    isBundled().then(b => {
+      if (b || !ctx.alive()) return;
+      $('#dlCard').hidden = false;
+      cachedCount().then(c => dlShow(c, 0));
+    });
+  }
+  if (!warsh) $('#dlBtn').onclick = async () => {
     if (dlRunning) { dlRunning = false; $('#dlBtn').textContent = 'تحميل'; return; }
     dlRunning = true;
     $('#dlBtn').textContent = 'إيقاف';
@@ -346,7 +376,7 @@ async function renderTextPage(view, args, ctx) {
     toast(on ? `وُضعت العلامة عند الصفحة ${arNum(n)}` : 'أُزيلت العلامة');
   };
   $('#pgListen').onclick = () => {
-    if (player.mode === 'ayah' && $(`.ayah[data-s="${player.surah}"][data-i="${player.ayahIdx}"]`)) return toggle();
+    if (player.mode === 'ayah' && player.voice === player.reciter && $(`.ayah[data-s="${player.surah}"][data-i="${player.ayahIdx}"]`)) return toggle();
     playAyahs(first.s, first.ayahs, first.from - 1);
   };
   $('#pgGo').onclick = () => goToPageSheet(n);
@@ -546,7 +576,7 @@ export async function renderPage(view, args, ctx) {
     if (t === 'next') go(n + 1, 1);
     if (t === 'goto') goToPageSheet(n);
     if (t === 'listen') {
-      if (player.mode === 'ayah' && $(`.w[data-k="${curKey()}"]`, page)) return toggle();
+      if (player.mode === 'ayah' && player.voice === player.reciter && $(`.w[data-k="${curKey()}"]`, page)) return toggle();
       const [s, a] = parts[0];
       playAyahs(s, await getSurah(s), a - 1);
     }
@@ -664,7 +694,8 @@ export function renderListen(view, args, ctx) {
     const b = e.target.closest('.surah');
     if (!b) return;
     const n = +b.dataset.n;
-    if (player.mode === 'surah' && player.surah === n) toggle();
+    // نفس السورة بصوت القارئ نفسه: إيقاف/استئناف، وإلا فتشغيل بالصوت المختار
+    if (player.mode === 'surah' && player.surah === n && player.voice === $('#reciterSel').value) toggle();
     else playSurah(n, $('#reciterSel').value);
   };
   mark();

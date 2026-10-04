@@ -4,8 +4,9 @@
   "private": true,
   "description": "نور — القرآن والمواعظ والأذان",
   "scripts": {
+    "fonts": "node tools/fetch-qcf.mjs",
     "build:www": "node tools/build-www.mjs",
-    "sync": "npm run build:www && npx cap sync android",
+    "sync": "npm run fonts && npm run build:www && npx cap sync android",
     "apk": "npm run sync && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {

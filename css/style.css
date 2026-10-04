@@ -732,3 +732,10 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .mushaf-pick button.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
 .mushaf-pick .dots { display: flex; gap: 3px; margin-bottom: 4px; }
 .mushaf-pick .dots i { width: 9px; height: 9px; border-radius: 50%; }
+
+/* اسم المدينة بجانب التاريخ */
+.hero-top > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hero-date { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; max-width: 58%; text-align: end; }
+.hero-date > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hero-date b { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
+.hero-date b svg { width: 14px; height: 14px; flex: none; }

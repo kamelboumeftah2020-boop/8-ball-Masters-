@@ -1,2 +1,4 @@
 node_modules/
 www/
+# خطوط صفحات المصحف (٩٥ م.ب) تُجلب عند البناء: npm run fonts
+fonts/qcf/

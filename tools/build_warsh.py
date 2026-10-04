@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""يبني صفحات مصحف ورش (مجمع الملك فهد، الإصدار العاشر) من بيانات KFGQPC.
+"""يبني فهرس مصحف ورش (مجمع الملك فهد، الإصدار العاشر) من بيانات KFGQPC.
+
+صفحات ورش نفسها تُبنى في التطبيق من المصدر (js/warshData.js)، وتُقرأ من الإنترنت
+أو بعد تحميلها؛ وهذا الفهرس الصغير وحده مضمّن ليعمل فهرس السور والأجزاء دون اتصال.
+(منطق بناء الكتل هنا مطابق لما في js/warshData.js، ويفيد في فحص البيانات.)
 
 المصدر: github.com/thetruetruth/quran-data-kfgqpc (warsh/data/warshData_v10.json)
 لكل آية: رقم الصفحة، وسطر البداية والنهاية. ينتج:
-  data/warsh/{1..604}.json  →  {"j": الجزء, "b": [كتل]}
+  (للفحص فقط، مع --pages) data/warsh/{1..604}.json  →  {"j": الجزء, "b": [كتل]}
     ["h", سورة]                     سطر اسم السورة
     ["b"]                           سطر البسملة
     ["t", عدد الأسطر, [[سورة, آية, نص, ختم], ...]]   كتلة آيات تملأ عددًا من الأسطر
       ختم = 1 إن كان النص ينتهي بعلامة الآية (0 لجزء أول من آية تكمل في الصفحة التالية)
-  data/warsh/index.json  →  {"p": [[سورة, آية, جزء] لأول آية في كل صفحة],
+  data/warsh-index.json  →  {"p": [[سورة, آية, جزء] لأول آية في كل صفحة],
                               "s": [صفحة بداية كل سورة], "j": [صفحة بداية كل جزء]}
 """
 import json, os, re, sys, urllib.request
@@ -19,8 +23,9 @@ OUT = os.path.join(ROOT, 'data', 'warsh')
 
 
 def load():
-    if len(sys.argv) > 1:
-        return json.load(open(sys.argv[1], encoding='utf-8-sig'))
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    if args:
+        return json.load(open(args[0], encoding='utf-8-sig'))
     with urllib.request.urlopen(SRC) as r:
         return json.loads(r.read().decode('utf-8-sig'))
 
@@ -58,7 +63,8 @@ def main():
             pages[ps[0]].append(dict(s=s, a=a, t=t1, ls=x['line_start'], le=15, end=0, j=x['jozz']))
             pages[ps[1]].insert(0, dict(s=s, a=a, t=t2, ls=1, le=x['line_end'], end=1, j=x['jozz']))
 
-    os.makedirs(OUT, exist_ok=True)
+    if '--pages' in sys.argv:
+        os.makedirs(OUT, exist_ok=True)
     index, sura_page, juz_page = [], {}, {}
     for p in range(1, 605):
         items = pages[p]
@@ -80,14 +86,15 @@ def main():
             block[2].append([it['s'], it['a'], it['t'], it['end']])
             cur = max(cur, it['le'])
             block[1] = cur - block_start + 1
-        json.dump({'j': items[0]['j'], 'b': blocks}, open(os.path.join(OUT, f'{p}.json'), 'w', encoding='utf-8'),
-                  ensure_ascii=False, separators=(',', ':'))
+        if '--pages' in sys.argv:
+            json.dump({'j': items[0]['j'], 'b': blocks}, open(os.path.join(OUT, f'{p}.json'), 'w', encoding='utf-8'),
+                      ensure_ascii=False, separators=(',', ':'))
         index.append([items[0]['s'], items[0]['a'], items[0]['j']])
         for it in items:
             sura_page.setdefault(it['s'], p)
             juz_page.setdefault(it['j'], p)
     index = {'p': index, 's': [sura_page[i] for i in range(1, 115)], 'j': [juz_page[i] for i in range(1, 31)]}
-    json.dump(index, open(os.path.join(OUT, 'index.json'), 'w', encoding='utf-8'), separators=(',', ':'))
+    json.dump(index, open(os.path.join(ROOT, 'data', 'warsh-index.json'), 'w', encoding='utf-8'), separators=(',', ':'))
     print('pages:', len(index['p']), 'ayat:', len(data))
 
 

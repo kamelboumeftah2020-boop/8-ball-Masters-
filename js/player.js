@@ -4,7 +4,7 @@ import { SURAHS } from './data/surahs.js';
 import { mediaPlaying, mediaStopped } from './native.js';
 import * as dl from './downloads.js';
 
-// server: السور كاملة (mp3quran) — ayah: مجلد التلاوة آية بآية (everyayah)
+// server: السور كاملة (mp3quran) — ayah: مجلد التلاوة آية بآية (everyayah)، وإن لم يوجد فبصوت العفاسي
 export const RECITERS = [
   { id: 'afs', name: 'مشاري العفاسي', server: 'https://server8.mp3quran.net/afs/', ayah: 'Alafasy_128kbps' },
   { id: 'basit', name: 'عبد الباسط عبد الصمد', server: 'https://server7.mp3quran.net/basit/', ayah: 'Abdul_Basit_Murattal_192kbps' },
@@ -17,6 +17,24 @@ export const RECITERS = [
   { id: 'yasser', name: 'ياسر الدوسري', server: 'https://server11.mp3quran.net/yasser/', ayah: 'Yasser_Ad-Dussary_128kbps' },
   { id: 'ajm', name: 'أحمد العجمي', server: 'https://server10.mp3quran.net/ajm/', ayah: 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net' },
   { id: 'qtm', name: 'ناصر القطامي', server: 'https://server6.mp3quran.net/qtm/', ayah: 'Nasser_Alqatami_128kbps' },
+  { id: 'ayyub', name: 'محمد أيوب', server: 'https://cdn.mp3quran.net/audio/muhammad-ayyub/r1/', ayah: 'Muhammad_Ayyoub_128kbps' },
+  { id: 'jaber', name: 'علي جابر', server: 'https://cdn.mp3quran.net/audio/ali-jaber/r1/', ayah: 'Ali_Jaber_64kbps' },
+  { id: 'basfar', name: 'عبد الله بصفر', server: 'https://cdn.mp3quran.net/audio/abdullah-basfar/r1/', ayah: 'Abdullah_Basfar_192kbps' },
+  { id: 'hani', name: 'هاني الرفاعي', server: 'https://cdn.mp3quran.net/audio/hani-rifai/r1/', ayah: 'Hani_Rifai_192kbps' },
+  { id: 'fares', name: 'فارس عباد', server: 'https://cdn.mp3quran.net/audio/fares-abbad/r1/', ayah: 'Fares_Abbad_64kbps' },
+  { id: 'jibreel', name: 'محمد جبريل', server: 'https://cdn.mp3quran.net/audio/muhammad-jibreel/r1/', ayah: 'Muhammad_Jibreel_128kbps' },
+  { id: 'hudhaifi', name: 'علي الحذيفي', server: 'https://cdn.mp3quran.net/audio/ali-hudhaifi/r1/', ayah: 'Hudhaify_128kbps' },
+  { id: 'shatri', name: 'أبو بكر الشاطري', server: 'https://cdn.mp3quran.net/audio/abubakr-shatri/r1/', ayah: 'Abu_Bakr_Ash-Shaatree_128kbps' },
+  { id: 'juhani', name: 'عبد الله الجهني', server: 'https://cdn.mp3quran.net/audio/abdullah-juhani/r1/', ayah: 'Abdullaah_3awwaad_Al-Juhaynee_128kbps' },
+  { id: 'budair', name: 'صلاح البدير', server: 'https://cdn.mp3quran.net/audio/salah-budair/r1/', ayah: 'Salah_Al_Budair_128kbps' },
+  { id: 'matrood', name: 'عبد الله المطرود', server: 'https://cdn.mp3quran.net/audio/abdullah-matrood/r1/', ayah: 'Abdullah_Matroud_128kbps' },
+  { id: 'tablawi', name: 'محمد الطبلاوي', server: 'https://cdn.mp3quran.net/audio/muhammad-tablawi/r1/', ayah: 'Mohammad_al_Tablaway_128kbps' },
+  { id: 'akhdar', name: 'إبراهيم الأخضر', server: 'https://cdn.mp3quran.net/audio/ibrahim-akhdar/r1/', ayah: 'Ibrahim_Akhdar_32kbps' },
+  { id: 'banna', name: 'محمود علي البنا', server: 'https://cdn.mp3quran.net/audio/mahmoud-banna/r1/', ayah: 'mahmoud_ali_al_banna_32kbps' },
+  { id: 'tunaiji', name: 'خليفة الطنيجي', server: 'https://cdn.mp3quran.net/audio/khalifa-tunaiji/r1/', ayah: 'khalefa_al_tunaiji_64kbps' },
+  { id: 'abkar', name: 'إدريس أبكر', server: 'https://cdn.mp3quran.net/audio/idrees-abkar/r1/' },
+  { id: 'jalil', name: 'خالد الجليل', server: 'https://cdn.mp3quran.net/audio/khalid-jalil/r1/' },
+  { id: 'luhaidan', name: 'محمد اللحيدان', server: 'https://cdn.mp3quran.net/audio/muhammad-luhaidan/r1/' },
 ];
 export const reciterById = id => RECITERS.find(r => r.id === id) || RECITERS[0];
 export const surahName = n => SURAHS[n - 1][0];
@@ -63,7 +81,7 @@ function startPreferLocal(key, alts = []) {
 export const surahUrl = (reciterId, n) => reciterById(reciterId).server + pad3(n) + '.mp3';
 
 export function playSurah(n, reciterId = player.reciter) {
-  Object.assign(player, { mode: 'surah', surah: n, reciter: reciterId, ayahs: null, lec: null });
+  Object.assign(player, { mode: 'surah', surah: n, reciter: reciterId, voice: reciterId, ayahs: null, lec: null });
   store.set('reciter', reciterId);
   store.set('lastListen', { surah: n, reciter: reciterId });
   startPreferLocal(surahUrl(reciterId, n));
@@ -86,14 +104,19 @@ export function downloadLecture(speaker, item, part = 0) {
 function ayahSources(surah, a) {
   const file = pad3(surah) + pad3(a.numberInSurah) + '.mp3';
   const dir = reciterById(player.reciter).ayah;
+  const alafasy = `https://cdn.islamic.network/quran/audio/128/ar.alafasy/${a.number}.mp3`;
+  if (!dir) return [alafasy, `https://everyayah.com/data/Alafasy_128kbps/${file}`];
   return [
     `https://everyayah.com/data/${dir}/${file}`,
     `https://mirrors.quranicaudio.com/everyayah/${dir}/${file}`,
-    `https://cdn.islamic.network/quran/audio/128/ar.alafasy/${a.number}.mp3`,
+    alafasy,
   ];
 }
+let noAyahNoted = '';
 export function playAyahs(surah, ayahs, idx) {
-  Object.assign(player, { mode: 'ayah', surah, ayahs, ayahIdx: idx, lec: null });
+  Object.assign(player, { mode: 'ayah', surah, ayahs, ayahIdx: idx, lec: null, voice: player.reciter });
+  const r = reciterById(player.reciter);
+  if (!r.ayah && noAyahNoted !== r.id) { noAyahNoted = r.id; toast(`التلاوة آية بآية غير متوفرة بصوت ${r.name}، فتُتلى بصوت مشاري العفاسي`); }
   const [src, ...alts] = ayahSources(surah, ayahs[idx]);
   start(src, alts);
 }

@@ -3,18 +3,15 @@ import { $, $$, store, arNum, toast, fetchJSON, copyText, shareText, icons, shee
 import { surahName } from '../player.js';
 import { immersive, keepAwake } from '../native.js';
 import { goToPageSheet } from './quran.js';
+import { loadWarsh, download, WARSH_SIZE_MB } from '../warshData.js';
 
 const BASMALA = 'بِسْمِ اِ۬للَّهِ اِ۬لرَّحْمَٰنِ اِ۬لرَّحِيمِ';
-const pageCache = new Map();
 let indexP = null;
 
+// فهرس صغير مضمّن (أول آية في كل صفحة، وصفحات السور والأجزاء) ليعمل الفهرس دون اتصال
 export function getWarshIndex() {
-  if (!indexP) indexP = fetchJSON('data/warsh/index.json').catch(e => { indexP = null; throw e; });
+  if (!indexP) indexP = fetchJSON('data/warsh-index.json').catch(e => { indexP = null; throw e; });
   return indexP;
-}
-function getPage(p) {
-  if (!pageCache.has(p)) pageCache.set(p, fetchJSON(`data/warsh/${p}.json`).catch(e => { pageCache.delete(p); throw e; }));
-  return pageCache.get(p);
 }
 
 export const warshMarks = () => store.get('warshMarks', []);
@@ -35,15 +32,18 @@ export async function renderWarsh(view, args, ctx) {
   view.innerHTML = '<div class="qr-loading"><div class="spinner"></div></div>';
   let data, index;
   try {
-    [data, index] = await Promise.all([getPage(n), getWarshIndex(), document.fonts?.load('20px "KFGQPC Warsh"').catch(() => {})]);
+    const [pages, idx] = await Promise.all([loadWarsh(), getWarshIndex()]);
+    data = pages[n - 1]; index = idx;
   } catch {
     if (!ctx.alive()) return;
-    view.innerHTML = `<div class="error-box">تعذّر تحميل الصفحة.<br><br><button class="btn" id="retry">إعادة المحاولة</button></div>`;
+    // مصحف ورش يحتاج إلى الإنترنت ما لم يُحمَّل
+    view.innerHTML = `<div class="error-box">مصحف ورش يُقرأ من الإنترنت، ويمكن تحميله (نحو ${arNum(WARSH_SIZE_MB)} م.ب) ليعمل دون اتصال.<br>تحقق من الاتصال ثم أعد المحاولة.<br><br>
+      <button class="btn" id="retry">إعادة المحاولة</button> <button class="btn ghost" id="dlWarsh">تحميل المصحف</button></div>`;
     $('#retry').onclick = () => renderWarsh(view, args, ctx);
+    $('#dlWarsh').onclick = () => download().then(() => { toast('حُفظ مصحف ورش في جهازك'); renderWarsh(view, args, ctx); }, () => toast('تعذّر التحميل، تحقق من الاتصال'));
     return;
   }
   if (!ctx.alive()) return;
-  if (n < 604) getPage(n + 1).catch(() => {});
 
   document.body.classList.add('reader-full');
   immersive(true);
