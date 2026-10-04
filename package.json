@@ -7,7 +7,8 @@
     "fonts": "node tools/fetch-qcf.mjs",
     "build:www": "node tools/build-www.mjs",
     "sync": "npm run fonts && npm run build:www && npx cap sync android",
-    "apk": "npm run sync && cd android && ./gradlew assembleRelease"
+    "apk": "npm run sync && cd android && ./gradlew assembleRelease",
+    "apk:lite": "LITE=1 node tools/build-www.mjs && npx cap sync android && cd android && ./gradlew assembleRelease -Plite"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

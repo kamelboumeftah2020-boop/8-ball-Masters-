@@ -10,14 +10,15 @@ export const fontFamily = p => `QCF2_P${p}`;
 
 let bundledP = null;
 export function isBundled() {
-  if (!bundledP) bundledP = fetch(LOCAL_URL(1)).then(r => r.ok, () => false);
+  // في النسخة المخففة لا تُضمَّن الخطوط؛ نتحقق من حجم الملف لا من نجاح الطلب وحده
+  if (!bundledP) bundledP = fetch(LOCAL_URL(1)).then(r => (r.ok ? r.arrayBuffer().then(b => b.byteLength > 1000) : false), () => false);
   return bundledP;
 }
 
 async function fontData(p) {
   if (await isBundled()) {
-    const r = await fetch(LOCAL_URL(p));
-    if (r.ok) return r.arrayBuffer();
+    const r = await fetch(LOCAL_URL(p)).catch(() => null);
+    if (r?.ok) { const b = await r.arrayBuffer(); if (b.byteLength > 1000) return b; }
   }
   const url = FONT_URL(p);
   if ('caches' in window) {
