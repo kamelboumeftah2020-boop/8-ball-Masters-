@@ -48,3 +48,11 @@ export function mediaStopped() {
 export function setBarsStyle(dark) {
   plugin('SystemBars')?.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(() => {});
 }
+
+// زر الرجوع في أندرويد: نتولّاه بأنفسنا بدل الخروج من التطبيق
+export function onBackButton(handler) {
+  plugin('App')?.addListener('backButton', handler);
+}
+export function minimizeApp() {
+  plugin('App')?.minimizeApp().catch(() => {});
+}

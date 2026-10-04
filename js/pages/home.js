@@ -47,7 +47,7 @@ export function renderHome(view, args, ctx) {
     const w = dailyWa3z();
     const rem = reminders();
     const cont = [];
-    if (last) cont.push(`<a class="mini-card" href="#/mushaf/${last.s}/${last.a}"><span class="tile-ic sm">${icons.book}</span><span><small>تابع القراءة</small><b>${surahName(last.s)} · ${arNum(last.a)}</b></span></a>`);
+    if (last) cont.push(`<a class="mini-card" href="${last.p ? `#/page/${last.p}` : `#/mushaf/${last.s}/${last.a}`}"><span class="tile-ic sm">${icons.book}</span><span><small>تابع القراءة</small><b>${last.p ? `صفحة ${arNum(last.p)} · ` : ''}${surahName(last.s)}</b></span></a>`);
     if (lastL) cont.push(`<button class="mini-card" id="contListen"><span class="tile-ic sm gold">${icons.headphones}</span><span><small>تابع التلاوة</small><b>${surahName(lastL.surah)} · ${esc(reciterById(lastL.reciter).name.split(' ').slice(-1)[0])}</b></span></button>`);
     if (lastLec) cont.push(`<button class="mini-card" id="contLec"><span class="tile-ic sm">${icons.mic}</span><span><small>تابع الموعظة</small><b>${esc(lastLec.title)}</b></span></button>`);
 

@@ -3,17 +3,19 @@ import { $, store, arNum, esc, pad3, fmtDur, toast, icons, sheet } from './core.
 import { SURAHS } from './data/surahs.js';
 import { isNative, mediaPlaying, mediaStopped, openExternal } from './native.js';
 
+// server: السور كاملة (mp3quran) — ayah: مجلد التلاوة آية بآية (everyayah)
 export const RECITERS = [
-  { id: 'afs', name: 'مشاري العفاسي', server: 'https://server8.mp3quran.net/afs/', ayah: 'ar.alafasy' },
-  { id: 'basit', name: 'عبد الباسط عبد الصمد', server: 'https://server7.mp3quran.net/basit/' },
-  { id: 'husr', name: 'محمود خليل الحصري', server: 'https://server13.mp3quran.net/husr/', ayah: 'ar.husary' },
-  { id: 'minsh', name: 'محمد صديق المنشاوي', server: 'https://server10.mp3quran.net/minsh/', ayah: 'ar.minshawi' },
-  { id: 'maher', name: 'ماهر المعيقلي', server: 'https://server12.mp3quran.net/maher/', ayah: 'ar.mahermuaiqly' },
-  { id: 'sds', name: 'عبد الرحمن السديس', server: 'https://server11.mp3quran.net/sds/' },
-  { id: 'gmd', name: 'سعد الغامدي', server: 'https://server7.mp3quran.net/s_gmd/' },
-  { id: 'yasser', name: 'ياسر الدوسري', server: 'https://server11.mp3quran.net/yasser/' },
-  { id: 'ajm', name: 'أحمد العجمي', server: 'https://server10.mp3quran.net/ajm/', ayah: 'ar.ahmedajamy' },
-  { id: 'qtm', name: 'ناصر القطامي', server: 'https://server6.mp3quran.net/qtm/' },
+  { id: 'afs', name: 'مشاري العفاسي', server: 'https://server8.mp3quran.net/afs/', ayah: 'Alafasy_128kbps' },
+  { id: 'basit', name: 'عبد الباسط عبد الصمد', server: 'https://server7.mp3quran.net/basit/', ayah: 'Abdul_Basit_Murattal_192kbps' },
+  { id: 'husr', name: 'محمود خليل الحصري', server: 'https://server13.mp3quran.net/husr/', ayah: 'Husary_128kbps' },
+  { id: 'minsh', name: 'محمد صديق المنشاوي', server: 'https://server10.mp3quran.net/minsh/', ayah: 'Minshawy_Murattal_128kbps' },
+  { id: 'maher', name: 'ماهر المعيقلي', server: 'https://server12.mp3quran.net/maher/', ayah: 'MaherAlMuaiqly128kbps' },
+  { id: 'sds', name: 'عبد الرحمن السديس', server: 'https://server11.mp3quran.net/sds/', ayah: 'Abdurrahmaan_As-Sudais_192kbps' },
+  { id: 'shur', name: 'سعود الشريم', server: 'https://server7.mp3quran.net/shur/', ayah: 'Saood_ash-Shuraym_128kbps' },
+  { id: 'gmd', name: 'سعد الغامدي', server: 'https://server7.mp3quran.net/s_gmd/', ayah: 'Ghamadi_40kbps' },
+  { id: 'yasser', name: 'ياسر الدوسري', server: 'https://server11.mp3quran.net/yasser/', ayah: 'Yasser_Ad-Dussary_128kbps' },
+  { id: 'ajm', name: 'أحمد العجمي', server: 'https://server10.mp3quran.net/ajm/', ayah: 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net' },
+  { id: 'qtm', name: 'ناصر القطامي', server: 'https://server6.mp3quran.net/qtm/', ayah: 'Nasser_Alqatami_128kbps' },
 ];
 export const reciterById = id => RECITERS.find(r => r.id === id) || RECITERS[0];
 export const surahName = n => SURAHS[n - 1][0];
@@ -54,10 +56,20 @@ export function playSurah(n, reciterId = player.reciter) {
   start(reciterById(reciterId).server + pad3(n) + '.mp3');
 }
 
-export const ayahEdition = () => reciterById(player.reciter).ayah || 'ar.alafasy';
+// رابط الآية بصوت القارئ المختار، ثم بديل احتياطي بصوت العفاسي
+function ayahSources(surah, a) {
+  const file = pad3(surah) + pad3(a.numberInSurah) + '.mp3';
+  const dir = reciterById(player.reciter).ayah;
+  return [
+    `https://everyayah.com/data/${dir}/${file}`,
+    `https://mirrors.quranicaudio.com/everyayah/${dir}/${file}`,
+    `https://cdn.islamic.network/quran/audio/128/ar.alafasy/${a.number}.mp3`,
+  ];
+}
 export function playAyahs(surah, ayahs, idx) {
   Object.assign(player, { mode: 'ayah', surah, ayahs, ayahIdx: idx, lec: null });
-  start(`https://cdn.islamic.network/quran/audio/128/${ayahEdition()}/${ayahs[idx].number}.mp3`);
+  const [src, ...alts] = ayahSources(surah, ayahs[idx]);
+  start(src, alts);
 }
 
 export function playLecture(speaker, list, idx, part = 0) {
@@ -141,7 +153,7 @@ audio.addEventListener('ended', () => {
   savePos(true);
   if (sleepEnd) { sleepEnd = false; refreshSheet(); return; }
   if (player.repeat) { audio.currentTime = 0; audio.play(); return; }
-  if (player.mode === 'ayah' && player.ayahIdx >= player.ayahs.length - 1) return;
+  if (player.mode === 'ayah' && player.ayahIdx >= player.ayahs.length - 1) { emit('ayahs-end'); return; }
   if (player.mode === 'surah' && player.surah >= 114) return;
   step(1);
 });
@@ -195,7 +207,7 @@ export function trackInfo() {
   if (player.mode === 'surah') return { title: 'سورة ' + surahName(player.surah), sub: reciterById(player.reciter).name, link: '#/listen' };
   if (player.mode === 'ayah') {
     const r = reciterById(player.reciter);
-    return { title: 'سورة ' + surahName(player.surah), sub: `الآية ${arNum(player.ayahs[player.ayahIdx].numberInSurah)} · ${r.ayah ? r.name : 'مشاري العفاسي'}`, link: `#/mushaf/${player.surah}` };
+    return { title: 'سورة ' + surahName(player.surah), sub: `الآية ${arNum(player.ayahs[player.ayahIdx].numberInSurah)} · ${r.name}`, link: `#/mushaf/${player.surah}` };
   }
   if (player.mode === 'lecture') {
     const { speaker, list, idx, part } = player.lec;

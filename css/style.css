@@ -525,3 +525,62 @@ select.select {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ═════════ المصحف بالصفحات ═════════ */
+.mushaf-top { display: flex; gap: 10px; align-items: stretch; margin-bottom: 14px; }
+.mushaf-top .continue { flex: 1; margin: 0; min-width: 0; }
+.goto-page { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 78px; padding: 10px; color: var(--primary); font-size: 13px; font-weight: 600; }
+.goto-page b { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--primary-soft); }
+.page-input { margin-top: 14px; height: 54px; font-size: 22px; text-align: center; font-weight: 700; }
+
+body.page-mode .view { padding-top: 0; padding-bottom: calc(var(--tab-h) + 12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))); }
+body.page-mode.has-player .view { padding-bottom: calc(var(--tab-h) + 92px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))); }
+.m-book {
+  --chrome: calc(62px + var(--safe-area-inset-top, env(safe-area-inset-top)) + 64px + var(--tab-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 16px);
+  height: calc(100dvh - var(--chrome)); min-height: 360px;
+  display: flex; justify-content: center; touch-action: pan-y; perspective: 1400px;
+}
+.has-player .m-book { height: calc(100dvh - var(--chrome) - 80px); }
+.m-page {
+  position: relative; width: 100%; max-width: 520px; height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--page); border-radius: 10px 18px 18px 10px;
+  padding: 10px 14px 8px;
+  box-shadow: var(--shadow), inset -10px 0 18px -14px rgba(0, 0, 0, .18);
+  border: 1px solid var(--line);
+  animation: pageIn .22s ease;
+}
+/* الإطار المزخرف المزدوج */
+.m-page::before { content: ""; position: absolute; inset: 5px; border: 2px solid color-mix(in srgb, var(--gold) 55%, transparent); border-radius: 8px 14px 14px 8px; pointer-events: none; }
+.m-page::after { content: ""; position: absolute; inset: 9px; border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent); border-radius: 6px 12px 12px 6px; pointer-events: none; }
+@keyframes pageIn { from { opacity: .3; transform: translateX(var(--from, 0)); } }
+.m-page.out-next { transition: transform .16s ease-in, opacity .16s; transform: translateX(40%) rotateY(-12deg); opacity: 0; }
+.m-page.out-prev { transition: transform .16s ease-in, opacity .16s; transform: translateX(-40%) rotateY(12deg); opacity: 0; }
+.m-head { display: flex; justify-content: space-between; gap: 8px; padding: 4px 10px 2px; font-size: 12px; color: var(--gold); font-weight: 600; position: relative; z-index: 1; border-bottom: 1px solid color-mix(in srgb, var(--gold) 25%, transparent); }
+.m-body { flex: 1; min-height: 0; overflow: hidden; padding: 4px 8px; position: relative; z-index: 1; display: flex; flex-direction: column; --mfs: 22px; font-size: var(--mfs); }
+.m-body.scroll { overflow-y: auto; }
+.m-page.opening .m-body { justify-content: center; }
+.m-text { font-family: var(--quran); font-size: 1em; line-height: 2.05; text-align: justify; text-align-last: center; margin: 0; word-spacing: .5px; }
+.m-page.opening .m-text { text-align: center; }
+.m-banner {
+  margin: .25em 0 .1em; padding: .1em 0; text-align: center; font-family: var(--quran); font-size: 1.08em; line-height: 1.75; color: var(--gold);
+  background: linear-gradient(90deg, transparent, var(--gold-soft) 15%, var(--gold-soft) 85%, transparent);
+  border-block: 1.5px solid color-mix(in srgb, var(--gold) 55%, transparent); position: relative;
+}
+.m-banner span::before, .m-banner span::after { content: "۞"; font-size: .7em; margin: 0 .6em; opacity: .7; }
+.m-basmala { text-align: center; font-family: var(--quran); font-size: 1em; line-height: 1.9; }
+.m-foot { display: flex; justify-content: center; padding-top: 2px; position: relative; z-index: 1; }
+.m-foot span { min-width: 34px; height: 24px; padding: 0 8px; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; color: var(--gold); border: 1.5px solid color-mix(in srgb, var(--gold) 60%, transparent); border-radius: 12px; background: var(--page); }
+.m-page .ayah.flash { animation: flash 2.4s ease; }
+/* شريطة العلامة كما في المصحف الورقي */
+.ribbon { position: absolute; top: -4px; left: 26px; width: 18px; height: 0; z-index: 3; background: #b8913a; transition: height .25s ease; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%); box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+.m-page.marked .ribbon { height: 54px; }
+.m-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 10px; }
+.m-bar .icon-btn { width: 46px; height: 46px; flex: none; }
+.m-bar .icon-btn[disabled] { opacity: .35; }
+.m-btn { min-height: 46px; padding: 0 12px; font-size: 13.5px; flex: 1; gap: 6px; background: var(--surface); box-shadow: var(--shadow); }
+.m-btn.on { color: var(--gold); }
+.m-btn.on svg { fill: currentColor; }
+#pgGo { font-variant-numeric: tabular-nums; white-space: nowrap; flex: 1.2; }
+.m-btn span { white-space: nowrap; }
+@media (max-width: 380px) { .m-btn { padding: 0 8px; font-size: 12.5px; } .m-btn svg { display: none; } }

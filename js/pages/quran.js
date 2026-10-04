@@ -23,27 +23,29 @@ function surahRows(filter, mode) {
     </button>`).join('');
 }
 
-const bookmarks = () => store.get('bookmarks', []);
-function toggleBookmark(s, a) {
-  const b = bookmarks();
-  const i = b.findIndex(x => x.s === s && x.a === a);
-  if (i >= 0) b.splice(i, 1); else b.unshift({ s, a, t: Date.now() });
-  store.set('bookmarks', b);
-  return i < 0;
-}
 
 /* ── فهرس المصحف ── */
-export function renderMushaf(view, args, ctx) {
+export async function renderMushaf(view, args, ctx) {
   if (args[0]) return renderReader(view, +args[0], +(args[1] || 0), ctx);
+  await migrateMarks().catch(() => {});
+  if (!ctx.alive()) return;
   const last = store.get('lastRead');
+  const lastHref = last ? (last.p ? `#/page/${last.p}` : `#/mushaf/${last.s}/${last.a}`) : '';
   let tab = store.get('mushafTab', 'surahs');
   view.innerHTML = `
     ${segment('mushaf')}
-    ${last ? `<a class="card continue" href="#/mushaf/${last.s}/${last.a}">
-      <span class="tile-ic">${icons.book}</span>
-      <div><small class="muted">آخر قراءة</small><strong>سورة ${surahName(last.s)}</strong><small class="muted">الآية ${arNum(last.a)}</small></div>
-      <span class="chev">${icons.chevron}</span>
-    </a>` : ''}
+    <div class="mushaf-top">
+      ${last ? `<a class="card continue" href="${lastHref}">
+        <span class="tile-ic">${icons.book}</span>
+        <div><small class="muted">آخر قراءة</small><strong>${last.p ? `الصفحة ${arNum(last.p)}` : `سورة ${surahName(last.s)}`}</strong><small class="muted">سورة ${surahName(last.s)}</small></div>
+        <span class="chev">${icons.chevron}</span>
+      </a>` : `<a class="card continue" href="#/page/1">
+        <span class="tile-ic">${icons.book}</span>
+        <div><small class="muted">ابدأ القراءة</small><strong>من أول المصحف</strong><small class="muted">سورة الفاتحة</small></div>
+        <span class="chev">${icons.chevron}</span>
+      </a>`}
+      <button class="card goto-page" id="gotoPage"><b>${icons.layers}</b><span>صفحة</span></button>
+    </div>
     <label class="search">${icons.search}<input id="q" type="search" placeholder="ابحث عن سورة أو كلمة في القرآن" autocomplete="off"></label>
     <div id="qsearch"></div>
     <div class="tabs" id="tabs">
@@ -51,6 +53,8 @@ export function renderMushaf(view, args, ctx) {
     </div>
     <div id="list"></div>`;
 
+  const pagesData = await getPages().catch(() => []);
+  if (!ctx.alive()) return;
   const draw = () => {
     $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.t === tab));
     const q = $('#q').value;
@@ -62,15 +66,19 @@ export function renderMushaf(view, args, ctx) {
       list.className = 'juz-grid';
       list.innerHTML = JUZ.map(([s, a], i) => `<a class="juz" href="#/mushaf/${s}/${a}"><b>${arNum(i + 1)}</b><span>الجزء</span><small>${surahName(s)} ${arNum(a)}</small></a>`).join('');
     } else {
-      const bm = bookmarks();
+      const bm = pageMarks();
       list.className = 'list-card';
-      list.innerHTML = bm.length ? bm.map(b => `<a class="row" href="#/mushaf/${b.s}/${b.a}">
+      list.innerHTML = bm.length ? bm.map(b => {
+        const [parts, juz] = pagesData[b.p - 1];
+        return `<a class="row" href="#/page/${b.p}">
         <span class="tile-ic gold sm">${icons.bookmark}</span>
-        <span class="meta"><strong>سورة ${surahName(b.s)}</strong><small>الآية ${arNum(b.a)}</small></span>
-        <span class="chev">${icons.chevron}</span></a>`).join('')
-        : '<div class="empty">لا توجد علامات بعد.<br>اضغط على أي آية أثناء القراءة واختر «حفظ علامة».</div>';
+        <span class="meta"><strong>الصفحة ${arNum(b.p)}</strong><small>سورة ${surahName(parts[0][0])} · الجزء ${arNum(juz)}</small></span>
+        <span class="chev">${icons.chevron}</span></a>`;
+      }).join('')
+        : '<div class="empty">لا توجد علامات بعد.<br>اضغط «علامة» أسفل أي صفحة أثناء القراءة.</div>';
     }
   };
+  $('#gotoPage').onclick = () => goToPageSheet(last?.p || 1);
   $('#tabs').onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -127,80 +135,219 @@ async function getSurah(n) {
   return ayahs;
 }
 
-function highlightAyah() {
-  $$('.ayah.active').forEach(el => el.classList.remove('active'));
-  if (player.mode !== 'ayah') return;
-  const el = document.querySelector(`.ayah[data-s="${player.surah}"][data-i="${player.ayahIdx}"]`);
-  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+/* ── فهرس الصفحات (٦٠٤ صفحة كمصحف المدينة) ── */
+let pagesIndex = null;
+export async function getPages() {
+  if (!pagesIndex) pagesIndex = fetchJSON('data/pages.json').catch(e => { pagesIndex = null; throw e; });
+  return pagesIndex;
+}
+// رقم الصفحة التي فيها الآية
+export async function pageOf(s, a) {
+  const pages = await getPages();
+  for (let i = 0; i < pages.length; i++) {
+    if (pages[i][0].some(([ps, from, to]) => ps === s && a >= from && a <= to)) return i + 1;
+  }
+  return 1;
 }
 
+/* ── علامات الصفحات وآخر قراءة ── */
+const pageMarks = () => store.get('pageMarks', []);
+export function togglePageMark(p) {
+  const m = pageMarks();
+  const i = m.findIndex(x => x.p === p);
+  if (i >= 0) m.splice(i, 1); else m.unshift({ p, t: Date.now() });
+  store.set('pageMarks', m);
+  return i < 0;
+}
+// نقل علامات الآيات القديمة إلى علامات صفحات
+async function migrateMarks() {
+  const old = store.get('bookmarks', []);
+  if (!old.length) return;
+  const m = pageMarks();
+  for (const b of old) {
+    const p = await pageOf(b.s, b.a);
+    if (!m.some(x => x.p === p)) m.push({ p, t: b.t || Date.now() });
+  }
+  store.set('pageMarks', m);
+  store.set('bookmarks', []);
+}
+
+/* ── القارئ: من سورة/آية إلى صفحتها ── */
 async function renderReader(view, n, goto, ctx) {
   if (!(n >= 1 && n <= 114)) { location.hash = '#/mushaf'; return; }
-  ctx.title('سورة ' + surahName(n));
+  const p = await pageOf(n, goto || 1);
+  if (!ctx.alive()) return;
+  location.replace(`#/page/${p}${goto ? `/${n}/${goto}` : ''}`);
+}
+
+const BASMALA = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
+
+export async function renderPage(view, args, ctx) {
+  const n = Math.min(604, Math.max(1, +args[0] || 1));
+  const flashS = +args[1] || 0, flashA = +args[2] || 0;
   ctx.back('#/mushaf');
-  view.innerHTML = '<div class="loader"><div class="spinner"></div>جارٍ تحميل السورة…</div>';
-  let ayahs;
-  try { ayahs = await getSurah(n); } catch {
-    view.innerHTML = `<div class="error-box">تعذّر تحميل السورة. تحقق من الاتصال بالإنترنت.<br><br><button class="btn" id="retry">إعادة المحاولة</button></div>`;
-    $('#retry').onclick = () => renderReader(view, n, goto, ctx);
+  document.body.classList.add('page-mode');
+  ctx.cleanup(() => document.body.classList.remove('page-mode'));
+  let pages, parts;
+  try {
+    pages = await getPages();
+    parts = await Promise.all(pages[n - 1][0].map(async ([s, from, to]) => ({ s, from, to, ayahs: await getSurah(s) })));
+  } catch {
+    view.innerHTML = `<div class="error-box">تعذّر تحميل الصفحة.<br><br><button class="btn" id="retry">إعادة المحاولة</button></div>`;
+    $('#retry').onclick = () => renderPage(view, args, ctx);
     return;
   }
   if (!ctx.alive()) return;
-  const marks = new Set(bookmarks().filter(b => b.s === n).map(b => b.a));
-  const size = store.get('qsize', 28);
+  const [, juz, hizb] = pages[n - 1];
+  const first = parts[0];
+  ctx.title('سورة ' + surahName(first.s));
+  store.set('lastRead', { p: n, s: first.s, a: first.from });
+  const marked = pageMarks().some(x => x.p === n);
+  // الصفحتان الأوليان (الفاتحة وأول البقرة) تُعرضان في الوسط كما في المصحف
+  const opening = n <= 2;
+
+  const body = parts.map(({ s, from, to, ayahs }) => {
+    let h = '';
+    if (from === 1) {
+      h += `<div class="m-banner"><span>سورة ${surahName(s)}</span></div>`;
+      if (s !== 1 && s !== 9) h += `<div class="m-basmala">${BASMALA}</div>`;
+    }
+    const items = [];
+    for (let i = from - 1; i < to; i++) {
+      const a = ayahs[i];
+      items.push(`<span class="ayah" data-s="${s}" data-i="${i}">${a.text}<span class="end">۝${arNum(a.numberInSurah)}</span></span>`);
+    }
+    return h + `<p class="m-text">${items.join(' ')}</p>`;
+  }).join('');
+
   view.innerHTML = `
-    <div class="reader-bar">
-      <button class="icon-btn raised" id="fsMinus" aria-label="تصغير الخط">${icons.minus}</button>
-      <button class="icon-btn raised" id="fsPlus" aria-label="تكبير الخط">${icons.plus}</button>
-      <span class="spacer"></span>
-      <button class="btn" id="listenAll">${icons.headphones} استمع للسورة</button>
+    <div class="m-book" id="book">
+      <article class="m-page ${opening ? 'opening' : ''} ${marked ? 'marked' : ''}" id="mpage">
+        <span class="ribbon" aria-hidden="true"></span>
+        <header class="m-head"><span>سورة ${surahName(first.s)}</span><span>الجزء ${arNum(juz)} · الحزب ${arNum(hizb)}</span></header>
+        <div class="m-body" id="mbody">${body}</div>
+        <footer class="m-foot"><span>${arNum(n)}</span></footer>
+      </article>
     </div>
-    <article class="mushaf-page" style="--qsize:${size}px">
-      <header class="surah-banner"><h2>سورة ${surahName(n)}</h2><small>${surahSub(n)} · الجزء ${arNum(ayahs[0].juz)} · الصفحة ${arNum(ayahs[0].page)}</small></header>
-      ${n !== 1 && n !== 9 ? '<div class="basmala">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>' : ''}
-      <p class="quran-text">${ayahs.map((a, i) => `<span class="ayah ${marks.has(a.numberInSurah) ? 'marked' : ''}" data-s="${n}" data-i="${i}" id="a${a.numberInSurah}">${a.text}<span class="end">۝${arNum(a.numberInSurah)}</span></span> `).join('')}</p>
-    </article>
-    <div class="reader-nav">
-      ${n > 1 ? `<a class="btn ghost" href="#/mushaf/${n - 1}">${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')} ${surahName(n - 1)}</a>` : '<span></span>'}
-      ${n < 114 ? `<a class="btn ghost" href="#/mushaf/${n + 1}">${surahName(n + 1)} ${icons.chevron}</a>` : ''}
+    <div class="m-bar">
+      <button class="icon-btn raised" id="pgPrev" aria-label="الصفحة السابقة" ${n <= 1 ? 'disabled' : ''}>${icons.chevron.replace('<svg', '<svg style="transform:scaleX(-1)"')}</button>
+      <button class="btn ghost m-btn ${marked ? 'on' : ''}" id="pgMark">${icons.bookmark}<span>علامة</span></button>
+      <button class="btn ghost m-btn" id="pgListen">${icons.headphones}<span>استماع</span></button>
+      <button class="btn ghost m-btn" id="pgGo">${arNum(n)} / ${arNum(604)}</button>
+      <button class="icon-btn raised" id="pgNext" aria-label="الصفحة التالية" ${n >= 604 ? 'disabled' : ''}>${icons.chevron}</button>
     </div>`;
 
-  const page = $('.mushaf-page');
-  const setSize = d => {
-    const v = Math.min(44, Math.max(18, store.get('qsize', 28) + d));
-    store.set('qsize', v);
-    page.style.setProperty('--qsize', v + 'px');
-  };
-  $('#fsMinus').onclick = () => setSize(-2);
-  $('#fsPlus').onclick = () => setSize(2);
-  $('#listenAll').onclick = () => playAyahs(n, ayahs, 0);
-  page.onclick = e => {
-    const el = e.target.closest('.ayah');
-    if (el) ayahSheet(n, ayahs, +el.dataset.i, el);
+  const go = (p, dir) => {
+    if (p < 1 || p > 604 || p === n) return;
+    const pg = $('#mpage');
+    if (pg && dir) pg.classList.add(dir > 0 ? 'out-next' : 'out-prev');
+    setTimeout(() => { if (ctx.alive()) location.replace(`#/page/${p}`); }, dir ? 160 : 0);
   };
 
-  const prevRead = store.get('lastRead', {});
-  store.set('lastRead', { s: n, a: goto || (prevRead.s === n ? prevRead.a : 1) });
-  if (goto) {
-    const el = $('#a' + goto);
-    if (el) setTimeout(() => { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); }, 60);
-  }
-  if (player.mode === 'ayah' && player.surah === n) highlightAyah();
+  // ملاءمة حجم الخط لتظهر الصفحة كاملة دون تمرير
+  const fit = () => {
+    const pg = $('#mpage'), bd = $('#mbody');
+    if (!pg || !bd) return;
+    let lo = 13, hi = opening ? 34 : 30;
+    for (let k = 0; k < 10; k++) {
+      const mid = (lo + hi) / 2;
+      bd.style.setProperty('--mfs', mid + 'px');
+      if (bd.scrollHeight <= bd.clientHeight + 1) lo = mid; else hi = mid;
+    }
+    bd.style.setProperty('--mfs', Math.floor(lo * 4) / 4 + 'px');
+    bd.classList.toggle('scroll', bd.scrollHeight > bd.clientHeight + 1);
+  };
+  (document.fonts?.load ? document.fonts.load('20px "Amiri Quran"').catch(() => {}) : Promise.resolve()).then(() => { if (ctx.alive()) { fit(); flash(); highlight(false); } });
+  window.addEventListener('resize', fit);
+  ctx.cleanup(() => window.removeEventListener('resize', fit));
 
-  // حفظ موضع القراءة تلقائيًا أثناء التمرير
-  const io = new IntersectionObserver(entries => {
-    const vis = entries.filter(e => e.isIntersecting).map(e => +e.target.id.slice(1));
-    if (vis.length) store.set('lastRead', { s: n, a: Math.min(...vis) });
-  }, { rootMargin: '-30% 0px -60% 0px' });
-  $$('.ayah').forEach(el => io.observe(el));
-  const onChange = () => highlightAyah();
+  const flash = () => {
+    if (!flashS) return;
+    const i = flashA - 1;
+    const el = $(`.ayah[data-s="${flashS}"][data-i="${i}"]`);
+    if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'nearest' }); }
+  };
+
+  // تمييز الآية التي تُتلى، وقلب الصفحة مع التلاوة
+  const highlight = follow => {
+    $$('.ayah.active').forEach(el => el.classList.remove('active'));
+    if (player.mode !== 'ayah') return;
+    const el = $(`.ayah[data-s="${player.surah}"][data-i="${player.ayahIdx}"]`);
+    if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); return; }
+    if (follow) {
+      const a = player.ayahs[player.ayahIdx];
+      if (a?.page && a.page !== n) location.replace(`#/page/${a.page}`);
+    }
+  };
+  const onChange = () => highlight(true);
+  // عند انتهاء السورة أثناء الاستماع نكمل بالسورة التالية
+  const onEnd = async () => {
+    if (player.surah >= 114) return;
+    const next = player.surah + 1;
+    const ayahs = await getSurah(next);
+    playAyahs(next, ayahs, 0);
+  };
   pEvents.addEventListener('change', onChange);
-  ctx.cleanup(() => { io.disconnect(); pEvents.removeEventListener('change', onChange); });
+  pEvents.addEventListener('ayahs-end', onEnd);
+  ctx.cleanup(() => { pEvents.removeEventListener('change', onChange); pEvents.removeEventListener('ayahs-end', onEnd); });
+
+  $('#pgNext').onclick = () => go(n + 1, 1);
+  $('#pgPrev').onclick = () => go(n - 1, -1);
+  $('#pgMark').onclick = () => {
+    const on = togglePageMark(n);
+    $('#mpage').classList.toggle('marked', on);
+    $('#pgMark').classList.toggle('on', on);
+    toast(on ? `وُضعت العلامة عند الصفحة ${arNum(n)}` : 'أُزيلت العلامة');
+  };
+  $('#pgListen').onclick = () => {
+    if (player.mode === 'ayah' && $(`.ayah[data-s="${player.surah}"][data-i="${player.ayahIdx}"]`)) return toggle();
+    playAyahs(first.s, first.ayahs, first.from - 1);
+  };
+  $('#pgGo').onclick = () => goToPageSheet(n);
+  $('#mbody').onclick = e => {
+    const el = e.target.closest('.ayah');
+    if (!el) return;
+    const s = +el.dataset.s;
+    const part = parts.find(x => x.s === s);
+    ayahSheet(s, part.ayahs, +el.dataset.i, n);
+  };
+
+  // السحب لتقليب الصفحات: إلى اليمين للتالية كما في المصحف الورقي
+  let sx = 0, sy = 0, st = 0;
+  const book = $('#book');
+  book.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); }, { passive: true });
+  book.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - st < 800) go(dx > 0 ? n + 1 : n - 1, dx > 0 ? 1 : -1);
+  }, { passive: true });
+  const onKey = e => {
+    if (e.key === 'ArrowLeft') go(n + 1, 1);
+    if (e.key === 'ArrowRight') go(n - 1, -1);
+  };
+  document.addEventListener('keydown', onKey);
+  ctx.cleanup(() => document.removeEventListener('keydown', onKey));
 }
 
-function ayahSheet(n, ayahs, i, el) {
+function goToPageSheet(current) {
+  const { el, close } = sheet(`
+    <div class="sheet-head"><h3>الانتقال إلى صفحة</h3><small class="muted">من ١ إلى ٦٠٤</small></div>
+    <input class="input page-input" id="pgNum" type="text" inputmode="numeric" autocomplete="off" value="${current}">
+    <button class="btn block" id="pgGoBtn">انتقال</button>`, { label: 'الانتقال إلى صفحة' });
+  const inp = $('#pgNum', el);
+  const submit = () => {
+    const v = parseInt(String(inp.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10);
+    if (!(v >= 1 && v <= 604)) return toast('أدخل رقمًا من ١ إلى ٦٠٤');
+    close();
+    location.replace(`#/page/${v}`);
+  };
+  $('#pgGoBtn', el).onclick = submit;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  setTimeout(() => inp.select(), 250);
+}
+
+function ayahSheet(n, ayahs, i, page) {
   const a = ayahs[i];
-  const marked = bookmarks().some(b => b.s === n && b.a === a.numberInSurah);
+  const marked = pageMarks().some(x => x.p === page);
   const ref = `[سورة ${surahName(n)}: ${a.numberInSurah}]`;
   sheet(`
     <div class="sheet-head"><h3>سورة ${surahName(n)} · الآية ${arNum(a.numberInSurah)}</h3>
@@ -208,7 +355,7 @@ function ayahSheet(n, ayahs, i, el) {
     <div class="sheet-actions">
       <button data-a="play">${icons.play}<span>استمع من هنا</span></button>
       <button data-a="tafsir">${icons.book}<span>التفسير</span></button>
-      <button data-a="mark">${icons.bookmark}<span>${marked ? 'إزالة العلامة' : 'حفظ علامة'}</span></button>
+      <button data-a="mark">${icons.bookmark}<span>${marked ? 'إزالة العلامة' : 'علامة الصفحة'}</span></button>
       <button data-a="copy">${icons.copy}<span>نسخ</span></button>
       <button data-a="share">${icons.share}<span>مشاركة</span></button>
     </div>
@@ -219,12 +366,7 @@ function ayahSheet(n, ayahs, i, el) {
       if (!b) return;
       const act = b.dataset.a;
       if (act === 'play') { playAyahs(n, ayahs, i); close(); }
-      if (act === 'mark') {
-        const on = toggleBookmark(n, a.numberInSurah);
-        el.classList.toggle('marked', on);
-        toast(on ? 'تم حفظ العلامة' : 'أُزيلت العلامة');
-        close();
-      }
+      if (act === 'mark') { close(); $('#pgMark')?.click(); }
       if (act === 'copy') { copyText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'share') { shareText(`﴿${a.text}﴾ ${ref}`); close(); }
       if (act === 'tafsir') {
@@ -233,7 +375,7 @@ function ayahSheet(n, ayahs, i, el) {
         try {
           const { data } = await fetchJSON(`https://api.alquran.cloud/v1/ayah/${a.number}/ar.muyassar`);
           box.innerHTML = `<div class="tafsir"><b>التفسير الميسّر</b><p>${esc(data.text)}</p><small>إعداد نخبة من العلماء — مجمع الملك فهد لطباعة المصحف الشريف</small></div>`;
-        } catch { box.innerHTML = '<div class="empty">تعذّر تحميل التفسير.</div>'; }
+        } catch { box.innerHTML = '<div class="empty">تعذّر تحميل التفسير. تحقق من الاتصال.</div>'; }
       }
     },
   });

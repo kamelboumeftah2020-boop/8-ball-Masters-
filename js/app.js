@@ -1,9 +1,9 @@
 import { $, $$, store } from './core.js';
 import './player.js';
 import { cfg, loadTimes } from './prayer.js';
-import { isNative, setBarsStyle } from './native.js';
+import { isNative, setBarsStyle, onBackButton, minimizeApp } from './native.js';
 import { renderHome } from './pages/home.js';
-import { renderMushaf, renderListen } from './pages/quran.js';
+import { renderMushaf, renderListen, renderPage } from './pages/quran.js';
 import { renderMawaiz } from './pages/mawaiz.js';
 import { renderAdhkar, renderTasbih, renderQibla } from './pages/adhkar.js';
 import { renderAdhan } from './pages/adhan.js';
@@ -27,6 +27,7 @@ const ROUTES = {
   home: { render: renderHome, title: 'نور', tab: 'home' },
   mushaf: { render: renderMushaf, title: 'القرآن الكريم', tab: 'quran' },
   listen: { render: renderListen, title: 'القرآن الكريم', tab: 'quran' },
+  page: { render: renderPage, title: 'المصحف', tab: 'quran' },
   mawaiz: { render: renderMawaiz, title: 'المواعظ', tab: 'mawaiz' },
   adhkar: { render: renderAdhkar, title: 'الأذكار', tab: 'adhkar' },
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },
@@ -69,6 +70,19 @@ $('#backBtn').onclick = () => {
 
 render();
 if (cfg.loc) loadTimes();
+
+/* ── زر الرجوع في أندرويد ──
+   يغلق النافذة المفتوحة أولًا، ثم يرجع للصفحة السابقة، وفي الرئيسية يُصغّر التطبيق ولا يغلقه. */
+onBackButton(() => {
+  const alert = document.querySelector('.adhan-alert');
+  if (alert) { alert.querySelector('.btn')?.click(); return; }
+  const sheetEl = document.querySelector('.sheet-wrap');
+  if (sheetEl) { sheetEl.click(); return; }
+  const route = location.hash.replace(/^#\/?/, '');
+  if (!route) { minimizeApp(); return; }
+  if (!$('#backBtn').hidden) { $('#backBtn').click(); return; }
+  location.hash = '#/';
+});
 if (isNative) document.documentElement.classList.add('native');
 
 /* ── التثبيت والعمل دون اتصال ── */
