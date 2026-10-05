@@ -41,15 +41,43 @@ VITE_DOWNLOAD_PROXY=https://your-worker.workers.dev npm run build
 
 يحاول التطبيق التحميل المباشر أولاً، ويلجأ للوسيط فقط عند الحاجة.
 
-## تحويله إلى تطبيق Android / iOS
+## تطبيق Android
 
-يمكن تغليف التطبيق بـ [Capacitor](https://capacitorjs.com):
+المشروع مغلّف بـ [Capacitor](https://capacitorjs.com) ومجلد `android/` جاهز. في نسخة أندرويد:
+
+- **التحميل يتم بشكل أصلي** (`@capacitor/file-transfer`) ويُحفظ في ذاكرة التطبيق، فيعمل مع كل مستضيفي البودكاست
+  دون الحاجة لوسيط CORS.
+- **التشغيل في الخلفية** عبر خدمة أصلية (`MediaPlaybackService`) مع إشعار وتحكم من شاشة القفل والسماعات
+  (تشغيل/إيقاف، رجوع 15، تقديم 30، التالي/السابق).
+- زر الرجوع في الجهاز يغلق المشغّل أو يرجع للصفحة السابقة، ومن الرئيسية يصغّر التطبيق إذا كان يشغّل.
+- مشاركة عبر قائمة المشاركة الأصلية، وأيقونة وشاشة بداية خاصة بالتطبيق.
+
+### بناء الـ APK
+
+يتطلب JDK 21 و Android SDK (أو Android Studio):
 
 ```bash
-npm i @capacitor/core @capacitor/cli @capacitor/android
-npx cap init "صدى" com.sada.podcasts --web-dir dist
-npm run build && npx cap add android && npx cap open android
+npm install
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug
+# الملف: android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+أو افتح المشروع في Android Studio بـ `npx cap open android`.
+
+كل push إلى GitHub يبني الـ APK تلقائياً (GitHub Actions ← «Android APK» ← Artifacts).
+
+### للنشر على Google Play
+
+أنشئ مفتاح توقيع ثم ابنِ نسخة release:
+
+```bash
+keytool -genkey -v -keystore sada.keystore -alias sada -keyalg RSA -keysize 2048 -validity 10000
+cd android && ./gradlew bundleRelease   # بعد إعداد signingConfigs في app/build.gradle
+```
+
+لتغيير الأيقونة: استبدل الصور في `assets/` ثم شغّل `npx capacitor-assets generate --android`.
 
 ## البنية
 
@@ -60,5 +88,7 @@ src/
   components/  المشغّل المصغّر والكامل، بطاقات البرامج، صف الحلقة، زر التحميل…
   pages/       الرئيسية، استكشاف، التصنيف/الأكثر استماعاً، صفحة البرنامج، مكتبتي، التحميلات
 public/        manifest، الأيقونة، Service Worker
-proxy/         وسيط تحميل اختياري (Cloudflare Worker)
+  native/      ربط الميزات الأصلية (تحميل، خدمة التشغيل في الخلفية)
+android/       مشروع أندرويد (Capacitor) + MediaPlaybackService
+proxy/         وسيط تحميل اختياري لنسخة الويب (Cloudflare Worker)
 ```

@@ -3,6 +3,7 @@ import {
 } from "react";
 import { load, save } from "../lib/storage";
 import type { Episode } from "../lib/types";
+import { isNative, MediaPlayback, type MediaAction } from "../native";
 import { useLibrary } from "./library";
 
 export type SleepTimer = { kind: "at"; at: number } | { kind: "end" } | null;
@@ -92,12 +93,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       if (objectUrl.current) {
-        URL.revokeObjectURL(objectUrl.current);
+        if (objectUrl.current.startsWith("blob:")) URL.revokeObjectURL(objectUrl.current);
         objectUrl.current = null;
       }
       const local = libRef.current.downloads[ep.id] ? await libRef.current.offlineUrl(ep.id) : null;
       if (loadedId.current !== ep.id) {
-        if (local) URL.revokeObjectURL(local);
+        if (local?.startsWith("blob:")) URL.revokeObjectURL(local);
         return; // another episode was picked meanwhile
       }
       objectUrl.current = local;
@@ -242,10 +243,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [audio, sleep]);
 
-  // Lock-screen / headset controls.
+  // Lock-screen / headset controls (browser). The Android app uses a native service instead, below.
   useEffect(() => {
     const ms = navigator.mediaSession;
-    if (!ms || !current) return;
+    if (isNative || !ms || !current) return;
     ms.metadata = new MediaMetadata({
       title: current.title,
       artist: current.podcastTitle,
@@ -272,19 +273,56 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const ms = navigator.mediaSession;
-    if (!ms) return;
+    if (isNative || !ms) return;
     ms.playbackState = isPlaying ? "playing" : "paused";
   }, [isPlaying]);
 
   useEffect(() => {
     const ms = navigator.mediaSession;
-    if (!ms?.setPositionState || !time.duration || !Number.isFinite(time.duration)) return;
+    if (isNative || !ms?.setPositionState || !time.duration || !Number.isFinite(time.duration)) return;
     try {
       ms.setPositionState({ duration: time.duration, position: Math.min(time.position, time.duration), playbackRate: rate });
     } catch {
       /* ignore */
     }
   }, [time.duration, Math.floor(time.position / 5), rate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Android: keep the foreground playback service + notification in sync.
+  const posBucket = Math.floor(time.position / 10);
+  useEffect(() => {
+    if (!isNative || !current) return;
+    MediaPlayback.update({
+      title: current.title,
+      artist: current.podcastTitle,
+      artwork: current.artwork,
+      playing: isPlaying,
+      position: audio.currentTime || time.position,
+      duration: audio.duration || time.duration || current.durationMs / 1000,
+      rate,
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, isPlaying, rate, posBucket, time.duration]);
+
+  const actionsRef = useRef<Record<MediaAction, (pos?: number) => void>>(null!);
+  actionsRef.current = {
+    play: () => toggle(),
+    pause: () => audio.pause(),
+    nexttrack: next,
+    previoustrack: prev,
+    seekforward: () => skip(30),
+    seekbackward: () => skip(-15),
+    seekto: (pos) => pos != null && seek(pos),
+  };
+  useEffect(() => {
+    if (!isNative) return;
+    const handle = MediaPlayback.addListener("action", (e) => {
+      if (e.action === "play" && !audio.paused) return;
+      actionsRef.current[e.action]?.(e.position);
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, [audio]);
 
   // Restored "last episode" shows its saved position before anything is loaded.
   useEffect(() => {

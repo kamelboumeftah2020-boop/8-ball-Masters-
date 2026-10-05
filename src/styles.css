@@ -14,7 +14,7 @@
   --radius: 18px;
   --nav-h: 64px;
   --mini-h: 68px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   color-scheme: dark;
 }
 
@@ -51,7 +51,7 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
   padding: 0 16px calc(var(--nav-h) + var(--safe-b) + 24px);
 }
 .app.has-player main { padding-bottom: calc(var(--nav-h) + var(--mini-h) + var(--safe-b) + 32px); }
-.page { padding-top: max(20px, env(safe-area-inset-top)); animation: fade-in 0.25s ease; }
+.page { padding-top: max(20px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); animation: fade-in 0.25s ease; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } }
 
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -210,11 +210,11 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 /* ---------- Podcast page ---------- */
 .podcast-hero {
   position: relative; isolation: isolate; text-align: center; padding: 56px 20px 24px;
-  margin: calc(-1 * max(20px, env(safe-area-inset-top))) -16px 8px; overflow: hidden;
+  margin: calc(-1 * max(20px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))) -16px 8px; overflow: hidden;
   display: flex; flex-direction: column; align-items: center;
 }
 .podcast-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, transparent 40%, var(--bg)); }
-.podcast-hero .back-btn { position: absolute; top: max(16px, env(safe-area-inset-top)); inset-inline-start: 16px; }
+.podcast-hero .back-btn { position: absolute; top: max(16px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); inset-inline-start: 16px; }
 .podcast-art { width: min(220px, 55vw); border-radius: 22px; box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.9); margin-bottom: 18px; }
 .podcast-hero h1 { font-size: 24px; max-width: 640px; }
 .podcast-author { color: rgba(255, 255, 255, 0.75); margin: 4px 0 10px; }
@@ -317,7 +317,7 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 .fp-inner {
   height: 100%; max-width: 480px; margin: 0 auto; overflow-y: auto; scrollbar-width: none;
   display: flex; flex-direction: column; gap: 18px;
-  padding: max(12px, env(safe-area-inset-top)) 24px calc(24px + var(--safe-b));
+  padding: max(12px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 24px calc(24px + var(--safe-b));
 }
 .fp-head { display: flex; align-items: center; justify-content: space-between; }
 .fp-head .icon-btn { color: var(--text); }

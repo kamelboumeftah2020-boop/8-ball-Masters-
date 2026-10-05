@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">صدى</string>
+    <string name="title_activity_main">صدى</string>
+    <string name="package_name">com.sada.podcasts</string>
+    <string name="custom_url_scheme">com.sada.podcasts</string>
+</resources>

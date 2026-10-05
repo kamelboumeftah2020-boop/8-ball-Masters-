@@ -1,5 +1,7 @@
 import { useEffect } from "react";
-import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { App as CapApp } from "@capacitor/app";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { isNative } from "./native";
 import { BottomNav } from "./components/BottomNav";
 import { FullPlayer } from "./components/FullPlayer";
 import { MiniPlayer } from "./components/MiniPlayer";
@@ -18,11 +20,32 @@ function ScrollToTop() {
   return null;
 }
 
+/** Android back button: close the player, go back, or send the app to the background. */
+function BackHandler() {
+  const { expanded, setExpanded, isPlaying } = usePlayer();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (!isNative) return;
+    const sub = CapApp.addListener("backButton", () => {
+      if (expanded) setExpanded(false);
+      else if (pathname !== "/") navigate(-1);
+      else if (isPlaying) CapApp.minimizeApp();
+      else CapApp.exitApp();
+    });
+    return () => {
+      sub.then((s) => s.remove());
+    };
+  }, [expanded, setExpanded, isPlaying, navigate, pathname]);
+  return null;
+}
+
 function Shell() {
   const { current } = usePlayer();
   return (
     <div className={`app ${current ? "has-player" : ""}`}>
       <ScrollToTop />
+      <BackHandler />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />

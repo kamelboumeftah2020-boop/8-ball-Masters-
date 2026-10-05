@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { allDownloads, deleteDownload, getDownload, putDownload } from "../lib/db";
+import { allDownloads, deleteDownload, getDownload, putDownload, type StoredDownload } from "../lib/db";
 import { usePersistent } from "../lib/storage";
+import { episodeFilePath, isNative, nativeDelete, nativeDownload, nativeFileUrl } from "../native";
 import type { Episode, Podcast } from "../lib/types";
 
 export interface DownloadInfo {
@@ -103,7 +104,33 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setActive((a) => ({ ...a, [ep.id]: { progress: 0 } }));
       navigator.storage?.persist?.().catch(() => {});
 
+      const finish = async (record: StoredDownload) => {
+        await putDownload(record);
+        setDownloads((d) => ({ ...d, [ep.id]: { episode: ep, size: record.size, savedAt: record.savedAt } }));
+        setActive(({ [ep.id]: _, ...rest }) => rest);
+      };
+
       try {
+        if (isNative) {
+          // Native download: no CORS restrictions, written straight to app storage.
+          const path = episodeFilePath(ep);
+          let lastTick = 0;
+          const size = await nativeDownload(ep, path, (progress) => {
+            const now = performance.now();
+            if (now - lastTick > 200 && !ctrl.signal.aborted) {
+              lastTick = now;
+              setActive((a) => ({ ...a, [ep.id]: { progress } }));
+            }
+          });
+          // The native transfer can't be interrupted; honour a cancel by discarding the file.
+          if (ctrl.signal.aborted) {
+            await nativeDelete(path);
+            return;
+          }
+          await finish({ id: ep.id, episode: ep, path, size, savedAt: Date.now() });
+          return;
+        }
+
         const res = await fetchAudio(ep.audioUrl, ctrl.signal);
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
         const total = Number(res.headers.get("content-length")) || 0;
@@ -124,17 +151,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         }
         const type = res.headers.get("content-type")?.split(";")[0] || "audio/mpeg";
         const blob = new Blob(chunks as BlobPart[], { type });
-        const record = { id: ep.id, episode: ep, blob, size: blob.size, savedAt: Date.now() };
-        await putDownload(record);
-        setDownloads((d) => ({ ...d, [ep.id]: { episode: ep, size: record.size, savedAt: record.savedAt } }));
-        setActive(({ [ep.id]: _, ...rest }) => rest);
+        await finish({ id: ep.id, episode: ep, blob, size: blob.size, savedAt: Date.now() });
       } catch (err) {
         if (ctrl.signal.aborted) {
           setActive(({ [ep.id]: _, ...rest }) => rest);
         } else {
           // Most failures here are servers that refuse cross-origin downloads (CORS).
           const message =
-            err instanceof TypeError
+            err instanceof TypeError && !isNative
               ? "خادم هذا البودكاست لا يسمح بالتحميل داخل المتصفح"
               : "تعذّر التحميل، حاول مرة أخرى";
           setActive((a) => ({ ...a, [ep.id]: { progress: 0, error: message } }));
@@ -155,13 +179,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   );
 
   const removeDownload = useCallback(async (id: string) => {
+    const rec = await getDownload(id).catch(() => undefined);
+    if (rec?.path) await nativeDelete(rec.path);
     await deleteDownload(id);
     setDownloads(({ [id]: _, ...rest }) => rest);
   }, []);
 
   const offlineUrl = useCallback(async (id: string) => {
     const rec = await getDownload(id).catch(() => undefined);
-    return rec ? URL.createObjectURL(rec.blob) : null;
+    if (rec?.path) return nativeFileUrl(rec.path);
+    return rec?.blob ? URL.createObjectURL(rec.blob) : null;
   }, []);
 
   const recordProgress = useCallback(

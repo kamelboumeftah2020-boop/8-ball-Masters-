@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Share } from "@capacitor/share";
+import { isNative } from "../native";
 import { formatClock } from "../lib/format";
 import { useLibrary } from "../store/library";
 import { usePlayer, type SleepTimer } from "../store/player";
@@ -60,7 +62,8 @@ export function FullPlayer() {
   const share = async () => {
     const text = `${ep.title} — ${ep.podcastTitle}`;
     const url = `https://podcasts.apple.com/podcast/id${ep.podcastId}?i=${ep.id}`;
-    if (navigator.share) navigator.share({ title: ep.title, text, url }).catch(() => {});
+    if (isNative) Share.share({ title: ep.title, text, url, dialogTitle: "مشاركة الحلقة" }).catch(() => {});
+    else if (navigator.share) navigator.share({ title: ep.title, text, url }).catch(() => {});
     else {
       await navigator.clipboard?.writeText(`${text}\n${url}`);
       alert("تم نسخ الرابط");

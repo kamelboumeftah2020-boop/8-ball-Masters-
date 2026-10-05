@@ -5,7 +5,10 @@ import type { Episode } from "./types";
 export interface StoredDownload {
   id: string;
   episode: Episode;
-  blob: Blob;
+  /** Browser builds keep the audio itself in IndexedDB… */
+  blob?: Blob;
+  /** …the Android app stores it as a file and keeps only its path here. */
+  path?: string;
   size: number;
   savedAt: number;
 }
