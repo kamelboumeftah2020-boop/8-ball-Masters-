@@ -1,14 +1,17 @@
 import { Link } from "react-router-dom";
 import { Artwork } from "../components/Artwork";
-import { IconGlobe, IconPlay } from "../components/Icons";
+import { EpisodeRow } from "../components/EpisodeRow";
+import { IconGlobe, IconPlay, IconRefresh } from "../components/Icons";
 import { PodcastCard, Shelf } from "../components/PodcastCard";
 import { ErrorState } from "../components/States";
 import { topPodcasts } from "../lib/api";
 import { formatDuration } from "../lib/format";
 import { COUNTRIES, GENRES, genreById } from "../lib/genres";
-import { useAsync } from "../lib/useAsync";
+import { triggerRefresh } from "../lib/refresh";
+import { useQuery } from "../lib/useAsync";
 import { useLibrary } from "../store/library";
 import { usePlayer } from "../store/player";
+import { useSubscriptions } from "../store/subscriptions";
 
 function greeting() {
   const h = new Date().getHours();
@@ -22,7 +25,7 @@ const FEATURED_GENRES = ["1324", "1303", "1304", "1314", "1321", "1318", "1488",
 
 function GenreShelf({ genreId, country }: { genreId: string; country: string }) {
   const g = genreById(genreId)!;
-  const { data, loading } = useAsync(() => topPodcasts(country, genreId, 20), [country, genreId]);
+  const { data, loading } = useQuery(() => topPodcasts(country, genreId, 20), [country, genreId]);
   if (!loading && !data?.length) return null;
   return (
     <Shelf title={`${g.emoji} ${g.name}`} action={<Link to={`/genre/${genreId}`} className="see-all">عرض الكل</Link>}>
@@ -30,6 +33,23 @@ function GenreShelf({ genreId, country }: { genreId: string; country: string }) 
         ? Array.from({ length: 6 }, (_, i) => <div key={i} className="card skeleton-card"><div className="skeleton square" /><div className="skeleton line" /></div>)
         : data!.map((p) => <PodcastCard key={p.id} podcast={p} />)}
     </Shelf>
+  );
+}
+
+function NewEpisodes() {
+  const { inbox } = useSubscriptions();
+  if (!inbox.length) return null;
+  const shown = inbox.slice(0, 3);
+  return (
+    <section className="new-episodes">
+      <header className="section-head">
+        <h2>🆕 جديد من مفضلتك <span className="count-pill">{inbox.length}</span></h2>
+        <Link to="/library?t=new" className="see-all">عرض الكل</Link>
+      </header>
+      <div className="episode-list">
+        {shown.map((e) => <EpisodeRow key={e.id} episode={e} queue={inbox} showArtwork showPodcast />)}
+      </div>
+    </section>
   );
 }
 
@@ -65,7 +85,9 @@ function ContinueListening() {
 
 export function Home() {
   const { country, setCountry } = useLibrary();
-  const top = useAsync(() => topPodcasts(country, undefined, 50), [country]);
+  const top = useQuery(() => topPodcasts(country, undefined, 50), [country]);
+  const { checking } = useSubscriptions();
+  const refreshing = top.refreshing || checking;
   const hero = top.data?.[0];
 
   return (
@@ -75,6 +97,15 @@ export function Home() {
           <p className="muted">{greeting()} 👋</p>
           <h1 className="brand">صدى</h1>
         </div>
+        <div className="head-actions">
+        <button
+          className={`icon-btn ${refreshing ? "spinning" : ""}`}
+          aria-label="تحديث"
+          title="تحديث"
+          onClick={triggerRefresh}
+        >
+          <IconRefresh size={20} />
+        </button>
         <label className="country-select" title="بلد المحتوى">
           <IconGlobe size={18} />
           <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="اختر البلد">
@@ -83,6 +114,7 @@ export function Home() {
             ))}
           </select>
         </label>
+        </div>
       </header>
 
       {hero && (
@@ -105,6 +137,8 @@ export function Home() {
           </Link>
         ))}
       </div>
+
+      <NewEpisodes />
 
       <ContinueListening />
 

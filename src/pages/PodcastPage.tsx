@@ -7,7 +7,7 @@ import { IconHeart, IconPlay, IconSearch } from "../components/Icons";
 import { Empty, ErrorState, Loading } from "../components/States";
 import { podcastWithEpisodes } from "../lib/api";
 import type { Podcast } from "../lib/types";
-import { useAsync } from "../lib/useAsync";
+import { useQuery } from "../lib/useAsync";
 import { useLibrary } from "../store/library";
 import { usePlayer } from "../store/player";
 
@@ -16,7 +16,7 @@ export function PodcastPage() {
   const preview = (useLocation().state as { podcast?: Podcast } | null)?.podcast;
   const { country, isFavPodcast, toggleFavPodcast, favPodcasts, download, downloads } = useLibrary();
   const { play } = usePlayer();
-  const { data, loading, error, retry } = useAsync(() => podcastWithEpisodes(id, country), [id, country]);
+  const { data, loading, error, retry } = useQuery(() => podcastWithEpisodes(id, country), [id, country]);
   const [filter, setFilter] = useState("");
   const [oldest, setOldest] = useState(false);
   const [showAbout, setShowAbout] = useState(false);

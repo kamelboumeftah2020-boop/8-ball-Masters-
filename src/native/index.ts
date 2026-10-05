@@ -64,3 +64,21 @@ interface MediaPlaybackPlugin {
 }
 
 export const MediaPlayback = registerPlugin<MediaPlaybackPlugin>("MediaPlayback");
+
+/* ---------- Background check for new episodes + notifications ---------- */
+
+export interface WatchedPodcast {
+  id: string;
+  title: string;
+  /** releaseDate (ISO) of the newest episode the app already knows about. */
+  latest?: string;
+}
+
+interface EpisodeCheckerPlugin {
+  sync(options: { country: string; podcasts: WatchedPodcast[] }): Promise<void>;
+  requestPermission(): Promise<{ granted: boolean }>;
+  consumeRoute(): Promise<{ route?: string | null }>;
+  addListener(event: "openRoute", fn: (e: { route: string }) => void): Promise<PluginListenerHandle>;
+}
+
+export const EpisodeChecker = registerPlugin<EpisodeCheckerPlugin>("EpisodeChecker");

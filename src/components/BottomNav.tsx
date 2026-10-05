@@ -1,14 +1,16 @@
 import { NavLink } from "react-router-dom";
 import { useLibrary } from "../store/library";
+import { useSubscriptions } from "../store/subscriptions";
 import { IconDownloadsNav, IconHome, IconLibrary, IconSearch } from "./Icons";
 
 export function BottomNav() {
   const { active } = useLibrary();
   const downloading = Object.values(active).filter((a) => !a.error).length;
+  const { inbox } = useSubscriptions();
   const items = [
     { to: "/", label: "الرئيسية", icon: <IconHome /> },
     { to: "/explore", label: "استكشاف", icon: <IconSearch /> },
-    { to: "/library", label: "مكتبتي", icon: <IconLibrary /> },
+    { to: "/library", label: "مكتبتي", icon: <IconLibrary />, badge: inbox.length || undefined },
     { to: "/downloads", label: "التحميلات", icon: <IconDownloadsNav />, badge: downloading || undefined },
   ];
   return (

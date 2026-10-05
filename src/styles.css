@@ -394,3 +394,32 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Auto-update / new episodes ---------- */
+.head-actions { display: flex; align-items: center; gap: 6px; }
+.icon-btn.spinning svg { animation: spin 1s linear infinite; color: var(--accent); }
+.count-pill, .tab-count {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-inline-start: 6px;
+  border-radius: 999px; background: var(--accent-2); color: #fff; font-size: 12px; font-weight: 700; vertical-align: middle;
+}
+.tab-count { min-width: 18px; height: 18px; font-size: 11px; }
+.new-episodes { margin-top: 8px; }
+.new-episodes .episode-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 14px; }
+.new-episodes .episode:last-child { border-bottom: 0; }
+.subs-card { display: flex; flex-direction: column; gap: 4px; padding: 6px 16px; margin-bottom: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.subs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.subs-row + .subs-row { border-top: 1px solid var(--border); }
+.subs-row > span { display: flex; flex-direction: column; min-width: 0; }
+.subs-row strong { font-size: 14px; }
+.subs-row small { color: var(--muted); font-size: 12px; }
+.subs-row.toggle { cursor: pointer; }
+.subs-row.toggle input {
+  appearance: none; -webkit-appearance: none; flex-shrink: 0; width: 46px; height: 28px; border-radius: 999px;
+  background: var(--surface-2); position: relative; cursor: pointer; transition: background 0.2s; margin: 0;
+}
+.subs-row.toggle input::after {
+  content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; transition: inset-inline-start 0.2s;
+}
+.subs-row.toggle input:checked { background: var(--accent); }
+.subs-row.toggle input:checked::after { inset-inline-start: 21px; }

@@ -4,7 +4,7 @@ import { PodcastCard } from "../components/PodcastCard";
 import { Empty, ErrorState, SkeletonGrid } from "../components/States";
 import { topPodcasts } from "../lib/api";
 import { COUNTRIES, genreById } from "../lib/genres";
-import { useAsync } from "../lib/useAsync";
+import { useQuery } from "../lib/useAsync";
 import { useLibrary } from "../store/library";
 
 /** Top chart for a genre (/genre/:id) or overall (/top). */
@@ -12,7 +12,7 @@ export function Chart() {
   const { id } = useParams();
   const { country } = useLibrary();
   const genre = id ? genreById(id) : undefined;
-  const { data, loading, error, retry } = useAsync(() => topPodcasts(country, id, 100), [country, id]);
+  const { data, loading, error, retry } = useQuery(() => topPodcasts(country, id, 100), [country, id]);
   const countryName = COUNTRIES.find((c) => c.code === country)?.name;
 
   return (

@@ -2,9 +2,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { installCrashHandlers, showCrash } from "./lib/crashReport";
+import { startAutoRefresh } from "./lib/refresh";
 import { isNative } from "./native";
 
 installCrashHandlers();
+startAutoRefresh();
 import "./styles.css";
 
 createRoot(document.getElementById("root")!, {

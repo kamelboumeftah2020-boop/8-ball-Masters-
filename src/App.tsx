@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { PluginListenerHandle } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { isNative } from "./native";
+import { EpisodeChecker, isNative } from "./native";
 import { BottomNav } from "./components/BottomNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FullPlayer } from "./components/FullPlayer";
@@ -15,6 +15,7 @@ import { Library } from "./pages/Library";
 import { PodcastPage } from "./pages/PodcastPage";
 import { LibraryProvider } from "./store/library";
 import { PlayerProvider, usePlayer } from "./store/player";
+import { SubscriptionsProvider } from "./store/subscriptions";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -58,6 +59,23 @@ function BackHandler() {
   return null;
 }
 
+/** Tapping a "new episode" notification opens that podcast. */
+function NotificationRoutes() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!isNative) return;
+    const go = (route?: string | null) => {
+      if (route && route.startsWith("/")) navigate(route);
+    };
+    EpisodeChecker.consumeRoute().then((r) => go(r.route)).catch(() => {});
+    const sub = EpisodeChecker.addListener("openRoute", (e) => go(e.route));
+    return () => {
+      sub.then((h) => h.remove()).catch(() => {});
+    };
+  }, [navigate]);
+  return null;
+}
+
 function Shell() {
   const { current } = usePlayer();
   const { pathname } = useLocation();
@@ -65,6 +83,7 @@ function Shell() {
     <div className={`app ${current ? "has-player" : ""}`}>
       <ScrollToTop />
       <BackHandler />
+      <NotificationRoutes />
       <main>
         <ErrorBoundary resetKey={pathname}>
         <Routes>
@@ -95,7 +114,9 @@ export default function App() {
     <HashRouter>
       <LibraryProvider>
         <PlayerProvider>
-          <Shell />
+          <SubscriptionsProvider>
+            <Shell />
+          </SubscriptionsProvider>
         </PlayerProvider>
       </LibraryProvider>
     </HashRouter>

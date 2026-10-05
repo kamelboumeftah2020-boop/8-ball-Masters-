@@ -6,15 +6,15 @@ import { PodcastCard } from "../components/PodcastCard";
 import { Empty, ErrorState, Loading, SkeletonGrid } from "../components/States";
 import { searchEpisodes, searchPodcasts } from "../lib/api";
 import { GENRES } from "../lib/genres";
-import { useAsync } from "../lib/useAsync";
+import { useQuery } from "../lib/useAsync";
 import { useLibrary } from "../store/library";
 
 type Tab = "podcasts" | "episodes";
 
 function Results({ q, tab }: { q: string; tab: Tab }) {
   const { country } = useLibrary();
-  const pods = useAsync(() => (tab === "podcasts" ? searchPodcasts(q, country) : Promise.resolve([])), [q, tab, country]);
-  const eps = useAsync(() => (tab === "episodes" ? searchEpisodes(q, country) : Promise.resolve([])), [q, tab, country]);
+  const pods = useQuery(() => searchPodcasts(tab === "podcasts" ? q : "", country), [q, tab, country]);
+  const eps = useQuery(() => searchEpisodes(tab === "episodes" ? q : "", country), [q, tab, country]);
 
   if (tab === "podcasts") {
     if (pods.loading) return <SkeletonGrid />;
