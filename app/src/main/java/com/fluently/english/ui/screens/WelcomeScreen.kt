@@ -120,7 +120,7 @@ private fun LevelStaircase() {
     ) {
         Column {
             Text("رحلتك", style = MaterialTheme.typography.labelLarge, color = AppTheme.extra.onHeroMuted)
-            Text("6 مستويات · 72 درساً", style = MaterialTheme.typography.titleLarge, color = AppTheme.extra.onHero)
+            Text("6 مستويات · 90 درساً", style = MaterialTheme.typography.titleLarge, color = AppTheme.extra.onHero)
             VSpace(18.dp)
             Ltr {
                 Row(

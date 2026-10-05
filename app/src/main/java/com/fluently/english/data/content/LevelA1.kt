@@ -228,4 +228,56 @@ val LevelA1 = level(
             ),
         )
     }
+
+    unit("My home", "بيتي ومدينتي") {
+        grammar(
+            "Possessives & have got", "الملكية: my / your و 's و have got",
+            notes = listOf(
+                "صفات الملكية تأتي قبل الاسم: my (لي)، your (لك)، his (له)، her (لها)، its (لشيء)، our (لنا)، their (لهم).",
+                "للملكية بالاسم نضيف 's: Sara's car (سيارة سارة)، my brother's room. ومع الجمع المنتهي بـ s نضيف ' فقط: my parents' house.",
+                "have got = have (يملك) في الإنجليزية البريطانية: I've got a car / She's got two cats. والنفي: haven't got / hasn't got.",
+                "السؤال: Have you got…? — Has he got…?",
+            ),
+            examples = listOf(
+                "This is my flat." means "هذه شقتي.",
+                "Is that your phone?" means "هل هذا هاتفك؟",
+                "It's Ahmed's bike." means "إنها دراجة أحمد.",
+                "She's got a big garden." means "لديها حديقة كبيرة.",
+            ),
+            questions = listOf(
+                q("This is ___ house. (نحن)", "our", "we", "us", "ours"),
+                q("Mona and Ali love ___ new car.", "their", "they", "there", "them"),
+                q("That's ___ bag. (سارة)", "Sara's", "Saras", "Sara", "of Sara"),
+                q("He ___ got a new phone.", "has", "have", "is", "does"),
+                q("___ you got any brothers?", "Have", "Has", "Do", "Are"),
+                q("The cat is eating ___ food.", "its", "it's", "it", "his"),
+                order("My sister has got a small car", "أختي لديها سيارة صغيرة"),
+                type("Complete: I ___ got a dog. (نفي — اختصار)", "haven't", "have not"),
+            ),
+        )
+        vocabulary(
+            "Rooms & furniture", "الغرف والأثاث",
+            listOf(
+                w("kitchen", "مطبخ", "We cook dinner in the kitchen."),
+                w("bedroom", "غرفة نوم", "My bedroom is small but nice."),
+                w("bathroom", "حمّام", "The bathroom is next to my room."),
+                w("living room", "غرفة المعيشة", "We watch TV in the living room."),
+                w("sofa", "أريكة", "The cat is sleeping on the sofa."),
+                w("table", "طاولة", "Put the keys on the table."),
+                w("window", "نافذة", "Please open the window."),
+                w("stairs", "درج", "The stairs go up to the bedrooms."),
+            ),
+        )
+        reading(
+            "My new flat", "شقتي الجديدة",
+            passage = "Hi! I'm Huda and this is my new flat. It's on the third floor of a modern building in the city centre. There are two bedrooms: my bedroom and my sister's bedroom. My bedroom has got a big window, so it's very bright. The living room is my favourite room — it's got a blue sofa and a small table. The kitchen is small, but it's got everything we need. There isn't a garden, but there's a park near the building. Our neighbours are friendly. I love my new home!",
+            questions = listOf(
+                q("Where is Huda's flat?", "In the city centre", "In a village", "Near the sea", "Next to a school"),
+                q("How many bedrooms are there?", "Two", "One", "Three", "Four"),
+                q("Why is Huda's bedroom bright?", "It has a big window.", "It's on the ground floor.", "It's yellow.", "It has many lamps."),
+                q("What colour is the sofa?", "Blue", "Red", "Green", "Black"),
+                q("Is there a garden?", "No, but there's a park nearby.", "Yes, a big one.", "Yes, on the roof.", "The text doesn't say."),
+            ),
+        )
+    }
 }

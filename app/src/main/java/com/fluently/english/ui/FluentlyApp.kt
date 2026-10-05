@@ -55,6 +55,8 @@ import androidx.navigation.compose.rememberNavController
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.screens.ExamScreen
+import com.fluently.english.ui.screens.MockExamScreen
+import com.fluently.english.ui.screens.MockListScreen
 import com.fluently.english.ui.screens.HomeScreen
 import com.fluently.english.ui.screens.LessonScreen
 import com.fluently.english.ui.screens.LevelScreen
@@ -197,6 +199,18 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                     onMistakes = { nav.navigate("mistakes") },
                     onVerbs = { nav.navigate("verbs") },
                     onGrammar = { nav.navigate("grammar") },
+                    onMocks = { nav.navigate("mocks") },
+                )
+            }
+            composable("mocks") {
+                MockListScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("mock/$it") })
+            }
+            composable("mock/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                MockExamScreen(
+                    id = id,
+                    onComplete = { score, correct -> vm.completeMock(id, score, correct) },
+                    onClose = { nav.popBackStack() },
                 )
             }
             composable("conversations") {

@@ -37,6 +37,8 @@ data class Progress(
     val lastChallengeDay: Long = -1,
     /** Hour of the daily reminder, or -1 when reminders are off. */
     val reminderHour: Int = -1,
+    /** Best mock exam results: IELTS band × 10, or Cambridge scale score. */
+    val mockBest: Map<String, Int> = emptyMap(),
 ) {
     fun challengeDoneToday(today: Long) = lastChallengeDay == today
 

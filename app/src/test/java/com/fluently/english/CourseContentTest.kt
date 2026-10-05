@@ -18,10 +18,10 @@ class CourseContentTest {
             PlacementBank.map { it.question }
 
     @Test
-    fun everyLevelHasFourUnitsOfThreeLessons() {
+    fun everyLevelHasFiveUnitsOfThreeLessons() {
         assertEquals(CefrLevel.entries.toList(), Course.levels.map { it.level })
         Course.levels.forEach { level ->
-            assertEquals("${level.level} units", 4, level.units.size)
+            assertEquals("${level.level} units", 5, level.units.size)
             level.units.forEach { assertEquals("${it.id} lessons", 3, it.lessons.size) }
             assertTrue("${level.level} exam too short", level.examQuestions.size >= 10)
         }
@@ -79,7 +79,7 @@ class CourseContentTest {
                 }
             }
         }
-        assertEquals(24, Guides.size)
+        assertEquals(30, Guides.size)
     }
 
     @Test

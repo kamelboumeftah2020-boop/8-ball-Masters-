@@ -14,8 +14,8 @@ class GuidesContentTest {
     @Test
     fun everyVocabularyLessonIsFullyTaught() {
         val vocab = lessons.filter { it.type == LessonType.VOCABULARY }
-        assertEquals(24, vocab.size)
-        assertEquals(24, VocabGuides.size)
+        assertEquals(30, vocab.size)
+        assertEquals(30, VocabGuides.size)
         vocab.forEach { lesson ->
             val g = lesson.vocabGuide
             assertTrue("${lesson.id} has no guide", g != null)
@@ -35,8 +35,8 @@ class GuidesContentTest {
     @Test
     fun everyReadingAndListeningLessonHasATextGuide() {
         val texts = lessons.filter { it.type == LessonType.READING || it.type == LessonType.LISTENING }
-        assertEquals(24, texts.size)
-        assertEquals(24, TextGuides.size)
+        assertEquals(30, texts.size)
+        assertEquals(30, TextGuides.size)
         texts.forEach { lesson ->
             val g = lesson.textGuide
             assertTrue("${lesson.id} has no text guide", g != null)

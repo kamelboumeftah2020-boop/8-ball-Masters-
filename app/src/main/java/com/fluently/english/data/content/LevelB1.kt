@@ -233,4 +233,58 @@ val LevelB1 = level(
             ),
         )
     }
+
+    unit("Learning & studying", "التعلم والدراسة") {
+        grammar(
+            "Gerunds & infinitives", "الفعل مع ing أم مع to",
+            notes = listOf(
+                "بعض الأفعال يتبعها فعل + ing (gerund): enjoy, finish, avoid, mind, suggest, keep, practise: I enjoy reading.",
+                "وبعضها يتبعها to + فعل (infinitive): want, decide, hope, plan, learn, need, agree, promise: She decided to study abroad.",
+                "بعد حروف الجر نستخدم دائماً ing: I'm interested in learning. — Thanks for helping me.",
+                "وفعل + ing يمكن أن يكون فاعلاً للجملة: Swimming is good exercise.",
+                "أفعال تقبل الاثنين بنفس المعنى تقريباً: like, love, hate, start, begin: I like reading / I like to read.",
+            ),
+            examples = listOf(
+                "I enjoy learning new languages." means "أستمتع بتعلم لغات جديدة.",
+                "She wants to become a doctor." means "تريد أن تصبح طبيبة.",
+                "He's good at solving problems." means "إنه بارع في حل المشكلات.",
+                "Learning English opens many doors." means "تعلم الإنجليزية يفتح أبواباً كثيرة.",
+            ),
+            questions = listOf(
+                q("I finished ___ my essay at midnight.", "writing", "to write", "write", "wrote"),
+                q("We decided ___ a taxi.", "to take", "taking", "take", "took"),
+                q("Are you interested ___ joining our club?", "in", "to", "for", "at"),
+                q("She avoids ___ coffee at night.", "drinking", "to drink", "drink", "drinks"),
+                q("I hope ___ you again soon.", "to see", "seeing", "see", "saw"),
+                q("___ every day is good for your health.", "Walking", "Walk", "To walking", "Walks"),
+                q("Would you mind ___ the window?", "opening", "to open", "open", "opened"),
+                order("I am looking forward to meeting you", "أتطلع إلى لقائك"),
+                type("Complete with «learn»: She practises ___ new words every day.", "learning"),
+            ),
+        )
+        vocabulary(
+            "Education", "التعليم",
+            listOf(
+                w("degree", "شهادة جامعية", "She has a degree in chemistry."),
+                w("lecture", "محاضرة", "The lecture starts at nine."),
+                w("assignment", "واجب / مهمة دراسية", "I have to finish my assignment tonight."),
+                w("revise", "يراجع (للامتحان)", "I need to revise for my exams."),
+                w("scholarship", "منحة دراسية", "He got a scholarship to study in Canada."),
+                w("fail", "يرسب", "Don't worry if you fail — try again."),
+                w("graduate", "يتخرج", "She will graduate next year."),
+                w("subject", "مادة دراسية", "Maths is my favourite subject."),
+            ),
+        )
+        reading(
+            "Online or in class?", "عن بُعد أم في الصف؟",
+            passage = "Ten years ago, most students learned in a classroom. Today, millions study online, and many people are asking which way is better. Online learning is flexible: you can watch a lecture at midnight and study from anywhere. It is also often cheaper. However, it requires a lot of self-discipline, and some students feel isolated without classmates. Classroom learning, on the other hand, offers direct contact with teachers and friends, which keeps many students motivated. But it is less flexible and can be expensive. A recent survey found that most students prefer a mix of both, known as 'blended learning'. In the end, the best method depends on your personality and your goals.",
+            questions = listOf(
+                q("What is one advantage of online learning?", "It's flexible.", "It never needs discipline.", "It always has more teachers.", "It's only at night."),
+                q("What problem do some online students have?", "They feel isolated.", "They have too many friends.", "Lectures are too short.", "They can't use computers."),
+                q("What keeps many classroom students motivated?", "Contact with teachers and friends", "Cheaper prices", "Studying at midnight", "Online videos"),
+                q("What is 'blended learning'?", "A mix of online and classroom learning", "Learning while cooking", "Only online learning", "Studying in a group"),
+                q("What is the writer's conclusion?", "The best method depends on the person.", "Classroom learning is always better.", "Online learning will disappear.", "Nobody likes studying."),
+            ),
+        )
+    }
 }

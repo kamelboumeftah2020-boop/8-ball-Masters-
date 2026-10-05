@@ -20,7 +20,10 @@ private const val SCAN = "البحث عن معلومة (Scanning): عندما ي
 private const val LISTEN_NUMBERS = "في الاستماع الأول ركّز على «من؟ أين؟ ماذا؟» فقط. وفي الاستماع الثاني انتبه للأرقام والأسعار والأوقات — اكتبها على ورقة إن أمكن."
 private const val LISTEN_GIST = "لا تحاول فهم كل كلمة! استمع للكلمات المهمة (الأسماء والأفعال) وتجاهل الباقي. الفهم العام أهم من الترجمة الحرفية."
 
-val TextGuides: Map<String, TextGuide> = mapOf(
+/** All reading and listening support, keyed by lesson id. */
+val TextGuides: Map<String, TextGuide> by lazy { TextGuidesBase + TextGuidesU5 }
+
+private val TextGuidesBase: Map<String, TextGuide> = mapOf(
 
     // ---------------- A1 ----------------
     "a1-u1-l3" to textGuide(

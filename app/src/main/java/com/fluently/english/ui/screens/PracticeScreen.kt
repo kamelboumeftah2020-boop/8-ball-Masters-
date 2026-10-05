@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Hearing
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.fluently.english.data.content.Course
+import com.fluently.english.data.content.MockExams
 import com.fluently.english.data.content.Scenarios
 import com.fluently.english.data.content.SoundLessons
 import com.fluently.english.data.content.Word
@@ -72,6 +74,7 @@ fun PracticeScreen(
     onMistakes: () -> Unit,
     onVerbs: () -> Unit,
     onGrammar: () -> Unit,
+    onMocks: () -> Unit,
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()),
@@ -85,6 +88,26 @@ fun PracticeScreen(
                 "${progress.conversationStars.size} من ${Scenarios.size} محادثة",
                 onConversations,
             )
+
+            VSpace(12.dp)
+            AppCard(onClick = onMocks, padding = 16.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconTile(Icons.Rounded.WorkspacePremium, Coral, size = 48.dp)
+                    HSpace(14.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text("اختبارات المحاكاة", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "IELTS · Cambridge B1 · Cambridge B2 — بنفس الأقسام والتوقيت والتقدير",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (progress.mockBest.isNotEmpty()) {
+                    VSpace(10.dp)
+                    Pill("أنجزت ${progress.mockBest.size} من ${MockExams.size}", Gold)
+                }
+            }
 
             SectionHeader("مهارات")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

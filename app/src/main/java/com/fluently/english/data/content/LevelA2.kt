@@ -231,4 +231,57 @@ val LevelA2 = level(
             ),
         )
     }
+
+    unit("Time & weather", "الوقت والطقس") {
+        grammar(
+            "Prepositions of time: in, on, at", "حروف جر الزمن in / on / at",
+            notes = listOf(
+                "at للوقت الدقيق واللحظات: at 7 o'clock, at noon, at night, at the weekend.",
+                "on للأيام والتواريخ: on Monday, on 5 May, on my birthday, on Friday morning.",
+                "in للفترات الأطول: in the morning, in July, in summer, in 2024.",
+                "لا نستخدم حرف جر قبل: this / next / last / every: next week, last Monday, every day.",
+            ),
+            examples = listOf(
+                "The film starts at 8 p.m." means "يبدأ الفيلم في الثامنة مساءً.",
+                "I was born on 12 March." means "وُلدت في 12 مارس.",
+                "It's very hot in August." means "الجو حار جداً في أغسطس.",
+                "See you next week!" means "أراك الأسبوع القادم!",
+            ),
+            questions = listOf(
+                q("The meeting is ___ 10 o'clock.", "at", "on", "in"),
+                q("My birthday is ___ June.", "in", "on", "at"),
+                q("We don't work ___ Fridays.", "on", "in", "at"),
+                q("I always drink coffee ___ the morning.", "in", "on", "at"),
+                q("They got married ___ 2015.", "in", "on", "at"),
+                q("I'll call you ___ week. (القادم)", "next", "in next", "at next", "on next"),
+                q("Shops are closed ___ Christmas Day.", "on", "in", "at"),
+                order("The shop opens at nine in the morning", "يفتح المتجر في التاسعة صباحاً"),
+                type("Complete: I usually sleep late ___ the weekend. (حرف جر)", "at", "on"),
+            ),
+        )
+        vocabulary(
+            "Weather & seasons", "الطقس والفصول",
+            listOf(
+                w("sunny", "مشمس", "It's sunny today — let's go to the beach."),
+                w("cloudy", "غائم", "The sky is grey and cloudy."),
+                w("windy", "عاصف / فيه رياح", "It's too windy to play tennis."),
+                w("storm", "عاصفة", "There was a big storm last night."),
+                w("temperature", "درجة الحرارة", "The temperature is 35 degrees."),
+                w("forecast", "توقعات الطقس", "The forecast says it will rain."),
+                w("spring", "الربيع", "Flowers grow in spring."),
+                w("autumn", "الخريف", "The leaves fall in autumn."),
+            ),
+        )
+        listening(
+            "The weather forecast", "النشرة الجوية",
+            script = "Good evening, and here's the weather forecast for the weekend. On Saturday morning it will be cloudy in the north, with some rain in the afternoon. In the south, it will be sunny and warm, with temperatures of around 28 degrees. On Sunday, a storm is coming from the west, so it will be very windy, especially near the coast. Temperatures will fall to about 18 degrees. If you're planning a trip to the beach, Saturday is the better day. Have a great weekend!",
+            questions = listOf(
+                q("What will the weather be like on Saturday morning in the north?", "Cloudy", "Sunny", "Snowy", "Stormy"),
+                q("What temperature is expected in the south on Saturday?", "About 28 degrees", "About 18 degrees", "About 38 degrees", "About 8 degrees"),
+                q("Where is the storm coming from?", "The west", "The east", "The north", "The south"),
+                q("Where will it be especially windy on Sunday?", "Near the coast", "In the mountains", "In the city centre", "In the desert"),
+                q("Which day is better for the beach?", "Saturday", "Sunday", "Both days", "Neither day"),
+            ),
+        )
+    }
 }

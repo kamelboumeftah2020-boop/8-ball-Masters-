@@ -232,4 +232,56 @@ val LevelB2 = level(
             ),
         )
     }
+
+    unit("Crime & society", "الجريمة والمجتمع") {
+        grammar(
+            "Future continuous & future perfect", "المستقبل المستمر والمستقبل التام",
+            notes = listOf(
+                "المستقبل المستمر (will be + ing) لحدث سيكون جارياً في لحظة معينة في المستقبل: This time tomorrow, I'll be flying to Paris.",
+                "ويُستخدم أيضاً لسؤال مهذب عن خطط شخص: Will you be using the car tonight?",
+                "المستقبل التام (will have + V3) لحدث سيكون قد انتهى قبل وقت معين في المستقبل: By 2030, I'll have finished my PhD.",
+                "كلمات مفتاحية: this time next week / at 8 p.m. tomorrow (للمستمر)، by + وقت / by the time (للتام).",
+            ),
+            examples = listOf(
+                "At 10 a.m. tomorrow, I'll be taking my exam." means "في العاشرة صباح الغد سأكون أؤدي امتحاني.",
+                "By the end of the year, we'll have saved enough money." means "بنهاية العام سنكون قد ادخرنا مالاً كافياً.",
+                "Don't call at 9 — I'll be sleeping." means "لا تتصل في التاسعة — سأكون نائماً.",
+                "She'll have left by the time you arrive." means "ستكون قد غادرت عندما تصل.",
+            ),
+            questions = listOf(
+                q("This time next week, we ___ on the beach.", "will be lying", "will have lain", "lie", "are lain"),
+                q("By 2030, scientists ___ a cure.", "will have found", "will be finding", "find", "found"),
+                q("Don't phone at 8 — I ___ dinner.", "will be having", "will have had", "have", "had"),
+                q("By the time you get home, I ___ the report.", "will have finished", "will be finishing", "finish", "finished"),
+                q("___ you be using the laptop this evening?", "Will", "Are", "Have", "Do"),
+                q("In ten years, she ___ here for two decades.", "will have worked", "will be work", "works", "is working"),
+                order("By next summer I will have graduated", "بحلول الصيف القادم سأكون قد تخرجت"),
+                type("Complete: At midnight, I'll be ___ (sleep).", "sleeping"),
+            ),
+        )
+        vocabulary(
+            "Crime & law", "الجريمة والقانون",
+            listOf(
+                w("witness", "شاهد", "The witness saw the thief's face."),
+                w("suspect", "مشتبه به", "The police arrested a suspect."),
+                w("evidence", "دليل / أدلة", "There isn't enough evidence."),
+                w("arrest", "يعتقل", "The police arrested two men."),
+                w("guilty", "مذنب", "The jury found him guilty."),
+                w("sentence", "حكم (قضائي)", "He received a five-year sentence."),
+                w("burglary", "سطو (على منزل)", "There was a burglary in our street."),
+                w("prevent", "يمنع", "Street lights can help prevent crime."),
+            ),
+        )
+        listening(
+            "A police appeal", "نداء من الشرطة",
+            script = "Police are appealing for witnesses after a burglary at a jewellery shop on King Street late last night. At around 11:30 p.m., two men broke into the shop through a back window and stole watches worth over fifty thousand pounds. One suspect is described as tall, in his thirties, wearing a black jacket. The other was shorter and was seen leaving in a small white van. No one was injured. Detective Sarah Moore said, 'We believe someone will have seen the van in the area. Any information, however small, could be important evidence.' Anyone with information should call 0800 555 0199.",
+            questions = listOf(
+                q("What kind of shop was burgled?", "A jewellery shop", "A clothes shop", "A bank", "A supermarket"),
+                q("How did the men get into the shop?", "Through a back window", "Through the front door", "Through the roof", "With a key"),
+                q("What was stolen?", "Watches", "Cash", "Phones", "Paintings"),
+                q("How did the second suspect leave?", "In a small white van", "On a motorbike", "On foot", "In a black car"),
+                q("Why does the detective think people can help?", "Someone probably saw the van.", "The thieves were caught on camera.", "The shop owner knows the thieves.", "There was a big reward."),
+            ),
+        )
+    }
 }

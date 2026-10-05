@@ -26,6 +26,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun completeConversation(id: String, stars: Int, points: Int): Int = repo.completeConversation(id, stars, points)
     fun completeSound(id: String, percent: Int, correct: Int): Int = repo.completeSound(id, percent, correct)
     fun completeGame(correct: Int, speedScore: Int? = null): Int = repo.completeGame(correct, speedScore)
+    fun completeMock(id: String, score: Int, correct: Int): Int = repo.completeMock(id, score, correct)
     fun completeDailyChallenge(correct: Int): Int = repo.completeDailyChallenge(correct)
     fun setReminderHour(hour: Int) {
         repo.setReminderHour(hour)

@@ -131,6 +131,15 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         return xp
     }
 
+    /** Records a finished mock exam; [score] is band × 10 (IELTS) or the scale score (Cambridge). */
+    fun completeMock(id: String, score: Int, correct: Int): Int {
+        val xp = correct * 5
+        update { p ->
+            p.copy(mockBest = p.mockBest + (id to maxOf(score, p.mockBest[id] ?: 0))).withXp(xp, today())
+        }
+        return xp
+    }
+
     fun completeDailyChallenge(correct: Int): Int {
         val already = _progress.value.challengeDoneToday(today())
         val xp = correct * 10 + if (already) 0 else DAILY_BONUS
@@ -220,6 +229,7 @@ internal object ProgressCodec {
         put("gamesPlayed", p.gamesPlayed)
         put("lastChallengeDay", p.lastChallengeDay)
         put("reminderHour", p.reminderHour)
+        put("mockBest", JSONObject(p.mockBest))
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -254,6 +264,7 @@ internal object ProgressCodec {
             gamesPlayed = o.optInt("gamesPlayed"),
             lastChallengeDay = o.optLong("lastChallengeDay", -1),
             reminderHour = o.optInt("reminderHour", -1),
+            mockBest = intMap(o.optJSONObject("mockBest")),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))

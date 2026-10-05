@@ -234,4 +234,56 @@ val LevelC1 = level(
             ),
         )
     }
+
+    unit("Mind & personality", "العقل والشخصية") {
+        grammar(
+            "Advanced passives: It is said that…, have something done", "المبني للمجهول المتقدم",
+            notes = listOf(
+                "لنقل آراء الناس بشكل موضوعي: It is said / believed / thought / reported that… — It is believed that the painting is fake.",
+                "أو بتركيب شخصي: Subject + is said / believed + to + فعل: He is said to be the richest man in town. وللماضي: to have + V3: She is thought to have left the country.",
+                "have / get something done: عندما يقوم شخص آخر بالعمل لأجلك: I had my car repaired. — She's getting her hair cut tomorrow.",
+                "ويُستخدم have something done أيضاً لشيء سيئ حدث لك: He had his phone stolen.",
+            ),
+            examples = listOf(
+                "It is reported that ten people were injured." means "تفيد التقارير بأن عشرة أشخاص أصيبوا.",
+                "The castle is believed to be 800 years old." means "يُعتقد أن عمر القلعة 800 عام.",
+                "I'm having my flat painted next week." means "سأدهن شقتي (عند أحد) الأسبوع القادم.",
+                "She had her bag stolen on the train." means "سُرقت حقيبتها في القطار.",
+            ),
+            questions = listOf(
+                q("It ___ that the company will close.", "is rumoured", "rumours", "is rumouring", "has rumour"),
+                q("He is believed ___ the country last week.", "to have left", "to leave", "leaving", "left"),
+                q("I need to ___ my eyes tested.", "have", "make", "do", "let"),
+                q("She had her passport ___ at the airport.", "stolen", "steal", "stealing", "stole"),
+                q("The president is said ___ ill at the moment.", "to be", "being", "be", "to have"),
+                q("We're getting the roof ___ next month.", "repaired", "repair", "repairing", "to repair"),
+                order("It is thought that the fire started in the kitchen", "يُعتقد أن الحريق بدأ في المطبخ"),
+                type("Complete: I had my hair ___ (cut) yesterday.", "cut"),
+            ),
+        )
+        vocabulary(
+            "Personality", "الشخصية",
+            listOf(
+                w("resilient", "مرن / سريع التعافي", "She's resilient — she never gives up."),
+                w("ambitious", "طموح", "He's ambitious and wants to be CEO."),
+                w("outgoing", "اجتماعي / منفتح", "My sister is outgoing and loves parties."),
+                w("reserved", "متحفظ", "He's quite reserved with strangers."),
+                w("stubborn", "عنيد", "Don't be so stubborn — listen to me!"),
+                w("empathetic", "متعاطف", "Good doctors are empathetic."),
+                w("self-confident", "واثق بنفسه", "She's self-confident in interviews."),
+                w("impulsive", "متهور / اندفاعي", "He's impulsive and buys things without thinking."),
+            ),
+        )
+        reading(
+            "The science of happiness", "علم السعادة",
+            passage = "For centuries, philosophers have debated what makes people happy. Today, psychologists are attempting to answer the question with data. One of the longest studies ever conducted, the Harvard Study of Adult Development, has followed hundreds of people for over eighty years. Its central finding is strikingly simple: the quality of our relationships is the strongest predictor of long-term wellbeing — more so than wealth, fame or social class. People who were more connected to family, friends and community were not only happier but also physically healthier and lived longer. Loneliness, by contrast, was found to be as damaging to health as smoking. Interestingly, it is not the number of friends that matters, but the depth of those connections. The researchers concluded that investing time in relationships may be the wisest decision a person can make.",
+            questions = listOf(
+                q("What makes the Harvard study special?", "It has lasted over eighty years.", "It studied only famous people.", "It was done by philosophers.", "It used no data."),
+                q("What is the strongest predictor of wellbeing, according to the study?", "The quality of relationships", "Wealth", "Fame", "Social class"),
+                q("What was loneliness compared to?", "Smoking", "Exercise", "Poverty", "Overeating"),
+                q("What matters most about friendships?", "How deep they are", "How many there are", "How long ago they began", "Where friends live"),
+                q("The word «strikingly» is closest in meaning to…", "remarkably", "slightly", "violently", "rarely"),
+            ),
+        )
+    }
 }

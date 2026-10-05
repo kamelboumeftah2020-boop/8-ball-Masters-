@@ -231,4 +231,57 @@ val LevelC2 = level(
             ),
         )
     }
+
+    unit("Precision in argument", "الدقة في الحجة") {
+        grammar(
+            "Advanced conditionals: but for, supposing, otherwise", "الشرط المتقدم",
+            notes = listOf(
+                "But for + اسم = لولا: But for your help, I would have failed. (= If it hadn't been for your help…)",
+                "Supposing / Suppose / Imagine تُستخدم لتخيّل موقف: Supposing you lost your job, what would you do?",
+                "otherwise = وإلا: Leave now; otherwise, you'll miss the train.",
+                "provided / providing (that) و as long as و on condition that = بشرط أن: You can borrow it as long as you return it.",
+                "في الرسمية: If + should للاحتمال البعيد: If you should see him, tell him to call me. أو بالقلب: Should you see him…",
+            ),
+            examples = listOf(
+                "But for the rain, the match would have been perfect." means "لولا المطر لكانت المباراة مثالية.",
+                "Supposing you won the lottery, what would you buy?" means "لنفترض أنك ربحت اليانصيب، ماذا ستشتري؟",
+                "Save your work; otherwise, you might lose it." means "احفظ عملك، وإلا فقد تفقده.",
+                "You can stay, on condition that you're quiet." means "يمكنك البقاء بشرط أن تكون هادئاً.",
+            ),
+            questions = listOf(
+                q("___ his quick thinking, there would have been an accident.", "But for", "Unless", "Otherwise", "Providing"),
+                q("___ you were offered the job, would you accept?", "Supposing", "Otherwise", "But for", "Unless that"),
+                q("Wear a coat; ___, you'll catch a cold.", "otherwise", "unless", "provided", "supposing"),
+                q("You may use my car ___ you drive carefully.", "as long as", "otherwise", "but for", "unless"),
+                q("___ you need any further information, do not hesitate to contact us.", "Should", "Would", "Had", "Were"),
+                q("We'll go ahead ___ that everyone agrees.", "on condition", "otherwise", "but for", "supposing"),
+                order("But for the map we would have got lost", "لولا الخريطة لضللنا الطريق"),
+                type("Complete: Hurry up; ___, we'll be late. (كلمة واحدة)", "otherwise"),
+            ),
+        )
+        vocabulary(
+            "Strong collocations", "المتلازمات القوية",
+            listOf(
+                w("bitterly cold", "بارد جداً / قارس", "It was bitterly cold in the mountains."),
+                w("utterly ridiculous", "سخيف تماماً", "That idea is utterly ridiculous."),
+                w("highly unlikely", "مستبعد جداً", "It's highly unlikely to rain today."),
+                w("deeply concerned", "قلق للغاية", "We are deeply concerned about the situation."),
+                w("fully aware", "مدرك تماماً", "I'm fully aware of the risks."),
+                w("widely regarded", "يُعتبر على نطاق واسع", "She is widely regarded as the best in her field."),
+                w("strongly oppose", "يعارض بشدة", "Many residents strongly oppose the plan."),
+                w("painfully slow", "بطيء بشكل مؤلم", "Progress has been painfully slow."),
+            ),
+        )
+        listening(
+            "A lecture on urban design", "محاضرة عن تصميم المدن",
+            script = "Good afternoon. Today I'd like to challenge an assumption that has shaped our cities for decades: that more roads mean less traffic. In fact, the evidence suggests the opposite. When a city builds a new motorway, traffic typically increases to fill it within a few years — a phenomenon known as 'induced demand'. Conversely, when roads are removed, traffic often doesn't simply move elsewhere; much of it disappears, as people change their habits. Seoul offers a striking example. In 2005, the city demolished an elevated highway and restored the stream beneath it. Critics predicted chaos. Instead, traffic adapted, air quality improved, and the area became one of the most popular public spaces in the city. But for such bold decisions, many cities would still be designed around cars rather than people.",
+            questions = listOf(
+                q("What assumption does the lecturer challenge?", "That more roads reduce traffic", "That cities need more parks", "That cars are cheap", "That traffic is decreasing"),
+                q("What is 'induced demand'?", "New roads attracting more traffic", "People wanting more parks", "Higher petrol prices", "Fewer cars in cities"),
+                q("What happened in Seoul in 2005?", "A highway was removed and a stream restored.", "A new motorway was built.", "Cars were banned completely.", "A metro line was closed."),
+                q("What did critics predict in Seoul?", "Chaos", "Cleaner air", "More tourists", "Lower prices"),
+                q("What is the lecturer's overall view?", "Cities should be designed for people, not cars.", "More motorways are needed.", "Traffic problems cannot be solved.", "Seoul made a mistake."),
+            ),
+        )
+    }
 }

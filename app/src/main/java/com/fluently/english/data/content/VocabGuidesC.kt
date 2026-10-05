@@ -236,4 +236,4 @@ internal val VocabGuidesC: Map<String, VocabGuide> = mapOf(
 )
 
 /** All vocabulary teaching, keyed by lesson id. */
-val VocabGuides: Map<String, VocabGuide> = VocabGuidesA + VocabGuidesB + VocabGuidesC
+val VocabGuides: Map<String, VocabGuide> = VocabGuidesA + VocabGuidesB + VocabGuidesC + VocabGuidesU5

@@ -359,4 +359,4 @@ internal val GuidesC: Map<String, Guide> = mapOf(
 )
 
 /** All grammar explanations, keyed by lesson id. */
-val Guides: Map<String, Guide> = GuidesA + GuidesB + GuidesC
+val Guides: Map<String, Guide> = GuidesA + GuidesB + GuidesC + GuidesU5
