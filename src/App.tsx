@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { isNative } from "./native";
 import { BottomNav } from "./components/BottomNav";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FullPlayer } from "./components/FullPlayer";
 import { MiniPlayer } from "./components/MiniPlayer";
 import { Chart } from "./pages/Chart";
@@ -25,28 +27,42 @@ function BackHandler() {
   const { expanded, setExpanded, isPlaying } = usePlayer();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const latest = useRef({ expanded, setExpanded, isPlaying, navigate, pathname });
+  latest.current = { expanded, setExpanded, isPlaying, navigate, pathname };
+
   useEffect(() => {
     if (!isNative) return;
-    const sub = CapApp.addListener("backButton", () => {
-      if (expanded) setExpanded(false);
-      else if (pathname !== "/") navigate(-1);
-      else if (isPlaying) CapApp.minimizeApp();
-      else CapApp.exitApp();
-    });
+    let handle: PluginListenerHandle | undefined;
+    let cancelled = false;
+    CapApp.addListener("backButton", () => {
+      const s = latest.current;
+      if (s.expanded) s.setExpanded(false);
+      else if (s.pathname !== "/") s.navigate(-1);
+      else if (s.isPlaying) CapApp.minimizeApp().catch(() => {});
+      else CapApp.exitApp().catch(() => {});
+    })
+      .then((h) => {
+        if (cancelled) h.remove().catch(() => {});
+        else handle = h;
+      })
+      .catch((e) => console.warn("backButton listener failed", e));
     return () => {
-      sub.then((s) => s.remove());
+      cancelled = true;
+      handle?.remove().catch(() => {});
     };
-  }, [expanded, setExpanded, isPlaying, navigate, pathname]);
+  }, []);
   return null;
 }
 
 function Shell() {
   const { current } = usePlayer();
+  const { pathname } = useLocation();
   return (
     <div className={`app ${current ? "has-player" : ""}`}>
       <ScrollToTop />
       <BackHandler />
       <main>
+        <ErrorBoundary resetKey={pathname}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
@@ -57,12 +73,15 @@ function Shell() {
           <Route path="/downloads" element={<Downloads />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </main>
       <div className="dock">
         <MiniPlayer />
         <BottomNav />
       </div>
-      <FullPlayer />
+      <ErrorBoundary>
+        <FullPlayer />
+      </ErrorBoundary>
     </div>
   );
 }

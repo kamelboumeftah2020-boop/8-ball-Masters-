@@ -319,8 +319,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (e.action === "play" && !audio.paused) return;
       actionsRef.current[e.action]?.(e.position);
     });
+    handle.catch((err) => console.warn("MediaPlayback listener failed", err));
     return () => {
-      handle.then((h) => h.remove());
+      handle.then((h) => h.remove()).catch(() => {});
     };
   }, [audio]);
 

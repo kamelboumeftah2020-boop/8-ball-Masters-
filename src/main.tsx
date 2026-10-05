@@ -1,10 +1,15 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { installCrashHandlers, showCrash } from "./lib/crashReport";
 import { isNative } from "./native";
+
+installCrashHandlers();
 import "./styles.css";
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById("root")!, {
+  onUncaughtError: (error) => showCrash(error, "React"),
+}).render(
   <StrictMode>
     <App />
   </StrictMode>
