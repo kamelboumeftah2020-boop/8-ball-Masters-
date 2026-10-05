@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <!-- قبة ومئذنتان -->
+    <path android:fillColor="#33FFFFFF" android:pathData="M48,14c2,6 14,12 18,22c3,8 0,14 0,14H30c0,0 -3,-6 0,-14c4,-10 16,-16 18,-22z" />
+    <path android:fillColor="#FFE9D9AB" android:pathData="M47,8h2v7h-2z" />
+    <path android:fillColor="#FFE9D9AB" android:pathData="M48,4a3,3 0 1,1 0,6a3,3 0 1,1 0,-6z" />
+    <path android:fillColor="#40FFFFFF" android:pathData="M24,50h48v34H24z" />
+    <path android:fillColor="#FF0B3F37" android:pathData="M42,84V68a6,6 0 0,1 12,0v16z" />
+    <path android:fillColor="#40FFFFFF" android:pathData="M10,30h8v54h-8zM78,30h8v54h-8z" />
+    <path android:fillColor="#FFE9D9AB" android:pathData="M14,20l5,10h-10zM82,20l5,10h-10z" />
+    <path android:fillColor="#FFE9D9AB" android:pathData="M4,84h88v4H4z" />
+</vector>

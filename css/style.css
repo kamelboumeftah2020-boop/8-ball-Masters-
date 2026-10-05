@@ -866,3 +866,4 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .row.season .cd.now { background: var(--primary); color: #fff; }
 .avatar.ruqya { background: linear-gradient(135deg, #6b2a78, #3f1847); }
 .note-box.warn { background: color-mix(in srgb, #c9a24a 14%, var(--surface)); }
+.hd-select { margin-bottom: 12px; }

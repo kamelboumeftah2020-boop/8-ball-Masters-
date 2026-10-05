@@ -119,6 +119,26 @@ public class NurAdhanPlugin extends Plugin {
         call.resolve(r);
     }
 
+    /** شاومي: إذن «العرض على شاشة القفل» و«النوافذ المنبثقة في الخلفية» لتظهر شاشة الأذان. */
+    @PluginMethod
+    public void openLockScreenSettings(PluginCall call) {
+        String m = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase();
+        boolean opened = false;
+        if (m.contains("xiaomi") || m.contains("redmi") || m.contains("poco")) {
+            for (String cls : new String[] { "com.miui.permcenter.permissions.PermissionsEditorActivity", "com.miui.permcenter.permissions.AppPermissionsEditorActivity" }) {
+                try {
+                    Intent i = new Intent("miui.intent.action.APP_PERM_EDITOR").setClassName("com.miui.securitycenter", cls)
+                        .putExtra("extra_pkgname", getContext().getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(i);
+                    opened = true;
+                    break;
+                } catch (Exception ignored) { }
+            }
+        }
+        if (!opened) start(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName())));
+        call.resolve();
+    }
+
     private void start(Intent i) {
         try {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

@@ -1,5 +1,5 @@
 // تخزين واجهة التطبيق وسور المصحف والتفسير لتعمل دون اتصال
-const SHELL = 'nur-shell-v9';
+const SHELL = 'nur-shell-v10';
 const DATA = 'nur-data-v3';
 const FILES = [
   './', 'index.html', 'css/style.css', 'css/fonts.css', 'manifest.webmanifest',

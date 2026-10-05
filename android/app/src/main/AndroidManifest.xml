@@ -41,6 +41,7 @@
         <!-- شاشة الأذان فوق قفل الشاشة -->
         <activity
             android:name=".AdhanActivity"
+            android:enableOnBackInvokedCallback="true"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleInstance"

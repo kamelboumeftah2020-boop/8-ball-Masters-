@@ -337,6 +337,7 @@ export function testAdhan(seconds = 10) {
 export const openExactSettings = () => nativePlugin('NurAdhan')?.openExactSettings();
 export const openFullScreenSettings = () => nativePlugin('NurAdhan')?.openFullScreenSettings();
 export const openAutostart = () => nativePlugin('NurAdhan')?.openAutostart();
+export const openLockScreenSettings = () => nativePlugin('NurAdhan')?.openLockScreenSettings();
 export const requestIgnoreBattery = () => nativePlugin('NurAdhan')?.requestIgnoreBattery();
 
 export async function enableNativeAdhan() {
@@ -355,6 +356,11 @@ export async function enableNativeAdhan() {
     store.set('exactAsked', true);
     toast('اسمح لـ«نور» بالمنبّهات الدقيقة ليُرفع الأذان في وقته');
     await openExactSettings();
+  } else if (st && st.fullScreen === false && !store.get('fsAsked')) {
+    // شاشة الأذان الكاملة فوق القفل تحتاج إذنًا في أندرويد ١٤ فما بعد
+    store.set('fsAsked', true);
+    toast('اسمح لـ«نور» بإظهار شاشة الأذان كاملة فوق القفل');
+    await openFullScreenSettings();
   }
   await scheduleAdhans();
   return true;

@@ -1,6 +1,6 @@
 // صفحة مواقيت الصلاة والأذان
 import { $, $$, esc, arNum, toast, icons } from '../core.js';
-import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, placeName, testAdhan, openExactSettings, requestIgnoreBattery, openFullScreenSettings, openAutostart } from '../prayer.js';
+import { PRAYERS, METHODS, ADHANS, adhanUrl, cfg, saveCfg, times, loadTimes, nextPrayer, toDate, fmt12, useGps, events as prEvents, scheduleAdhans, enableNativeAdhan, nativeAdhanStatus, placeName, testAdhan, openExactSettings, requestIgnoreBattery, openFullScreenSettings, openAutostart, openLockScreenSettings } from '../prayer.js';
 import { isNative, BUNDLED_ADHANS } from '../native.js';
 
 // في التطبيق: أصوات الأذان المضمّنة فقط (لتعمل والتطبيق مغلق ودون اتصال)
@@ -90,7 +90,7 @@ export function renderAdhan(view, args, ctx) {
           <span class="switch"><input type="checkbox" id="alerts" ${cfg.alerts ? 'checked' : ''}><i></i></span>
         </label>
         ${isNative ? `<div class="adhan-status" id="adhanStatus"><div class="loader small"><div class="spinner"></div></div></div>
-        <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان والهاتف مقفل (بعد ٣٠ ثانية)</button>
+        <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان والشاشة مطفأة (بعد ٣٠ ثانية)</button>
         <a class="btn ghost block" href="#/reminders">${icons.bell} التذكيرات: الأذكار والكهف والصيام والورد</a>` : ''}
         <div class="note-box">${icons.info} ${isNative
           ? 'يُرفع الأذان على صوت المنبّه، فيُسمع حتى في الوضع الصامت؛ ويمكنك إيقافه من الإشعار. ويمكنك إيقاف الأذان لصلاة معيّنة من زر الجرس بجانبها.'
@@ -200,6 +200,7 @@ export function renderAdhan(view, args, ctx) {
     // هواتف تمنع المنبّهات للتطبيقات غير المسموح لها بالتشغيل التلقائي
     const brand = OEM.find(([re]) => re.test(st.manufacturer || ''));
     if (brand) rows.push(['warn', `في هواتف ${brand[1]} يجب السماح لـ«نور» بـ«التشغيل التلقائي» وجعل البطارية «بلا قيود»، وإلا منع النظام الأذان والهاتف مقفل. <button class="link" data-fix="autostart">فتح الإعداد</button>`]);
+    if (brand && /شاومي/.test(brand[1])) rows.push(['warn', 'ولتظهر شاشة الأذان والهاتف مطفأ: اسمح بـ«العرض على شاشة القفل» و«عرض النوافذ المنبثقة أثناء العمل في الخلفية». <button class="link" data-fix="lockscreen">فتح الأذونات</button>']);
     // آخر أذان رُفع، لمعرفة ما جرى
     const last = (st.log || [])[0];
     if (last) {
@@ -218,10 +219,10 @@ export function renderAdhan(view, args, ctx) {
     ctx.cleanup(() => { prEvents.removeEventListener('scheduled', showStatus); document.removeEventListener('visibilitychange', onFocus); });
     const onClick = e => {
       const f = e.target.closest('[data-fix]');
-      if (f) ({ exact: openExactSettings, battery: requestIgnoreBattery, fullscreen: openFullScreenSettings, autostart: openAutostart }[f.dataset.fix])?.();
+      if (f) ({ exact: openExactSettings, battery: requestIgnoreBattery, fullscreen: openFullScreenSettings, autostart: openAutostart, lockscreen: openLockScreenSettings }[f.dataset.fix])?.();
       if (e.target.closest('#testAdhan')) {
         testAdhan(30);
-        toast('اقفل الهاتف الآن؛ سيُرفع أذان التجربة بعد ٣٠ ثانية');
+        toast('أطفئ الشاشة الآن؛ بعد ٣٠ ثانية تضيء وتظهر شاشة الأذان');
       }
     };
     view.addEventListener('click', onClick);
