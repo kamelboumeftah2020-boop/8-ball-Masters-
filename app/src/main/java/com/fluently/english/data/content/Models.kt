@@ -142,6 +142,41 @@ data class Table(val headers: List<String>, val rows: List<List<String>>)
 
 data class Mistake(val wrong: String, val right: String, val why: String)
 
+/*
+ * Step-by-step teaching for a vocabulary lesson: a hook, a memory trick for every
+ * word, words grouped by meaning, a short story that uses them in context,
+ * context checks and typical mistakes.
+ */
+data class VocabGuide(
+    val hook: String,
+    /** Memory trick per word (keyed by the English word). */
+    val hints: Map<String, String>,
+    val groups: List<WordGroup>,
+    /** Short English story using the lesson's words. */
+    val story: String,
+    val storyAr: String,
+    val checks: List<Question.Choice>,
+    val mistakes: List<Mistake>,
+    val tip: String,
+)
+
+data class WordGroup(val title: String, val words: List<String>, val note: String)
+
+/*
+ * Pre- and post-task support for reading and listening lessons: context and a
+ * prediction, key words taught before the text, a comprehension strategy, a
+ * main-idea check and a speaking/writing task afterwards.
+ */
+data class TextGuide(
+    val hook: String,
+    val predict: Question.Choice,
+    val keyWords: List<Word>,
+    val strategy: String,
+    val gist: Question.Choice,
+    val reflect: String,
+    val reflectSample: String,
+)
+
 data class Lesson(
     val id: String,
     val level: CefrLevel,
@@ -157,6 +192,8 @@ data class Lesson(
     val questions: List<Question>,
 ) {
     val guide: Guide? get() = Guides[id]
+    val vocabGuide: VocabGuide? get() = VocabGuides[id]
+    val textGuide: TextGuide? get() = TextGuides[id]
 }
 
 data class CourseUnit(

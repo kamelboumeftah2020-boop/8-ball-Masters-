@@ -55,6 +55,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -562,3 +565,132 @@ fun FlipCard(
 /** Splits a passage into sentences for sentence-by-sentence playback. */
 fun sentencesOf(text: String): List<String> =
     text.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+
+// ---------- Interactive text ----------
+
+private fun words(text: String) = text.lowercase().split(Regex("[^a-z']+")).filter { it.isNotBlank() }
+
+/** Finds the glossary entry closest to [segment] (handles "[ran out of]" vs "run out of"). */
+private fun lookup(segment: String, glossary: Map<String, String>): Pair<String, String>? {
+    glossary.entries.firstOrNull { it.key.equals(segment, true) }?.let { return it.key to it.value }
+    glossary.entries.firstOrNull { segment.startsWith(it.key, true) || it.key.startsWith(segment, true) }
+        ?.let { return it.key to it.value }
+    val seg = words(segment)
+    return glossary.entries
+        .map { e -> e to words(e.key).count { it in seg }.toFloat() / words(e.key).size.coerceAtLeast(1) }
+        .filter { it.second >= 0.5f }
+        .maxByOrNull { it.second }
+        ?.let { it.first.key to it.first.value }
+}
+
+/**
+ * Reading text you can touch: tap a highlighted word to see its meaning, or any
+ * other part of a sentence to hear that sentence. Words are highlighted either
+ * where the text marks them with [brackets] or wherever a [glossary] term occurs.
+ */
+@Composable
+fun InteractiveText(text: String, glossary: Map<String, String>, modifier: Modifier = Modifier) {
+    val speaker = LocalSpeaker.current
+    val accent = MaterialTheme.colorScheme.primary
+    val bracketMode = '[' in text
+    val sentences = remember(text) { sentencesOf(text) }
+    var activeSentence by remember(text) { mutableStateOf(-1) }
+    var selected by remember(text) { mutableStateOf<Pair<String, String?>?>(null) }
+    val termRegex = remember(glossary) {
+        glossary.keys.sortedByDescending { it.length }
+            .joinToString("|") { "\\b" + Regex.escape(it) + "\\b" }
+            .takeIf { it.isNotEmpty() }
+            ?.let { Regex(it, RegexOption.IGNORE_CASE) }
+    }
+
+    val annotated = buildAnnotatedString {
+        sentences.forEachIndexed { si, sentence ->
+            // Split the sentence into (text, isTerm) pieces.
+            val pieces = mutableListOf<Pair<String, Boolean>>()
+            if (bracketMode) {
+                var inside = false
+                val buf = StringBuilder()
+                sentence.forEach { c ->
+                    when (c) {
+                        '[' -> { if (buf.isNotEmpty()) pieces += buf.toString() to false; buf.clear(); inside = true }
+                        ']' -> { if (buf.isNotEmpty()) pieces += buf.toString() to true; buf.clear(); inside = false }
+                        else -> buf.append(c)
+                    }
+                }
+                if (buf.isNotEmpty()) pieces += buf.toString() to inside
+            } else {
+                var last = 0
+                termRegex?.findAll(sentence)?.forEach { m ->
+                    if (m.range.first > last) pieces += sentence.substring(last, m.range.first) to false
+                    pieces += m.value to true
+                    last = m.range.last + 1
+                }
+                if (last < sentence.length) pieces += sentence.substring(last) to false
+            }
+            val plainSentence = sentence.replace("[", "").replace("]", "")
+            pieces.forEachIndexed { pi, (piece, isTerm) ->
+                if (isTerm) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "t$si-$pi",
+                            styles = TextLinkStyles(
+                                style = SpanStyle(color = accent, fontWeight = FontWeight.Bold, background = accent.copy(alpha = 0.10f)),
+                            ),
+                        ) {
+                            val found = lookup(piece, glossary)
+                            selected = piece to found?.second
+                            speaker.speak(found?.first ?: piece)
+                        },
+                    ) { append(piece) }
+                } else {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "s$si-$pi",
+                            styles = TextLinkStyles(
+                                style = if (si == activeSentence) SpanStyle(background = accent.copy(alpha = 0.08f)) else SpanStyle(),
+                            ),
+                        ) {
+                            activeSentence = si
+                            speaker.speak(plainSentence)
+                        },
+                    ) { append(piece) }
+                }
+            }
+            if (si < sentences.lastIndex) append(" ")
+        }
+    }
+
+    Column(modifier) {
+        Ltr {
+            Text(
+                annotated,
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.25f),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        val sel = selected
+        AnimatedVisibility(sel != null, enter = expandVertically() + fadeIn()) {
+            if (sel != null) {
+                Row(
+                    Modifier
+                        .padding(top = 14.dp)
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Ltr { Text(sel.first, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.fillMaxWidth()) }
+                        Text(
+                            sel.second ?: "اضغط على الصوت لسماعها",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    SpeakButton(sel.first)
+                }
+            }
+        }
+    }
+}

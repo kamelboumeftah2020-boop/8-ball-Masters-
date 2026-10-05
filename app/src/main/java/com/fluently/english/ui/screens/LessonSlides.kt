@@ -65,6 +65,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import com.fluently.english.data.content.Concept
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.fluently.english.ui.components.InteractiveText
+import com.fluently.english.data.content.plain
+import com.fluently.english.data.content.Example
+import com.fluently.english.data.content.Question
+import com.fluently.english.data.content.TextGuide
+import com.fluently.english.data.content.VocabGuide
+import com.fluently.english.data.content.Mistake
 import com.fluently.english.data.content.Guide
 import com.fluently.english.data.content.Lesson
 import com.fluently.english.data.content.LessonType
@@ -108,14 +116,25 @@ private sealed interface Slide {
     data class ConceptSlide(val concept: Concept, val index: Int, val total: Int) : Slide {
         override val gated get() = concept.check != null
     }
-    data class Mistakes(val guide: Guide) : Slide
+    data class Mistakes(val mistakes: List<Mistake>) : Slide
+    data class Groups(val guide: VocabGuide, val words: List<Word>) : Slide
+    data class Story(val guide: VocabGuide, val words: List<Word>) : Slide
+    data class Checks(val checks: List<Question.Choice>, val title: String) : Slide {
+        override val gated get() = true
+    }
+    data class Predict(val lesson: Lesson, val guide: TextGuide) : Slide {
+        override val gated get() = true
+    }
+    data class KeyWords(val words: List<Word>) : Slide
+    data class Strategy(val text: String, val listening: Boolean) : Slide
+    data class Reflect(val guide: TextGuide) : Slide
     data class Summary(val lesson: Lesson, val tip: String?) : Slide
-    data class WordCard(val word: Word, val index: Int, val total: Int) : Slide
+    data class WordCard(val word: Word, val index: Int, val total: Int, val hint: String?) : Slide
     data class WarmUpMatch(val words: List<Word>) : Slide {
         override val gated get() = true
     }
-    data class Passage(val text: String) : Slide
-    data class Listen(val script: String) : Slide
+    data class Passage(val text: String, val glossary: Map<String, String>) : Slide
+    data class Listen(val script: String, val glossary: Map<String, String>) : Slide
 }
 
 private fun slidesFor(lesson: Lesson): List<Slide> {
@@ -125,17 +144,37 @@ private fun slidesFor(lesson: Lesson): List<Slide> {
             add(Slide.Intro(lesson, guide))
             if (guide != null) {
                 guide.concepts.forEachIndexed { i, c -> add(Slide.ConceptSlide(c, i, guide.concepts.size)) }
-                if (guide.mistakes.isNotEmpty()) add(Slide.Mistakes(guide))
+                if (guide.mistakes.isNotEmpty()) add(Slide.Mistakes(guide.mistakes))
             }
             add(Slide.Summary(lesson, guide?.tip))
         }
         LessonType.VOCABULARY -> buildList {
+            val vg = lesson.vocabGuide
             add(Slide.Intro(lesson, null))
-            lesson.words.forEachIndexed { i, w -> add(Slide.WordCard(w, i, lesson.words.size)) }
+            lesson.words.forEachIndexed { i, w -> add(Slide.WordCard(w, i, lesson.words.size, vg?.hints?.get(w.en))) }
+            if (vg != null) {
+                add(Slide.Groups(vg, lesson.words))
+                add(Slide.Story(vg, lesson.words))
+                if (vg.checks.isNotEmpty()) add(Slide.Checks(vg.checks, "استخدم الكلمات في سياقها"))
+                if (vg.mistakes.isNotEmpty()) add(Slide.Mistakes(vg.mistakes))
+            }
             if (lesson.words.size >= 4) add(Slide.WarmUpMatch(lesson.words.takeLast(4)))
         }
-        LessonType.READING -> listOf(Slide.Intro(lesson, null), Slide.Passage(lesson.passage.orEmpty()))
-        LessonType.LISTENING -> listOf(Slide.Intro(lesson, null), Slide.Listen(lesson.passage.orEmpty()))
+        LessonType.READING, LessonType.LISTENING -> buildList {
+            val tg = lesson.textGuide
+            val listening = lesson.type == LessonType.LISTENING
+            val glossary = tg?.keyWords?.associate { it.en to it.ar }.orEmpty()
+            if (tg != null) add(Slide.Predict(lesson, tg)) else add(Slide.Intro(lesson, null))
+            if (tg != null) {
+                add(Slide.KeyWords(tg.keyWords))
+                add(Slide.Strategy(tg.strategy, listening))
+            }
+            add(if (listening) Slide.Listen(lesson.passage.orEmpty(), glossary) else Slide.Passage(lesson.passage.orEmpty(), glossary))
+            if (tg != null) {
+                add(Slide.Checks(listOf(tg.gist), if (listening) "ماذا فهمت؟" else "الفكرة الرئيسية"))
+                add(Slide.Reflect(tg))
+            }
+        }
     }
 }
 
@@ -221,12 +260,19 @@ private fun SlideContent(slide: Slide, lesson: Lesson, onUnlock: () -> Unit) {
     when (slide) {
         is Slide.Intro -> IntroSlide(slide.lesson, slide.guide)
         is Slide.ConceptSlide -> ConceptSlide(slide, lesson, onUnlock)
-        is Slide.Mistakes -> MistakesSlide(slide.guide)
+        is Slide.Mistakes -> MistakesSlide(slide.mistakes)
+        is Slide.Groups -> GroupsSlide(slide.guide, slide.words)
+        is Slide.Story -> StorySlide(slide.guide, slide.words)
+        is Slide.Checks -> ChecksSlide(slide.checks, slide.title, onUnlock)
+        is Slide.Predict -> PredictSlide(slide.lesson, slide.guide, onUnlock)
+        is Slide.KeyWords -> KeyWordsSlide(slide.words)
+        is Slide.Strategy -> StrategySlide(slide.text, slide.listening)
+        is Slide.Reflect -> ReflectSlide(slide.guide)
         is Slide.Summary -> SummarySlide(slide.lesson, slide.tip)
         is Slide.WordCard -> WordSlide(slide)
         is Slide.WarmUpMatch -> WarmUpSlide(slide.words, onUnlock)
-        is Slide.Passage -> PassageSlide(slide.text)
-        is Slide.Listen -> ListenSlide(slide.script)
+        is Slide.Passage -> PassageSlide(slide.text, slide.glossary)
+        is Slide.Listen -> ListenSlide(slide.script, slide.glossary)
     }
 }
 
@@ -332,7 +378,7 @@ private fun ConceptSlide(slide: Slide.ConceptSlide, lesson: Lesson, onUnlock: ()
 // ---------- Mistakes ----------
 
 @Composable
-private fun MistakesSlide(guide: Guide) {
+private fun MistakesSlide(mistakes: List<Mistake>) {
     SlideLabel("انتبه!", Danger)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.WarningAmber, null, tint = Danger)
@@ -345,7 +391,7 @@ private fun MistakesSlide(guide: Guide) {
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     VSpace(10.dp)
-    guide.mistakes.forEach { MistakeCard(it) }
+    mistakes.forEach { MistakeCard(it) }
 }
 
 // ---------- Summary ----------
@@ -411,7 +457,7 @@ private fun WordSlide(slide: Slide.WordCard) {
     Text("خمّن المعنى، ثم اقلب البطاقة", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     VSpace(14.dp)
     FlipCard(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1.15f),
+        modifier = Modifier.fillMaxWidth().aspectRatio(if (slide.hint != null) 0.95f else 1.15f),
         flipped = flipped,
         onFlip = { flipped = !flipped },
         front = {
@@ -441,6 +487,17 @@ private fun WordSlide(slide: Slide.WordCard) {
                 }
                 VSpace(12.dp)
                 SpeakButton(word.example)
+                if (slide.hint != null) {
+                    VSpace(16.dp)
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(extra.heroTrack).padding(12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(Icons.Rounded.Lightbulb, null, tint = Gold, modifier = Modifier.size(18.dp))
+                        HSpace(8.dp)
+                        Text(isolateLatin(slide.hint), style = MaterialTheme.typography.bodySmall, color = extra.onHero)
+                    }
+                }
             }
         },
     )
@@ -503,55 +560,29 @@ private fun WarmUpSlide(words: List<Word>, onUnlock: () -> Unit) {
 // ---------- Reading ----------
 
 @Composable
-private fun PassageSlide(text: String) {
-    val speaker = LocalSpeaker.current
-    val sentences = remember(text) { sentencesOf(text) }
-    var active by remember { mutableStateOf(-1) }
-    val accent = MaterialTheme.colorScheme.primary
-
+private fun PassageSlide(text: String, glossary: Map<String, String>) {
     SlideLabel("النص")
     Text("اقرأ واستمع", style = MaterialTheme.typography.headlineSmall)
     VSpace(6.dp)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.TouchApp, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         HSpace(6.dp)
-        Text("اضغط على أي جملة لتسمعها", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            if (glossary.isEmpty()) "اضغط على أي جملة لتسمعها" else "اضغط على الكلمة الملونة لترى معناها، وعلى أي جملة لتسمعها",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
     VSpace(14.dp)
     AudioControls(text)
     VSpace(14.dp)
-    AppCard(padding = 20.dp) {
-        val annotated = buildAnnotatedString {
-            sentences.forEachIndexed { i, sentence ->
-                withLink(
-                    LinkAnnotation.Clickable(
-                        tag = "s$i",
-                        styles = TextLinkStyles(
-                            style = if (i == active) SpanStyle(background = accent.copy(alpha = 0.16f), color = accent) else SpanStyle(),
-                        ),
-                    ) {
-                        active = i
-                        speaker.speak(sentence)
-                    },
-                ) { append(sentence) }
-                if (i < sentences.lastIndex) append(" ")
-            }
-        }
-        Ltr {
-            Text(
-                annotated,
-                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
+    AppCard(padding = 20.dp) { InteractiveText(text, glossary) }
 }
 
 // ---------- Listening ----------
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ListenSlide(script: String) {
+private fun ListenSlide(script: String, glossary: Map<String, String>) {
     val speaker = LocalSpeaker.current
     val sentences = remember(script) { sentencesOf(script) }
     var played by remember { mutableStateOf(setOf<Int>()) }
@@ -611,7 +642,217 @@ private fun ListenSlide(script: String) {
         }
         if (showText) {
             VSpace(12.dp)
-            AutoText(script, style = MaterialTheme.typography.bodyMedium)
+            InteractiveText(script, glossary)
+        }
+    }
+}
+
+// ---------- Vocabulary: groups, story, checks ----------
+
+@Composable
+private fun GroupsSlide(guide: VocabGuide, words: List<Word>) {
+    val byEn = words.associateBy { it.en }
+    SlideLabel("نظّم الكلمات")
+    Text("الكلمات في مجموعات", style = MaterialTheme.typography.headlineSmall)
+    VSpace(6.dp)
+    Text(
+        "الدماغ يحفظ الكلمات المترابطة أسرع من القوائم العشوائية.",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val colors = listOf(Success, Coral, Gold)
+    guide.groups.forEachIndexed { gi, g ->
+        VSpace(14.dp)
+        val c = colors[gi % colors.size]
+        AppCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(c))
+                HSpace(8.dp)
+                Text(g.title, style = MaterialTheme.typography.titleMedium)
+            }
+            VSpace(10.dp)
+            WordChips(g.words.mapNotNull { byEn[it] }, c)
+            VSpace(10.dp)
+            AutoText(g.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WordChips(words: List<Word>, color: Color) {
+    val speaker = LocalSpeaker.current
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        words.forEach { w ->
+            Column(
+                Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(color.copy(alpha = 0.10f))
+                    .clickable { speaker.speak(w.en) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Ltr { Text(w.en, style = MaterialTheme.typography.titleSmall, color = color) }
+                Text(w.ar, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StorySlide(guide: VocabGuide, words: List<Word>) {
+    var showAr by remember { mutableStateOf(false) }
+    SlideLabel("الكلمات في قصة")
+    Text("اقرأ القصة واستمع", style = MaterialTheme.typography.headlineSmall)
+    VSpace(6.dp)
+    Text(
+        "كل الكلمات الجديدة موجودة في القصة. اضغط على الكلمة الملونة لتتذكر معناها، أو على أي جملة لتسمعها.",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    VSpace(14.dp)
+    AudioControls(guide.story.plain())
+    VSpace(14.dp)
+    AppCard(padding = 20.dp) { InteractiveText(guide.story, words.associate { it.en to it.ar }) }
+    VSpace(12.dp)
+    AppCard(onClick = { showAr = !showAr }, color = AppTheme.extra.subtle, bordered = false, padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (showAr) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            HSpace(10.dp)
+            Text(if (showAr) "إخفاء الترجمة" else "اعرض الترجمة بعد أن تحاول الفهم", style = MaterialTheme.typography.titleSmall)
+        }
+        if (showAr) {
+            VSpace(10.dp)
+            Text(guide.storyAr, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun ChecksSlide(checks: List<Question.Choice>, title: String, onUnlock: () -> Unit) {
+    val answered = remember { mutableStateMapOf<Int, Boolean>() }
+    SlideLabel("تحقق من فهمك")
+    Text(title, style = MaterialTheme.typography.headlineSmall)
+    checks.forEachIndexed { i, q ->
+        VSpace(16.dp)
+        CheckCard(q) {
+            answered[i] = it
+            if (answered.size == checks.size) onUnlock()
+        }
+    }
+}
+
+// ---------- Reading & listening: before / after ----------
+
+@Composable
+private fun PredictSlide(lesson: Lesson, guide: TextGuide, onUnlock: () -> Unit) {
+    val c = lesson.level.color()
+    val extra = AppTheme.extra
+    VSpace(8.dp)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Pill(lesson.level.code, c, solid = true)
+        HSpace(8.dp)
+        Pill(lesson.type.labelAr, MaterialTheme.colorScheme.primary, icon = lesson.type.icon())
+    }
+    VSpace(14.dp)
+    Text(lesson.titleAr, style = MaterialTheme.typography.headlineMedium)
+    Ltr { Text(lesson.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth()) }
+    VSpace(18.dp)
+    Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(extra.hero).padding(22.dp)) {
+        IconTile(Icons.Rounded.Lightbulb, Gold, size = 44.dp, background = extra.heroTrack)
+        VSpace(12.dp)
+        Text(isolateLatin(guide.hook), style = MaterialTheme.typography.bodyLarge, color = extra.onHero)
+    }
+    VSpace(18.dp)
+    Text("قبل أن تبدأ — توقّع!", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "التوقع قبل القراءة أو الاستماع يجهّز دماغك للفهم.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    VSpace(10.dp)
+    CheckCard(guide.predict) { onUnlock() }
+}
+
+@Composable
+private fun KeyWordsSlide(words: List<Word>) {
+    SlideLabel("كلمات مفتاحية")
+    Text("تعرّف عليها قبل النص", style = MaterialTheme.typography.headlineSmall)
+    VSpace(6.dp)
+    Text(
+        "هذه الكلمات ستقابلها في النص. فكّر في معناها ثم اضغط على البطاقة لتتأكد.",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    VSpace(8.dp)
+    words.forEach { ExampleCard(Example("[${w(it)}] — ${it.example}", it.ar)) }
+}
+
+private fun w(word: Word) = word.en
+
+@Composable
+private fun StrategySlide(text: String, listening: Boolean) {
+    SlideLabel("مهارة اليوم")
+    Text(if (listening) "كيف تستمع بذكاء" else "كيف تقرأ بذكاء", style = MaterialTheme.typography.headlineSmall)
+    VSpace(14.dp)
+    AppCard(color = MaterialTheme.colorScheme.tertiaryContainer, bordered = false, padding = 20.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Lightbulb, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            HSpace(8.dp)
+            Text("استراتيجية", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+        }
+        VSpace(10.dp)
+        Text(isolateLatin(text), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+    }
+    VSpace(16.dp)
+    listOf(
+        if (listening) "استمع مرة كاملة دون توقف" else "اقرأ مرة سريعة للفكرة العامة",
+        if (listening) "استمع جملة جملة للتفاصيل" else "اقرأ مرة ثانية للتفاصيل",
+        "اضغط على الكلمات الملونة لمعرفة معناها",
+    ).forEachIndexed { i, step ->
+        Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) { Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+            HSpace(12.dp)
+            Text(step, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+private fun ReflectSlide(guide: TextGuide) {
+    var showSample by remember { mutableStateOf(false) }
+    SlideLabel("دورك الآن")
+    Text("تحدث أو اكتب عن نفسك", style = MaterialTheme.typography.headlineSmall)
+    VSpace(14.dp)
+    AppCard(padding = 20.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Mic, null, tint = Coral)
+            HSpace(8.dp)
+            Text("المهمة", style = MaterialTheme.typography.titleSmall)
+        }
+        VSpace(8.dp)
+        Text(isolateLatin(guide.reflect), style = MaterialTheme.typography.bodyLarge)
+        VSpace(8.dp)
+        Text(
+            "قلها بصوت عالٍ أو اكتبها في دفترك. استخدام اللغة عن حياتك يثبّتها أكثر من أي تمرين.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    VSpace(12.dp)
+    AppCard(onClick = { showSample = !showSample }, color = AppTheme.extra.subtle, bordered = false) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (showSample) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            HSpace(10.dp)
+            Text(if (showSample) "إخفاء المثال" else "اعرض مثالاً للإجابة", style = MaterialTheme.typography.titleSmall)
+        }
+        if (showSample) {
+            VSpace(10.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { AutoText(guide.reflectSample, style = MaterialTheme.typography.titleMedium) }
+                HSpace(8.dp)
+                SpeakButton(guide.reflectSample)
+            }
+            VSpace(12.dp)
+            SpeakPractice(guide.reflectSample, compact = true)
         }
     }
 }

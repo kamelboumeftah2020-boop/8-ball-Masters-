@@ -35,6 +35,8 @@ fun mistake(wrong: String, right: String, why: String) = Mistake(wrong, right, w
 fun guide(hook: String, goals: List<String>, concepts: List<Concept>, mistakes: List<Mistake>, tip: String) =
     Guide(hook, goals, concepts, mistakes, tip)
 
+fun group(title: String, note: String, vararg words: String) = WordGroup(title, words.toList(), note)
+
 /** Removes the [highlight] markers from an example sentence. */
 fun String.plain(): String = replace("[", "").replace("]", "")
 
