@@ -27,6 +27,9 @@ data class Session(
 /** A saved copy of the learner's progress and when it was written. */
 data class RemoteProgress(val json: String, val updatedAt: Long)
 
+/** One row of the weekly leaderboard. */
+data class LeaderEntry(val uid: String, val name: String, val xp: Int, val level: String, val streak: Int)
+
 /** An error with a message ready to show to the learner (Arabic). */
 class AuthException(message: String) : Exception(message)
 
@@ -37,6 +40,12 @@ interface AuthBackend {
     suspend fun sendPasswordReset(email: String)
     suspend fun pull(session: Session): Pair<Session, RemoteProgress?>
     suspend fun push(session: Session, progress: RemoteProgress): Session
+
+    /** Publishes (or with [entry] = null, removes) the learner's score for [week]. */
+    suspend fun submitScore(session: Session, week: Long, entry: LeaderEntry?): Session = session
+
+    /** Top learners of [week], best first. */
+    suspend fun topScores(session: Session, week: Long): Pair<Session, List<LeaderEntry>> = session to emptyList()
 }
 
 object AuthValidation {
@@ -117,6 +126,54 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
         if (code !in 200..299) throw AuthException(firebaseMessage(body))
         return s
     }
+
+    override suspend fun submitScore(session: Session, week: Long, entry: LeaderEntry?): Session {
+        val s = fresh(session)
+        val url = "$base/leaderboards/w$week/entries/${s.uid}"
+        val (code, body) = if (entry == null) {
+            request("DELETE", url, null, s.idToken)
+        } else {
+            val doc = JSONObject().put(
+                "fields",
+                JSONObject()
+                    .put("name", JSONObject().put("stringValue", entry.name.take(30)))
+                    .put("xp", JSONObject().put("integerValue", entry.xp.toString()))
+                    .put("level", JSONObject().put("stringValue", entry.level))
+                    .put("streak", JSONObject().put("integerValue", entry.streak.toString())),
+            )
+            request("PATCH", url, doc.toString(), s.idToken)
+        }
+        if (code !in 200..299 && code != 404) throw AuthException(firebaseMessage(body))
+        return s
+    }
+
+    override suspend fun topScores(session: Session, week: Long): Pair<Session, List<LeaderEntry>> {
+        val s = fresh(session)
+        val query = JSONObject().put(
+            "structuredQuery",
+            JSONObject()
+                .put("from", org.json.JSONArray().put(JSONObject().put("collectionId", "entries")))
+                .put("orderBy", org.json.JSONArray().put(JSONObject().put("field", JSONObject().put("fieldPath", "xp")).put("direction", "DESCENDING")))
+                .put("limit", 50),
+        )
+        val (code, body) = request("POST", "$base/leaderboards/w$week:runQuery", query.toString(), s.idToken)
+        if (code !in 200..299) throw AuthException(firebaseMessage(body))
+        val rows = org.json.JSONArray(body)
+        val list = (0 until rows.length()).mapNotNull { i ->
+            val doc = rows.getJSONObject(i).optJSONObject("document") ?: return@mapNotNull null
+            val f = doc.getJSONObject("fields")
+            LeaderEntry(
+                uid = doc.getString("name").substringAfterLast('/'),
+                name = f.optJSONObject("name")?.optString("stringValue").orEmpty(),
+                xp = f.optJSONObject("xp")?.optString("integerValue")?.toIntOrNull() ?: 0,
+                level = f.optJSONObject("level")?.optString("stringValue").orEmpty(),
+                streak = f.optJSONObject("streak")?.optString("integerValue")?.toIntOrNull() ?: 0,
+            )
+        }
+        return s to list
+    }
+
+    private val base = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents"
 
     private fun docUrl(s: Session) =
         "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/${s.uid}"

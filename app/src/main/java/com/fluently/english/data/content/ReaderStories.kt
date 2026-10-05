@@ -1117,4 +1117,4 @@ private val ReadersB2: List<GradedReader> = listOf(
 )
 
 /** A1–B2 stories here; C1–C2 in ReaderStoriesC.kt. */
-internal val ReaderStories: List<GradedReader> = ReadersA1 + ReadersA2 + ReadersB1 + ReadersB2 + ReadersC1 + ReadersC2
+internal val ReaderStories: List<GradedReader> = ReadersA1 + ReadersA2 + ReadersB1 + ReadersB2 + ReadersC1 + ReadersC2 + ReadersExtra

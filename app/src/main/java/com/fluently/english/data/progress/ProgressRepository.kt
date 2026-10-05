@@ -181,6 +181,16 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         return xp
     }
 
+    /** Records a checked writing task; [rating] is the sum of the four 0..3 criteria. */
+    fun completeWriting(id: String, words: Int, rating: Int): Int {
+        val first = id !in _progress.value.writingDone
+        val xp = if (first) (words / 4).coerceAtMost(60) + rating * 3 else rating
+        update { p -> p.copy(writingDone = p.writingDone + id).withSkill(SkillKey.WRITING, rating, 12).withXp(xp, today()) }
+        return xp
+    }
+
+    fun setShowOnLeaderboard(show: Boolean) = update { it.copy(showOnLeaderboard = show) }
+
     /** Replaces the whole progress (sign-in, restore from backup). */
     fun replace(p: Progress) = update { p }
 
@@ -299,6 +309,8 @@ internal object ProgressCodec {
         put("skillTotal", JSONObject(p.skillTotal))
         put("readerChapters", JSONObject(p.readerChapters))
         put("wordsRead", p.wordsRead)
+        put("writingDone", org.json.JSONArray(p.writingDone.toList()))
+        put("showOnLeaderboard", p.showOnLeaderboard)
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -340,6 +352,8 @@ internal object ProgressCodec {
             skillTotal = intMap(o.optJSONObject("skillTotal")),
             readerChapters = intMap(o.optJSONObject("readerChapters")),
             wordsRead = o.optInt("wordsRead"),
+            writingDone = o.optJSONArray("writingDone")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
+            showOnLeaderboard = o.optBoolean("showOnLeaderboard", true),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))

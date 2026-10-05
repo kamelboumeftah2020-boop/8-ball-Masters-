@@ -61,6 +61,9 @@ import com.fluently.english.ui.screens.ReaderListScreen
 import com.fluently.english.ui.screens.ReaderScreen
 import com.fluently.english.ui.screens.ReportScreen
 import com.fluently.english.ui.screens.GoalScreen
+import com.fluently.english.ui.screens.LeaderboardScreen
+import com.fluently.english.ui.screens.WritingLabScreen
+import com.fluently.english.ui.screens.WritingTaskScreen
 import com.fluently.english.account.SyncState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -219,6 +222,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     onOpenRoute = { nav.navigate(it) },
                     onChooseGoal = { nav.navigate("goal") },
                     onReport = { nav.navigate("report") },
+                    onLeaderboard = { nav.navigate("leaderboard") },
                 )
             }
             composable(Tab.PRACTICE.route) {
@@ -234,6 +238,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     onGrammar = { nav.navigate("grammar") },
                     onMocks = { nav.navigate("mocks") },
                     onReaders = { nav.navigate("readers") },
+                    onWriting = { nav.navigate("writing") },
                 )
             }
             composable("readers") {
@@ -246,7 +251,21 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     progress = progress,
                     onComplete = { ch, words, right, total -> vm.completeReaderChapter(id, ch, words, right, total) },
                     onClose = { nav.popBackStack() },
+                    onAddWord = vm::addWordToReview,
                 )
+            }
+            composable("leaderboard") {
+                LeaderboardScreen(
+                    progress = progress, uid = session.uid, cloud = session.cloud, today = vm.today(),
+                    load = vm::leaderboard, onToggleShow = vm::setShowOnLeaderboard, onBack = { nav.popBackStack() },
+                )
+            }
+            composable("writing") {
+                WritingLabScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("writing/$it") })
+            }
+            composable("writing/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                WritingTaskScreen(id, onChecked = { words, rating -> vm.completeWriting(id, words, rating) }, onBack = { nav.popBackStack() })
             }
             composable("goal") {
                 GoalScreen(progress.learningGoal, onSelect = { vm.setGoal(it); nav.popBackStack() }, onBack = { nav.popBackStack() })
@@ -345,6 +364,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     ),
                     onSignOut = { scope.launch { vm.signOut() } },
                     onReport = { nav.navigate("report") },
+                    onLeaderboard = { nav.navigate("leaderboard") },
                     onLearningGoal = vm::setGoal,
                     exportBackup = vm::exportBackup,
                     importBackup = vm::importBackup,

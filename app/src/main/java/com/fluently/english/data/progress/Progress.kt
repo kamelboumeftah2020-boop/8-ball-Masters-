@@ -49,6 +49,10 @@ data class Progress(
     /** Graded readers: chapters finished per story, and total words read. */
     val readerChapters: Map<String, Int> = emptyMap(),
     val wordsRead: Int = 0,
+    /** Writing-lab tasks checked at least once. */
+    val writingDone: Set<String> = emptySet(),
+    /** Whether the learner's name and weekly XP appear on the shared leaderboard. */
+    val showOnLeaderboard: Boolean = true,
 ) {
     val learningGoal: LearningGoal? get() = LearningGoal.entries.firstOrNull { it.name == goal }
 
@@ -59,6 +63,9 @@ data class Progress(
     }.toMap()
 
     fun xpBetween(fromDay: Long, toDay: Long): Int = dayXp.filterKeys { it in fromDay..toDay }.values.sum()
+
+    /** XP earned in the leaderboard week (Monday–Sunday) containing [today]. */
+    fun weekXp(today: Long): Int = weekStart(today).let { xpBetween(it, it + 6) }
 
     fun challengeDoneToday(today: Long) = lastChallengeDay == today
 
@@ -121,6 +128,8 @@ fun Progress.achievements(): List<Achievement> = listOf(
     Achievement("chat", "متحدث", "أكمل 3 محادثات", conversationStars.size >= 3),
     Achievement("ear", "أذن ذهبية", "أكمل 3 دروس نطق", soundScores.size >= 3),
     Achievement("game", "لاعب", "العب 10 ألعاب", gamesPlayed >= 10),
+    Achievement("reader", "قارئ نهم", "اقرأ 5000 كلمة في مكتبة القصص", wordsRead >= 5000),
+    Achievement("pen", "كاتب", "صحّح 3 نصوص في مختبر الكتابة", writingDone.size >= 3),
     Achievement("trophy", "محترف", "اجتز مستوى C2", isLevelPassed(CefrLevel.C2)),
 )
 
@@ -142,3 +151,8 @@ enum class LearningGoal(val titleAr: String, val descAr: String) {
     EXAM("اختبار دولي", "IELTS وCambridge وTOEFL"),
     DAILY("التواصل اليومي", "المحادثة مع الناس والأفلام والإنترنت"),
 }
+
+/** Leaderboard weeks run Monday to Sunday (epoch day 0 was a Thursday). */
+fun weekIndex(day: Long): Long = Math.floorDiv(day - 4, 7L)
+
+fun weekStart(day: Long): Long = weekIndex(day) * 7 + 4

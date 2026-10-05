@@ -1,0 +1,116 @@
+package com.fluently.english.data.content
+
+/** A free-writing task for the writing lab, checked by [WritingCheck]. */
+data class WritingPrompt(
+    val id: String,
+    val level: CefrLevel,
+    val typeAr: String,
+    val title: String,
+    val prompt: String,
+    val promptAr: String,
+    val minWords: Int,
+    val formal: Boolean,
+    /** What to include, as a checklist. */
+    val pointsAr: List<String>,
+    /** Useful phrases for this task. */
+    val phrases: List<String>,
+)
+
+val WritingPrompts: List<WritingPrompt> = listOf(
+    WritingPrompt(
+        "w-a1-1", CefrLevel.A1, "تعريف بالنفس", "About me",
+        "Write about yourself: your name, age, family, home and what you like.",
+        "اكتب عن نفسك: اسمك وعمرك وعائلتك وبيتك وما تحبه.",
+        40, false,
+        listOf("اسمك وعمرك ومن أين أنت", "عائلتك", "أين تسكن", "هواياتك وما تحبه"),
+        listOf("My name is …", "I am … years old.", "I live in …", "I have got …", "I like … because …"),
+    ),
+    WritingPrompt(
+        "w-a1-2", CefrLevel.A1, "رسالة قصيرة", "A note to a friend",
+        "Write a short message to a friend. Invite them to your house on Saturday. Say what time and what you will do.",
+        "اكتب رسالة قصيرة لصديقك تدعوه إلى بيتك يوم السبت، واذكر الوقت وماذا ستفعلان.",
+        35, false,
+        listOf("التحية", "الدعوة واليوم", "الوقت", "ماذا ستفعلان", "الختام"),
+        listOf("Hi …!", "Can you come to my house on …?", "at 5 o'clock", "We can …", "See you soon!"),
+    ),
+    WritingPrompt(
+        "w-a2-1", CefrLevel.A2, "بريد إلكتروني", "My last holiday",
+        "Write an email to a friend about your last holiday. Where did you go? What did you do? Did you enjoy it?",
+        "اكتب بريداً لصديقك عن عطلتك الأخيرة: أين ذهبت؟ ماذا فعلت؟ هل استمتعت؟",
+        60, false,
+        listOf("أين ذهبت ومع من", "ماذا فعلت (الماضي البسيط)", "شيء أعجبك وشيء لم يعجبك", "سؤال لصديقك في النهاية"),
+        listOf("Last summer I went to …", "We stayed in …", "The best part was …", "Unfortunately, …", "What about you?"),
+    ),
+    WritingPrompt(
+        "w-a2-2", CefrLevel.A2, "وصف", "My favourite place",
+        "Describe your favourite place in your town. Where is it? What does it look like? Why do you like it?",
+        "صف مكانك المفضل في مدينتك: أين هو؟ كيف يبدو؟ لماذا تحبه؟",
+        60, false,
+        listOf("اسم المكان وموقعه", "وصف بالصفات", "ماذا تفعل هناك", "لماذا تحبه"),
+        listOf("My favourite place is …", "It is near …", "There is / There are …", "I usually go there to …", "I love it because …"),
+    ),
+    WritingPrompt(
+        "w-b1-1", CefrLevel.B1, "قصة", "A day I will never forget",
+        "Write a story that begins: “I woke up and knew immediately that something was wrong.”",
+        "اكتب قصة تبدأ بالجملة: «استيقظت وعرفت فوراً أن شيئاً ما كان خاطئاً».",
+        100, false,
+        listOf("ابدأ بالجملة المعطاة", "استخدم الماضي البسيط والماضي المستمر", "أضف مشاعر الشخصيات", "نهاية واضحة"),
+        listOf("At first, …", "While I was …, …", "Suddenly, …", "I couldn't believe …", "In the end, …"),
+    ),
+    WritingPrompt(
+        "w-b1-2", CefrLevel.B1, "رأي", "Mobile phones at school",
+        "Should students be allowed to use mobile phones at school? Give your opinion with reasons and examples.",
+        "هل يُسمح للطلاب باستخدام الهواتف في المدرسة؟ اكتب رأيك مع أسباب وأمثلة.",
+        120, true,
+        listOf("مقدمة توضح رأيك", "سببان على الأقل مع أمثلة", "رأي الطرف الآخر", "خاتمة"),
+        listOf("In my opinion, …", "Firstly, …", "For example, …", "On the other hand, …", "To sum up, …"),
+    ),
+    WritingPrompt(
+        "w-b2-1", CefrLevel.B2, "مقال", "Working from home",
+        "More and more people work from home. Discuss the advantages and disadvantages of this trend.",
+        "يعمل عدد متزايد من الناس من المنزل. ناقش مزايا هذا الاتجاه وعيوبه.",
+        180, true,
+        listOf("مقدمة بإعادة صياغة الموضوع", "فقرة للمزايا", "فقرة للعيوب", "خاتمة برأيك"),
+        listOf("There is no doubt that …", "One major advantage is …", "In addition, …", "However, a significant drawback is …", "All things considered, …"),
+    ),
+    WritingPrompt(
+        "w-b2-2", CefrLevel.B2, "مراجعة", "A film or series review",
+        "Write a review of a film or series you watched recently for an English-language website. Would you recommend it?",
+        "اكتب مراجعة لفيلم أو مسلسل شاهدته مؤخراً لموقع إنجليزي. هل تنصح بمشاهدته؟",
+        160, false,
+        listOf("عنوان جذاب", "فكرة العمل دون حرق الأحداث", "ما أعجبك وما لم يعجبك", "توصيتك ولمن يناسب"),
+        listOf("If you enjoy …, you'll love …", "The plot follows …", "What impressed me most was …", "My only criticism is …", "I would highly recommend it to …"),
+    ),
+    WritingPrompt(
+        "w-c1-1", CefrLevel.C1, "مقال أكاديمي", "Technology and loneliness",
+        "Some argue that social media has made people lonelier than ever. To what extent do you agree or disagree?",
+        "يرى البعض أن وسائل التواصل جعلت الناس أكثر وحدة من أي وقت مضى. إلى أي مدى توافق أو تعارض؟",
+        250, true,
+        listOf("موقف واضح منذ المقدمة", "حجج مدعومة بأمثلة", "مناقشة الرأي المعارض والرد عليه", "خاتمة تلخّص موقفك"),
+        listOf("It is often argued that …", "While it is true that …, …", "This is particularly evident in …", "Critics might counter that …", "On balance, …"),
+    ),
+    WritingPrompt(
+        "w-c1-2", CefrLevel.C1, "تقرير", "Improving your town",
+        "Write a report for your local council suggesting how to make your town more environmentally friendly.",
+        "اكتب تقريراً للمجلس البلدي تقترح فيه كيف تصبح مدينتك صديقة للبيئة أكثر.",
+        220, true,
+        listOf("عنوان وفقرات بعناوين فرعية", "وصف الوضع الحالي", "اقتراحات عملية", "توصية نهائية"),
+        listOf("The aim of this report is to …", "At present, …", "It is recommended that …", "This would result in …", "In conclusion, …"),
+    ),
+    WritingPrompt(
+        "w-c2-1", CefrLevel.C2, "مقال نقدي", "The value of failure",
+        "“Success teaches us nothing; only failure teaches.” Discuss this statement, drawing on examples from history, science or your own experience.",
+        "«النجاح لا يعلّمنا شيئاً، الفشل وحده يعلّم». ناقش هذه العبارة مستشهداً بأمثلة من التاريخ أو العلم أو تجربتك.",
+        300, true,
+        listOf("تحليل العبارة وحدودها", "أمثلة متنوعة ودقيقة", "موقف دقيق غير مطلق", "أسلوب متنوع وراقٍ"),
+        listOf("At first glance, …", "Yet this view overlooks …", "A case in point is …", "Paradoxically, …", "Ultimately, …"),
+    ),
+    WritingPrompt(
+        "w-c2-2", CefrLevel.C2, "مقالة رأي", "Should zoos exist?",
+        "Write an article for a magazine arguing whether zoos still have a place in the 21st century.",
+        "اكتب مقالة لمجلة تناقش فيها: هل ما زال للحدائق الحيوانية مكان في القرن الحادي والعشرين؟",
+        280, true,
+        listOf("افتتاحية تجذب القارئ", "حجج أخلاقية وعلمية", "اعتراف بتعقيد المسألة", "خاتمة مؤثرة"),
+        listOf("Picture this: …", "Proponents insist that …", "Such arguments, however, ring hollow when …", "Far from being …, zoos …", "The question, then, is not whether … but …"),
+    ),
+)

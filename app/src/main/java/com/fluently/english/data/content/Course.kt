@@ -5,7 +5,16 @@ object Course {
 
     private val lessonsById: Map<String, Lesson> = levels.flatMap { it.lessons }.associateBy { it.id }
 
-    val wordsByEn: Map<String, Word> = levels.flatMap { it.words }.associateBy { it.en }
+    /** Every known word: lesson words, plus story glossary words (with the sentence they appear in). */
+    val wordsByEn: Map<String, Word> by lazy {
+        val fromStories = Readers.flatMap { r -> r.chapters }.flatMap { ch ->
+            ch.glossary.map { (en, ar) ->
+                val sentence = ch.text.split(Regex("(?<=[.!?”])\\s+")).firstOrNull { it.contains(en, ignoreCase = true) }.orEmpty()
+                Word(en, ar, sentence.trim())
+            }
+        }.associateBy { it.en }
+        fromStories + levels.flatMap { it.words }.associateBy { it.en }
+    }
 
     fun level(level: CefrLevel): LevelCourse = levels.first { it.level == level }
 

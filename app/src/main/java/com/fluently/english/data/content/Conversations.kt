@@ -32,7 +32,10 @@ private fun ok(en: String, feedback: String) = Reply(en, ReplyQuality.OK, feedba
 private fun bad(en: String, feedback: String) = Reply(en, ReplyQuality.WRONG, feedback)
 private fun turn(line: String, lineAr: String, vararg replies: Reply) = Turn(line, lineAr, replies.toList())
 
-val Scenarios: List<Scenario> = listOf(
+/** All conversations, easiest first (more in Conversations2.kt). */
+val Scenarios: List<Scenario> by lazy { (ScenariosBase + ScenariosExtra).sortedBy { it.level.ordinal } }
+
+private val ScenariosBase: List<Scenario> = listOf(
     Scenario(
         "conv-a1-cafe", CefrLevel.A1, "At the café", "في المقهى",
         "أنت في مقهى وتريد أن تطلب مشروباً وشيئاً تأكله.", "Emma", "النادلة",

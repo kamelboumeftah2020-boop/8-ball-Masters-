@@ -5,6 +5,7 @@ import com.fluently.english.BuildConfig
 import com.fluently.english.data.progress.Progress
 import com.fluently.english.data.progress.ProgressCodec
 import com.fluently.english.data.progress.ProgressRepository
+import com.fluently.english.data.progress.weekIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -120,10 +121,44 @@ class AccountManager(
         _sync.value = SyncState.SYNCING
         _sync.value = try {
             updateSession(backend.push(_session.value ?: s, RemoteProgress(repo.exportJson(), repo.updatedAt)))
+            publishScore()
             SyncState.SYNCED
         } catch (e: AuthException) {
             SyncState.OFFLINE
         }
+    }
+
+    private var lastScore = ""
+
+    /** Keeps the learner's leaderboard row in step with their weekly XP (only when it changed). */
+    private suspend fun publishScore() {
+        val s = _session.value ?: return
+        if (!backend.cloud) return
+        val p = repo.progress.value
+        val today = repo.today()
+        val week = weekIndex(today)
+        val xp = p.weekXp(today)
+        val show = p.showOnLeaderboard && xp > 0
+        val key = "$week:$xp:${p.name}:$show:${p.streak}"
+        if (key == lastScore) return
+        val entry = if (show) LeaderEntry(s.uid, p.name.ifBlank { s.name }, xp, p.currentLevel.code, p.streak) else null
+        // A learner with no XP yet simply has no row; only delete when they opted out.
+        if (entry == null && p.showOnLeaderboard) { lastScore = key; return }
+        try {
+            updateSession(backend.submitScore(s, week, entry))
+            lastScore = key
+        } catch (e: AuthException) {
+            // The leaderboard is optional; progress is already saved.
+        }
+    }
+
+    /** This week's top learners (empty for device accounts). */
+    suspend fun leaderboard(): List<LeaderEntry> {
+        val s = _session.value ?: return emptyList()
+        publishScore()
+        val (fresh, list) = backend.topScores(s, weekIndex(repo.today()))
+        updateSession(fresh)
+        return list
     }
 
     private fun updateSession(s: Session) {

@@ -25,11 +25,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun signIn(email: String, password: String) = accounts.signIn(email, password)
     suspend fun sendPasswordReset(email: String) = accounts.sendPasswordReset(email)
     suspend fun signOut() = accounts.signOut()
+    suspend fun leaderboard() = accounts.leaderboard()
 
     fun setGoal(goal: LearningGoal) = repo.setGoal(goal)
     fun recordSkill(skill: SkillKey, right: Int, total: Int) = repo.recordSkill(skill, right, total)
     fun completeReaderChapter(storyId: String, chapter: Int, words: Int, right: Int, total: Int): Int =
         repo.completeReaderChapter(storyId, chapter, words, right, total)
+    fun completeWriting(id: String, words: Int, rating: Int): Int = repo.completeWriting(id, words, rating)
+    fun setShowOnLeaderboard(show: Boolean) = repo.setShowOnLeaderboard(show)
     fun exportBackup(): String = repo.exportJson()
     fun importBackup(raw: String): Boolean = repo.importJson(raw)
 

@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.PhoneAndroid
@@ -102,6 +103,8 @@ private fun achievementIcon(key: String): ImageVector = when (key) {
     "chat" -> Icons.Rounded.Forum
     "ear" -> Icons.Rounded.Hearing
     "game" -> Icons.Rounded.SportsEsports
+    "reader" -> Icons.AutoMirrored.Rounded.MenuBook
+    "pen" -> Icons.Rounded.EditNote
     else -> Icons.Rounded.EmojiEvents
 }
 
@@ -119,6 +122,7 @@ fun ProfileScreen(
     account: AccountInfo? = null,
     onSignOut: () -> Unit = {},
     onReport: () -> Unit = {},
+    onLeaderboard: () -> Unit = {},
     onLearningGoal: (LearningGoal) -> Unit = {},
     exportBackup: () -> String = { "" },
     importBackup: (String) -> Boolean = { false },
@@ -212,6 +216,8 @@ fun ProfileScreen(
         SectionHeader("تقدّمي")
         AppCard(padding = 0.dp) {
             SettingRow(Icons.Rounded.Insights, Emerald, "تقريري الأسبوعي ونقاط ضعفي", onReport)
+            HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.EmojiEvents, Gold, "ترتيب المتعلمين هذا الأسبوع", onLeaderboard)
             HorizontalDivider(color = border)
             SettingRow(
                 progress.learningGoal?.icon() ?: Icons.Rounded.Flag, Coral,

@@ -27,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,8 @@ import com.fluently.english.ui.components.SecondaryButton
 import com.fluently.english.ui.components.SectionHeader
 import com.fluently.english.ui.components.VSpace
 import com.fluently.english.ui.components.isolateLatin
+import com.fluently.english.ui.components.sentencesOf
+import com.fluently.english.data.content.activities
 import com.fluently.english.ui.components.ltr
 import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Emerald
@@ -185,8 +189,8 @@ private fun BookRow(r: GradedReader, read: Int, onClick: () -> Unit) {
 private sealed interface ReaderStage {
     data object Cover : ReaderStage
     data class Read(val ch: Int) : ReaderStage
-    data class Quiz(val ch: Int) : ReaderStage
-    data class Done(val ch: Int, val right: Int, val total: Int, val xp: Int) : ReaderStage
+    data class Quiz(val ch: Int, val seconds: Int) : ReaderStage
+    data class Done(val ch: Int, val right: Int, val total: Int, val xp: Int, val wpm: Int) : ReaderStage
 }
 
 @Composable
@@ -195,23 +199,28 @@ fun ReaderScreen(
     progress: Progress,
     onComplete: (chapter: Int, words: Int, right: Int, total: Int) -> Int,
     onClose: () -> Unit,
+    onAddWord: (String) -> Unit = {},
 ) {
     val reader = remember(id) { Readers.firstOrNull { it.id == id } } ?: run { onClose(); return }
     var stage by remember { mutableStateOf<ReaderStage>(ReaderStage.Cover) }
     when (val st = stage) {
         ReaderStage.Cover -> ReaderCover(reader, progress.chaptersRead(reader), onClose) { stage = ReaderStage.Read(it) }
-        is ReaderStage.Read -> ChapterView(reader, st.ch, onClose = { stage = ReaderStage.Cover }) { stage = ReaderStage.Quiz(st.ch) }
+        is ReaderStage.Read -> ChapterView(reader, st.ch, onClose = { stage = ReaderStage.Cover }, onAddWord = onAddWord) {
+            stage = ReaderStage.Quiz(st.ch, it)
+        }
         is ReaderStage.Quiz -> {
             val chapter = reader.chapters[st.ch]
+            val questions = remember(st) { chapter.questions + chapter.activities() }
             QuizRunner(
-                questions = chapter.questions,
+                questions = questions,
                 instantFeedback = true,
                 onClose = { stage = ReaderStage.Cover },
                 title = "${reader.title} · ${chapter.title}",
                 onFinish = { records ->
                     val right = records.count { it.correct }
                     val xp = onComplete(st.ch, chapter.wordCount, right, records.size)
-                    stage = ReaderStage.Done(st.ch, right, records.size, xp)
+                    val wpm = if (st.seconds < 20) 0 else chapter.wordCount * 60 / st.seconds
+                    stage = ReaderStage.Done(st.ch, right, records.size, xp, wpm)
                 },
             )
         }
@@ -225,7 +234,28 @@ fun ReaderScreen(
                 xp = st.xp,
                 onAgain = { stage = ReaderStage.Read(st.ch) },
                 onDone = { if (last) onClose() else stage = ReaderStage.Read(st.ch + 1) },
-            )
+            ) {
+                if (st.wpm > 0) {
+                    VSpace(10.dp)
+                    Pill("سرعة قراءتك: ${ltr("${st.wpm}")} كلمة في الدقيقة", MaterialTheme.colorScheme.primary)
+                }
+                if (!last) {
+                    val next = reader.chapters[st.ch + 1]
+                    VSpace(18.dp)
+                    AppCard(color = AppTheme.extra.subtle, bordered = false) {
+                        Text("في الفصل القادم: ${next.title}", style = MaterialTheme.typography.titleSmall)
+                        VSpace(6.dp)
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
+                        ) {
+                            Text(
+                                next.text.substringBefore("\n").split(Regex("(?<=[.!?])\\s+")).first() + " …",
+                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -294,45 +324,81 @@ private fun ReaderCover(r: GradedReader, read: Int, onClose: () -> Unit, onRead:
 }
 
 @Composable
-private fun ChapterView(r: GradedReader, index: Int, onClose: () -> Unit, onFinished: () -> Unit) {
+private fun ChapterView(
+    r: GradedReader,
+    index: Int,
+    onClose: () -> Unit,
+    onAddWord: (String) -> Unit,
+    onFinished: (seconds: Int) -> Unit,
+) {
     val chapter = r.chapters[index]
     val speaker = LocalSpeaker.current
-    var playing by remember(index) { mutableStateOf(false) }
     val paragraphs = remember(chapter) { chapter.text.split(Regex("\\n\\s*\\n")).map { it.trim() }.filter { it.isNotEmpty() } }
-    var paragraph by remember(index) { mutableIntStateOf(0) }
+    // Sentences per paragraph, as InteractiveText splits them, for the read-along highlight.
+    val sentences = remember(paragraphs) { paragraphs.map { sentencesOf(it) } }
+    val flat = remember(sentences) { sentences.flatMapIndexed { p, list -> list.indices.map { p to it } } }
+    var revealed by rememberSaveable(index) { mutableIntStateOf(1) }
+    var playingAt by remember(index) { mutableIntStateOf(-1) }
+    var fontScale by rememberSaveable { mutableStateOf(1f) }
+    val started = remember(index) { System.currentTimeMillis() }
+    val scroll = rememberScrollState()
+    DisposableEffect(index) { onDispose { speaker.stop() } }
+    LaunchedEffect(revealed) { if (revealed > 1) scroll.animateScrollTo(scroll.maxValue) }
+
+    fun readAlong() {
+        if (playingAt >= 0) { speaker.stop(); playingAt = -1; return }
+        revealed = paragraphs.size
+        val texts = flat.map { (p, i) -> sentences[p][i] }
+        playingAt = 0
+        speaker.speakSequence(texts, onIndex = { playingAt = it }, onDone = { playingAt = -1 })
+    }
+
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ScreenHeader(
             "الفصل ${index + 1} من ${r.chapters.size}", onBack = onClose,
             trailing = {
-                Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                        .clickable {
-                            if (playing) speaker.stop() else speaker.speak(paragraphs.drop(paragraph).joinToString(" "))
-                            playing = !playing
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(if (playing) Icons.Rounded.Stop else Icons.AutoMirrored.Rounded.VolumeUp, "استمع للفصل", tint = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SmallRound(ltr("A−")) { fontScale = (fontScale - 0.1f).coerceAtLeast(0.8f) }
+                    SmallRound(ltr("A+")) { fontScale = (fontScale + 0.1f).coerceAtMost(1.5f) }
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape)
+                            .background(if (playingAt >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .clickable { readAlong() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (playingAt >= 0) Icons.Rounded.Stop else Icons.AutoMirrored.Rounded.VolumeUp, "اقرأ معي",
+                            tint = if (playingAt >= 0) Color.White else MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             },
         )
-        LinearMeter((index + 1f) / r.chapters.size, height = 4.dp, modifier = Modifier.padding(horizontal = 20.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        LinearMeter(
+            (index + revealed.toFloat() / paragraphs.size) / r.chapters.size,
+            height = 4.dp, modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp)) {
             VSpace(18.dp)
             AutoText(chapter.title, style = MaterialTheme.typography.headlineSmall)
             VSpace(4.dp)
             Text(
-                "اضغط على الكلمة الملوّنة لترى معناها، وعلى أي جملة لتسمعها.",
+                "اضغط على الكلمة الملوّنة لمعناها وأضفها لبطاقاتك، وعلى أي جملة لتسمعها، أو اضغط 🔊 ليقرأ معك الفصل.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             VSpace(14.dp)
-            paragraphs.forEachIndexed { i, text ->
-                Box(Modifier.clickable(enabled = false) {}.padding(bottom = 14.dp)) {
-                    InteractiveText(text, chapter.glossary)
+            val playing = flat.getOrNull(playingAt)
+            paragraphs.take(revealed).forEachIndexed { i, text ->
+                Box(Modifier.padding(bottom = 14.dp)) {
+                    InteractiveText(
+                        text, chapter.glossary,
+                        playing = if (playing?.first == i) playing.second else -1,
+                        fontScale = fontScale,
+                        onAddWord = onAddWord,
+                    )
                 }
-                if (i == paragraph) paragraph = i
             }
-            if (chapter.glossary.isNotEmpty()) {
+            if (revealed >= paragraphs.size && chapter.glossary.isNotEmpty()) {
                 SectionHeader("كلمات الفصل")
                 AppCard(padding = 14.dp) {
                     chapter.glossary.forEach { (en, ar) ->
@@ -352,8 +418,28 @@ private fun ChapterView(r: GradedReader, index: Int, onClose: () -> Unit, onFini
             VSpace(16.dp)
         }
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-            PrimaryButton("أنهيت الفصل — أسئلة الفهم", onClick = { speaker.stop(); onFinished() }, icon = Icons.AutoMirrored.Rounded.ArrowForward)
+            PrimaryButton(
+                if (revealed < paragraphs.size) "تابع القراءة (${revealed}/${paragraphs.size})" else "أنهيت الفصل — إلى الأنشطة",
+                onClick = {
+                    if (revealed < paragraphs.size) revealed++
+                    else {
+                        speaker.stop()
+                        onFinished(((System.currentTimeMillis() - started) / 1000).toInt())
+                    }
+                },
+                icon = Icons.AutoMirrored.Rounded.ArrowForward,
+            )
         }
+    }
+}
+
+@Composable
+private fun SmallRound(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).background(AppTheme.extra.subtle).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -363,7 +449,7 @@ fun ReadersEntryCard(progress: Progress, onClick: () -> Unit) {
     AppCard(onClick = onClick, padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(horizontalArrangement = Arrangement.spacedBy((-14).dp)) {
-                Readers.take(3).forEach { BookCover(it, 34, 46) }
+                Readers.distinctBy { it.level }.take(3).forEach { BookCover(it, 34, 46) }
             }
             HSpace(16.dp)
             Column(Modifier.weight(1f)) {

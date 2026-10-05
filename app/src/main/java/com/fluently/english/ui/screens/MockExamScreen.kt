@@ -62,6 +62,7 @@ import com.fluently.english.data.content.SectionType
 import com.fluently.english.data.content.SpeakingCriteria
 import com.fluently.english.data.content.SpeakingPart
 import com.fluently.english.data.content.WritingCriteria
+import com.fluently.english.data.content.WritingCheck
 import com.fluently.english.data.progress.Progress
 import com.fluently.english.data.progress.SkillKey
 import com.fluently.english.tts.LocalSpeaker
@@ -544,20 +545,18 @@ private fun WritingStage(exam: MockExam, s: Int, remaining: Int, onClose: () -> 
             LinearMeter((words.toFloat() / task.minWords).coerceAtMost(1f), height = 6.dp)
         }
     } else {
+        val report = remember(text) { WritingCheck.check(text, task.minWords, formal = true) }
         SelfAssessment(
             title = "قيّم كتابتك",
-            intro = "قارن ما كتبته بنموذج الإجابة، ثم قيّم نفسك بصدق في كل معيار — هذه هي المعايير التي يستخدمها الممتحنون.",
+            intro = "صحّحنا نصك آلياً واقترحنا تقييماً مبدئياً. قارن نصك بنموذج الإجابة وعدّل التقييم بصدق — هذه معايير الممتحنين.",
             criteria = WritingCriteria,
             onClose = onClose,
             onDone = onDone,
+            initial = if (text.isBlank()) null else report.suggested,
         ) {
             if (text.isNotBlank()) {
-                SectionHeader("ما كتبته · ${ltr("$words")} كلمة")
-                AppCard(padding = 14.dp) {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth())
-                    }
-                }
+                SectionHeader("التصحيح الآلي")
+                WritingFeedback(text, report)
             }
             ModelAnswer("نموذج إجابة بمستوى عالٍ", task.modelAnswer)
             SectionHeader("نصائح الممتحن")
@@ -773,9 +772,10 @@ private fun SelfAssessment(
     criteria: List<Pair<String, String>>,
     onClose: () -> Unit,
     onDone: (List<Int>) -> Unit,
+    initial: List<Int>? = null,
     content: @Composable () -> Unit,
 ) {
-    val picks = remember { mutableStateListOf<Int?>().apply { repeat(criteria.size) { add(null) } } }
+    val picks = remember { mutableStateListOf<Int?>().apply { repeat(criteria.size) { add(initial?.getOrNull(it)) } } }
     StageScaffold(
         title, onClose,
         button = "متابعة", enabled = picks.all { it != null },

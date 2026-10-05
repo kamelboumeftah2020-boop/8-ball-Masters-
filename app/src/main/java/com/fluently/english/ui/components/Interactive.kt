@@ -589,7 +589,16 @@ private fun lookup(segment: String, glossary: Map<String, String>): Pair<String,
  * where the text marks them with [brackets] or wherever a [glossary] term occurs.
  */
 @Composable
-fun InteractiveText(text: String, glossary: Map<String, String>, modifier: Modifier = Modifier) {
+fun InteractiveText(
+    text: String,
+    glossary: Map<String, String>,
+    modifier: Modifier = Modifier,
+    /** Sentence being read aloud (read-along highlight), or -1. */
+    playing: Int = -1,
+    fontScale: Float = 1f,
+    /** When set, the word popup offers "add to my cards". */
+    onAddWord: ((String) -> Unit)? = null,
+) {
     val speaker = LocalSpeaker.current
     val accent = MaterialTheme.colorScheme.primary
     val bracketMode = '[' in text
@@ -647,7 +656,11 @@ fun InteractiveText(text: String, glossary: Map<String, String>, modifier: Modif
                         LinkAnnotation.Clickable(
                             tag = "s$si-$pi",
                             styles = TextLinkStyles(
-                                style = if (si == activeSentence) SpanStyle(background = accent.copy(alpha = 0.08f)) else SpanStyle(),
+                                style = when (si) {
+                                    playing -> SpanStyle(background = accent.copy(alpha = 0.22f))
+                                    activeSentence -> SpanStyle(background = accent.copy(alpha = 0.08f))
+                                    else -> SpanStyle()
+                                },
                             ),
                         ) {
                             activeSentence = si
@@ -664,7 +677,9 @@ fun InteractiveText(text: String, glossary: Map<String, String>, modifier: Modif
         Ltr {
             Text(
                 annotated,
-                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.25f),
+                style = MaterialTheme.typography.bodyLarge.let {
+                    it.copy(fontSize = it.fontSize * fontScale, lineHeight = it.lineHeight * 1.25f * fontScale)
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -687,6 +702,20 @@ fun InteractiveText(text: String, glossary: Map<String, String>, modifier: Modif
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
+                    }
+                    if (onAddWord != null) {
+                        var added by remember(sel) { mutableStateOf(false) }
+                        Box(
+                            Modifier.padding(end = 8.dp).clip(RoundedCornerShape(12.dp))
+                                .background(if (added) Success else MaterialTheme.colorScheme.primary)
+                                .clickable(enabled = !added) {
+                                    onAddWord(lookup(sel.first, glossary)?.first ?: sel.first.lowercase())
+                                    added = true
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Text(if (added) "أُضيفت ✓" else "+ بطاقاتي", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                        }
                     }
                     SpeakButton(sel.first)
                 }

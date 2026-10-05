@@ -76,6 +76,7 @@ fun PracticeScreen(
     onGrammar: () -> Unit,
     onMocks: () -> Unit,
     onReaders: () -> Unit = {},
+    onWriting: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()),
@@ -98,7 +99,7 @@ fun PracticeScreen(
                     Column(Modifier.weight(1f)) {
                         Text("اختبارات المحاكاة", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "IELTS · Cambridge B1 · Cambridge B2 — بنفس الأقسام والتوقيت والتقدير",
+                            "بنفس الأقسام والتوقيت والتقدير: IELTS وCambridge B1 وB2",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -112,6 +113,12 @@ fun PracticeScreen(
 
             VSpace(12.dp)
             ReadersEntryCard(progress, onReaders)
+            VSpace(12.dp)
+            GameRow(
+                Icons.Rounded.EditNote, Emerald, "مختبر الكتابة",
+                "اكتب واحصل على تصحيح فوري مجاني · ${progress.writingDone.size} من ${com.fluently.english.data.content.WritingPrompts.size}",
+                onWriting,
+            )
 
             SectionHeader("مهارات")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

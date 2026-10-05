@@ -5,6 +5,14 @@ import com.fluently.english.account.FirebaseBackend
 import com.fluently.english.account.PasswordHash
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.data.content.Readers
+import com.fluently.english.data.content.Question
+import com.fluently.english.data.content.Scenarios
+import com.fluently.english.data.content.WritingCheck
+import com.fluently.english.data.content.WritingPrompts
+import com.fluently.english.data.content.IssueKind
+import com.fluently.english.data.content.activities
+import com.fluently.english.data.progress.weekIndex
+import com.fluently.english.data.progress.weekStart
 import com.fluently.english.data.progress.LearningGoal
 import com.fluently.english.data.progress.Progress
 import com.fluently.english.data.progress.ProgressCodec
@@ -24,7 +32,7 @@ class ReadersAndAccountsTest {
     @Test
     fun readersAreWellFormed() {
         assertEquals(Readers.size, Readers.map { it.id }.toSet().size)
-        CefrLevel.entries.forEach { level -> assertTrue("no reader for $level", Readers.count { it.level == level } >= 2) }
+        CefrLevel.entries.forEach { level -> assertTrue("no reader for $level", Readers.count { it.level == level } >= 3) }
         Readers.forEach { r ->
             assertTrue(r.chapters.size >= 3)
             r.chapters.forEach { ch ->
@@ -88,5 +96,59 @@ class ReadersAndAccountsTest {
             assertTrue("$goal plan too short", plan.size >= 3)
             assertEquals(plan.size, plan.map { it.route }.toSet().size)
         }
+    }
+
+    @Test
+    fun everyChapterGetsPracticeActivities() {
+        Readers.forEach { r ->
+            r.chapters.forEach { ch ->
+                val acts = ch.activities()
+                assertTrue("${r.id} ${ch.title}: no activities", acts.isNotEmpty())
+                acts.filterIsInstance<Question.Order>().forEach { assertTrue(it.sentence in ch.text) }
+            }
+        }
+    }
+
+    @Test
+    fun writingCheckerFindsCommonMistakes() {
+        val bad = WritingCheck.check("i think he go to school every day. She have a apple and we discuss about informations", 50)
+        val messages = bad.issues.map { it.excerpt.orEmpty().lowercase() }
+        assertTrue("he go", messages.any { it.contains("he go") })
+        assertTrue("she have", messages.any { it.contains("she have") })
+        assertTrue("a apple", messages.any { it.contains("a apple") })
+        assertTrue("discuss about", messages.any { it.contains("discuss about") })
+        assertTrue("informations", messages.any { it.contains("informations") })
+        assertTrue(bad.issues.any { it.kind == IssueKind.LENGTH })
+        assertTrue(bad.issues.any { it.kind == IssueKind.MECHANICS })
+
+        val good = WritingCheck.check(
+            "Many people believe that technology improves our lives. However, it also creates new problems.\n\n" +
+                "Firstly, does he go online too often? For example, teenagers spend hours on their phones. " +
+                "In addition, they had had little sleep before exams.\n\nIn conclusion, we should use technology wisely.",
+        )
+        assertTrue("false positives: ${good.issues.filter { it.kind == IssueKind.GRAMMAR }}", good.issues.none { it.kind == IssueKind.GRAMMAR })
+        assertTrue(good.linkers.size >= 4)
+        assertEquals(3, good.paragraphs)
+    }
+
+    @Test
+    fun writingPromptsAndConversationsAreValid() {
+        assertEquals(WritingPrompts.size, WritingPrompts.map { it.id }.toSet().size)
+        CefrLevel.entries.forEach { l -> assertTrue(WritingPrompts.any { it.level == l }) }
+        assertEquals(Scenarios.size, Scenarios.map { it.id }.toSet().size)
+        assertTrue(Scenarios.size >= 16)
+        assertEquals(Scenarios.sortedBy { it.level.ordinal }, Scenarios)
+    }
+
+    @Test
+    fun leaderboardWeeksStartOnMonday() {
+        // 2026-10-05 is a Monday (epoch day 20731).
+        val monday = 20731L
+        assertEquals(monday, weekStart(monday))
+        assertEquals(monday, weekStart(monday + 6))
+        assertEquals(weekIndex(monday), weekIndex(monday + 6))
+        assertNotEquals(weekIndex(monday), weekIndex(monday + 7))
+        val p = Progress().withXp(40, monday - 1).withXp(25, monday).withXp(10, monday + 3)
+        assertEquals(35, p.weekXp(monday + 3))
     }
 }
