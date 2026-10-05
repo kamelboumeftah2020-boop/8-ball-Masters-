@@ -87,7 +87,8 @@ class AccountManager(
             val remote = pulled.second
             updateSession(fresh)
             val owner = repo.owner
-            val localIsMine = owner == s.uid || owner.isEmpty()
+            // Progress made before signing in, or in a device account, moves into the cloud account.
+            val localIsMine = owner == s.uid || owner.isEmpty() || (s.cloud && owner.startsWith("local-"))
             val name = s.name
             when {
                 remote != null && !(owner == s.uid && repo.updatedAt > remote.updatedAt) -> {

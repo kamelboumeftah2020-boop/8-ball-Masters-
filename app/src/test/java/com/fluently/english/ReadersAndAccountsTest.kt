@@ -64,6 +64,7 @@ class ReadersAndAccountsTest {
         assertTrue(FirebaseBackend.firebaseMessage(body).contains("مسجّل"))
         val creds = """{"error":{"message":"INVALID_LOGIN_CREDENTIALS"}}"""
         assertTrue(FirebaseBackend.firebaseMessage(creds).contains("غير صحيحة"))
+        assertTrue(FirebaseBackend.firebaseMessage("""{"error":{"message":"CONFIGURATION_NOT_FOUND"}}""").contains("غير مفعّلة"))
     }
 
     @Test

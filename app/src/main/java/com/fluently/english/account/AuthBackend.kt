@@ -198,6 +198,9 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
                 code.startsWith("INVALID_EMAIL") -> "البريد الإلكتروني غير صحيح"
                 code.startsWith("USER_DISABLED") -> "تم إيقاف هذا الحساب"
                 code.startsWith("TOO_MANY_ATTEMPTS") -> "محاولات كثيرة، انتظر قليلاً ثم حاول مرة أخرى"
+                code.startsWith("CONFIGURATION_NOT_FOUND") || code.startsWith("OPERATION_NOT_ALLOWED") ->
+                    "خدمة الحسابات غير مفعّلة بعد على الخادم، حاول لاحقاً"
+                code.contains("has not been used") || code.contains("is disabled") -> "قاعدة البيانات غير مفعّلة بعد على الخادم"
                 code.startsWith("PERMISSION_DENIED") || code.contains("permission", true) -> "لا توجد صلاحية لحفظ التقدم على الخادم"
                 else -> "حدث خطأ غير متوقع، حاول مرة أخرى"
             }
