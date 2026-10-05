@@ -68,6 +68,7 @@ import com.fluently.english.account.SyncState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.fluently.english.ui.screens.AuthScreen
+import com.fluently.english.ui.screens.VerifyEmailScreen
 import com.fluently.english.account.Session
 import com.fluently.english.ui.screens.MockExamScreen
 import com.fluently.english.ui.screens.MockListScreen
@@ -160,6 +161,16 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
             onSignUp = vm::signUp,
             onSignIn = vm::signIn,
             onResetPassword = vm::sendPasswordReset,
+        )
+        return
+    }
+    if (current.cloud && !current.emailVerified) {
+        val scope = rememberCoroutineScope()
+        VerifyEmailScreen(
+            email = current.email,
+            onCheck = vm::checkVerified,
+            onResend = vm::resendVerification,
+            onSignOut = { scope.launch { vm.signOut() } },
         )
         return
     }

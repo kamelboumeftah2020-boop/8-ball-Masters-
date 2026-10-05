@@ -55,6 +55,20 @@ class AccountManager(
 
     suspend fun sendPasswordReset(email: String) = backend.sendPasswordReset(email)
 
+    /** Sends the confirmation link again. */
+    suspend fun resendVerification() {
+        val s = _session.value ?: return
+        updateSession(backend.sendVerification(s))
+    }
+
+    /** Re-checks the address; returns true once it has been confirmed. */
+    suspend fun checkVerified(): Boolean {
+        val s = _session.value ?: return false
+        val fresh = backend.refreshVerified(s)
+        updateSession(fresh)
+        return fresh.emailVerified
+    }
+
     /** Uploads the latest progress, then forgets the session and clears local progress. */
     suspend fun signOut() {
         val s = _session.value ?: return
@@ -183,6 +197,7 @@ class AccountManager(
             Session(
                 o.getString("uid"), o.getString("name"), o.getString("email"), o.getBoolean("cloud"),
                 o.optString("idToken"), o.optString("refreshToken"), o.optLong("tokenTime"),
+                emailVerified = o.optBoolean("emailVerified", !o.getBoolean("cloud")),
             )
         }.getOrNull()?.takeIf { it.cloud == backend.cloud }
     }
@@ -192,6 +207,7 @@ class AccountManager(
             JSONObject()
                 .put("uid", it.uid).put("name", it.name).put("email", it.email).put("cloud", it.cloud)
                 .put("idToken", it.idToken).put("refreshToken", it.refreshToken).put("tokenTime", it.tokenTime)
+                .put("emailVerified", it.emailVerified)
                 .toString()
         }
         prefs.edit().putString("session", raw).apply()

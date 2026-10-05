@@ -22,6 +22,8 @@ data class Session(
     val refreshToken: String = "",
     /** When [idToken] was issued (ms); Firebase tokens last one hour. */
     val tokenTime: Long = 0,
+    /** Whether the learner confirmed the address via the emailed link (always true for device accounts). */
+    val emailVerified: Boolean = true,
 )
 
 /** A saved copy of the learner's progress and when it was written. */
@@ -38,6 +40,13 @@ interface AuthBackend {
     suspend fun signUp(name: String, email: String, password: String): Session
     suspend fun signIn(email: String, password: String): Session
     suspend fun sendPasswordReset(email: String)
+
+    /** Emails a confirmation link to the learner's address. */
+    suspend fun sendVerification(session: Session): Session = session
+
+    /** Asks the server whether the address has been confirmed yet. */
+    suspend fun refreshVerified(session: Session): Session = session
+
     suspend fun pull(session: Session): Pair<Session, RemoteProgress?>
     suspend fun push(session: Session, progress: RemoteProgress): Session
 
@@ -49,12 +58,50 @@ interface AuthBackend {
 }
 
 object AuthValidation {
-    private val email = Regex("^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$")
+    private val email = Regex("^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(\\.[A-Za-z0-9\\-]+)*\\.[A-Za-z]{2,}$")
+
+    /** Misspellings of popular mail providers → the intended domain. */
+    private val domainTypos = mapOf(
+        "gmail.com" to listOf("gmial.com", "gmal.com", "gmai.com", "gmail.co", "gmail.cm", "gmail.con", "gmaill.com", "gamil.com", "gnail.com", "gmail.om", "gmil.com", "gmali.com"),
+        "hotmail.com" to listOf("hotmial.com", "hotmal.com", "hotmai.com", "hotmail.co", "hotmail.con", "hotmil.com", "hotamil.com", "homail.com"),
+        "yahoo.com" to listOf("yaho.com", "yahooo.com", "yahoo.co", "yahoo.con", "yhoo.com", "yahho.com"),
+        "outlook.com" to listOf("outlok.com", "outloo.com", "outlook.co", "outlook.con", "otlook.com", "outllok.com"),
+        "icloud.com" to listOf("iclod.com", "icloud.co", "icoud.com", "icloud.con"),
+    )
+
+    /** Temporary inbox services: accounts on them can't be recovered later. */
+    private val disposable = setOf(
+        "mailinator.com", "tempmail.com", "temp-mail.org", "10minutemail.com", "guerrillamail.com",
+        "yopmail.com", "trashmail.com", "sharklasers.com", "getnada.com", "dispostable.com", "maildrop.cc",
+    )
+
+    /** "Did you mean …?" for a mistyped provider, or null. */
+    fun suggestion(mail: String): String? {
+        val m = mail.trim().lowercase()
+        val at = m.lastIndexOf('@').takeIf { it > 0 } ?: return null
+        val domain = m.substring(at + 1)
+        val fixed = domainTypos.entries.firstOrNull { domain in it.value }?.key ?: return null
+        return m.substring(0, at + 1) + fixed
+    }
+
+    /** Arabic error for the address itself (format, typos, temporary inboxes), or null. */
+    fun emailError(mail: String): String? {
+        val m = mail.trim()
+        val domain = m.substringAfterLast('@', "").lowercase()
+        return when {
+            m.isEmpty() -> "اكتب بريدك الإلكتروني"
+            ' ' in m -> "البريد الإلكتروني لا يحتوي على مسافات"
+            !email.matches(m) || ".." in m -> "البريد الإلكتروني غير صحيح — مثال: name@gmail.com"
+            suggestion(m) != null -> "هل تقصد ${suggestion(m)}؟ يبدو أن في البريد خطأً إملائياً"
+            domain in disposable -> "استخدم بريدك الحقيقي؛ البريد المؤقت لا يمكن استعادة الحساب منه"
+            else -> null
+        }
+    }
 
     /** Returns an Arabic error for the sign-up form, or null if it is valid. */
     fun signUpError(name: String, mail: String, password: String, confirm: String): String? = when {
         name.isBlank() -> "اكتب اسمك"
-        !email.matches(mail.trim()) -> "البريد الإلكتروني غير صحيح"
+        emailError(mail) != null -> emailError(mail)
         password.length < 6 -> "كلمة السر يجب أن تكون 6 أحرف على الأقل"
         password != confirm -> "كلمتا السر غير متطابقتين"
         else -> null
@@ -79,12 +126,31 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey",
             JSONObject().put("email", email.trim()).put("password", password).put("returnSecureToken", true),
         )
-        val session = res.toSession(name.trim())
+        val session = res.toSession(name.trim()).copy(emailVerified = false)
         post(
             "https://identitytoolkit.googleapis.com/v1/accounts:update?key=$apiKey",
             JSONObject().put("idToken", session.idToken).put("displayName", name.trim()).put("returnSecureToken", false),
         )
-        return session
+        return sendVerification(session)
+    }
+
+    override suspend fun sendVerification(session: Session): Session {
+        val s = fresh(session)
+        post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$apiKey",
+            JSONObject().put("requestType", "VERIFY_EMAIL").put("idToken", s.idToken),
+        )
+        return s
+    }
+
+    override suspend fun refreshVerified(session: Session): Session {
+        val s = fresh(session)
+        val res = post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=$apiKey",
+            JSONObject().put("idToken", s.idToken),
+        )
+        val user = res.optJSONArray("users")?.optJSONObject(0)
+        return s.copy(emailVerified = user?.optBoolean("emailVerified") == true)
     }
 
     override suspend fun signIn(email: String, password: String): Session {
@@ -92,7 +158,7 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$apiKey",
             JSONObject().put("email", email.trim()).put("password", password).put("returnSecureToken", true),
         )
-        return res.toSession(res.optString("displayName"))
+        return refreshVerified(res.toSession(res.optString("displayName")))
     }
 
     override suspend fun sendPasswordReset(email: String) {
@@ -255,6 +321,7 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
                 code.startsWith("INVALID_EMAIL") -> "البريد الإلكتروني غير صحيح"
                 code.startsWith("USER_DISABLED") -> "تم إيقاف هذا الحساب"
                 code.startsWith("TOO_MANY_ATTEMPTS") -> "محاولات كثيرة، انتظر قليلاً ثم حاول مرة أخرى"
+                code.startsWith("INVALID_ID_TOKEN") || code.startsWith("TOKEN_EXPIRED") -> "انتهت الجلسة، سجّل الدخول من جديد"
                 code.startsWith("CONFIGURATION_NOT_FOUND") || code.startsWith("OPERATION_NOT_ALLOWED") ->
                     "خدمة الحسابات غير مفعّلة بعد على الخادم، حاول لاحقاً"
                 code.contains("has not been used") || code.contains("is disabled") -> "قاعدة البيانات غير مفعّلة بعد على الخادم"

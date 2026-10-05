@@ -151,4 +151,19 @@ class ReadersAndAccountsTest {
         val p = Progress().withXp(40, monday - 1).withXp(25, monday).withXp(10, monday + 3)
         assertEquals(35, p.weekXp(monday + 3))
     }
+
+    @Test
+    fun emailAddressesAreCheckedCarefully() {
+        assertNull(AuthValidation.emailError("sara.ali@gmail.com"))
+        assertNull(AuthValidation.emailError("omar@uni.edu.sa"))
+        assertNotNull(AuthValidation.emailError("sara@gmail"))
+        assertNotNull(AuthValidation.emailError("sara gmail.com"))
+        assertNotNull(AuthValidation.emailError("sara@@gmail.com"))
+        assertNotNull(AuthValidation.emailError("sara..ali@gmail.com"))
+        assertNotNull(AuthValidation.emailError("sara@mailinator.com"))
+        assertEquals("sara@gmail.com", AuthValidation.suggestion("Sara@gmial.com"))
+        assertEquals("ali@hotmail.com", AuthValidation.suggestion("ali@hotmial.com"))
+        assertNull(AuthValidation.suggestion("ali@gmail.com"))
+        assertTrue(AuthValidation.emailError("sara@gmial.com")!!.contains("gmail.com"))
+    }
 }

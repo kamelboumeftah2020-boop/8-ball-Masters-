@@ -25,6 +25,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun signIn(email: String, password: String) = accounts.signIn(email, password)
     suspend fun sendPasswordReset(email: String) = accounts.sendPasswordReset(email)
     suspend fun signOut() = accounts.signOut()
+    suspend fun resendVerification() = accounts.resendVerification()
+    suspend fun checkVerified() = accounts.checkVerified()
     suspend fun leaderboard() = accounts.leaderboard()
 
     fun setGoal(goal: LearningGoal) = repo.setGoal(goal)
