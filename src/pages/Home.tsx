@@ -109,7 +109,7 @@ export function Home() {
       <ContinueListening />
 
       {top.error ? (
-        <ErrorState onRetry={top.retry} />
+        <ErrorState onRetry={top.retry} error={top.error} />
       ) : (
         <Shelf title="🏆 الأكثر استماعاً" action={<Link to="/top" className="see-all">عرض الكل</Link>}>
           {top.loading

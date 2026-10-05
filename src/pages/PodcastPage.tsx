@@ -77,7 +77,7 @@ export function PodcastPage() {
       {loading ? (
         <Loading />
       ) : error ? (
-        <ErrorState onRetry={retry} />
+        <ErrorState onRetry={retry} error={error} />
       ) : !data?.episodes.length ? (
         <Empty icon="🎙️" title="لا توجد حلقات متاحة">قد يكون هذا البودكاست غير متوفر في بلدك المختار.</Empty>
       ) : (

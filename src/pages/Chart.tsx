@@ -30,7 +30,7 @@ export function Chart() {
       {loading ? (
         <SkeletonGrid count={12} />
       ) : error ? (
-        <ErrorState onRetry={retry} />
+        <ErrorState onRetry={retry} error={error} />
       ) : !data?.length ? (
         <Empty title="لا توجد نتائج في هذا البلد">جرّب تغيير البلد من الصفحة الرئيسية.</Empty>
       ) : (

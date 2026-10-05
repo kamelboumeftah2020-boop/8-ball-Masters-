@@ -20,10 +20,17 @@ export function Empty({ icon, title, children }: { icon?: ReactNode; title: stri
   );
 }
 
-export function ErrorState({ onRetry }: { onRetry?: () => void }) {
+export function ErrorState({ onRetry, error }: { onRetry?: () => void; error?: unknown }) {
+  const detail = error instanceof Error ? error.message : error ? String(error) : "";
   return (
     <Empty title="تعذّر تحميل المحتوى">
       تأكد من اتصالك بالإنترنت.
+      {detail && (
+        <>
+          <br />
+          <small className="error-detail" dir="ltr">{detail}</small>
+        </>
+      )}
       {onRetry && (
         <>
           <br />

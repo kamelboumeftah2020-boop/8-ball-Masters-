@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import type { Episode, Podcast } from "./types";
 
 // Apple's public podcast directory: free, keyless and CORS-enabled.
@@ -5,13 +6,31 @@ const ITUNES = "https://itunes.apple.com";
 
 const cache = new Map<string, Promise<unknown>>();
 
-async function getJson<T>(url: string): Promise<T> {
+const TIMEOUT_MS = 20_000;
+
+/** In the Android app requests go through the native HTTP stack, not the WebView. */
+async function nativeGet(url: string): Promise<unknown> {
+  const res = await CapacitorHttp.get({ url, responseType: "text", connectTimeout: TIMEOUT_MS, readTimeout: TIMEOUT_MS });
+  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
+  return typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+}
+
+async function webGet(url: string): Promise<unknown> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return JSON.parse(await r.text());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function getJson<T>(url: string): Promise<T> {
   const hit = cache.get(url);
   if (hit) return hit as Promise<T>;
-  const p = fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json() as Promise<T>;
-  });
+  const p = (Capacitor.isNativePlatform() ? nativeGet(url) : webGet(url)) as Promise<T>;
   cache.set(url, p);
   p.catch(() => cache.delete(url));
   return p;
@@ -46,7 +65,7 @@ export async function topPodcasts(country: string, genreId?: string, limit = 50)
     id: e.id.attributes["im:id"],
     title: e["im:name"].label,
     author: e["im:artist"]?.label ?? "",
-    artwork: hiRes(e["im:image"].at(-1)?.label),
+    artwork: hiRes(e["im:image"][e["im:image"].length - 1]?.label),
     genre: e.category?.attributes.label,
     summary: e.summary?.label,
     link: e.link?.attributes.href,

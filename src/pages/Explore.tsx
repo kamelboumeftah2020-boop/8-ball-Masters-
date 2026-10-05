@@ -18,12 +18,12 @@ function Results({ q, tab }: { q: string; tab: Tab }) {
 
   if (tab === "podcasts") {
     if (pods.loading) return <SkeletonGrid />;
-    if (pods.error) return <ErrorState onRetry={pods.retry} />;
+    if (pods.error) return <ErrorState onRetry={pods.retry} error={pods.error} />;
     if (!pods.data?.length) return <Empty icon="🔎" title="لا توجد نتائج">جرّب كلمات أخرى أو ابحث بالإنجليزية.</Empty>;
     return <div className="grid">{pods.data.map((p) => <PodcastCard key={p.id} podcast={p} />)}</div>;
   }
   if (eps.loading) return <Loading />;
-  if (eps.error) return <ErrorState onRetry={eps.retry} />;
+  if (eps.error) return <ErrorState onRetry={eps.retry} error={eps.error} />;
   if (!eps.data?.length) return <Empty icon="🔎" title="لا توجد حلقات مطابقة" />;
   return (
     <div className="episode-list">
