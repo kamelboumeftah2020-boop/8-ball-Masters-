@@ -1,6 +1,13 @@
 package com.fluently.english.ui.screens
 
 import androidx.compose.foundation.background
+import com.fluently.english.ui.theme.Success
+import com.fluently.english.ui.components.SpeakButton
+import com.fluently.english.ui.components.Ltr
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +75,8 @@ fun HomeScreen(
     onOpenLevel: (CefrLevel) -> Unit,
     onReview: () -> Unit,
     onPlacement: () -> Unit,
+    onDaily: () -> Unit = {},
+    onAddWord: (String) -> Unit = {},
 ) {
     val today = localEpochDay()
     Column(
@@ -83,6 +92,11 @@ fun HomeScreen(
 
         SectionHeader("هذا الأسبوع")
         WeekCard(progress, today)
+
+        SectionHeader("اليوم")
+        DailyChallengeCard(progress.challengeDoneToday(today), onDaily)
+        VSpace(12.dp)
+        WordOfTheDay(progress, today, onAddWord)
 
         SectionHeader("اختصارات")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -304,5 +318,66 @@ private fun QuickCard(icon: ImageVector, tint: Color, title: String, body: Strin
         VSpace(14.dp)
         Text(title, style = MaterialTheme.typography.titleSmall)
         Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DailyChallengeCard(done: Boolean, onClick: () -> Unit) {
+    AppCard(onClick = onClick, color = if (done) Success.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconTile(if (done) Icons.Rounded.TaskAlt else Icons.Rounded.Bolt, if (done) Success else Gold, size = 46.dp)
+            HSpace(14.dp)
+            Column(Modifier.weight(1f)) {
+                Text(if (done) "أنجزت تحدي اليوم" else "تحدي اليوم", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (done) "عد غداً لتحدٍّ جديد — أو تدرّب مرة أخرى" else "5 أسئلة سريعة مما تعلمته · مكافأة 30 نقطة",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun WordOfTheDay(progress: Progress, today: Long, onAdd: (String) -> Unit) {
+    val words = remember(progress.unlockedLevel) {
+        Course.levels.filter { progress.isLevelUnlocked(it.level) }.flatMap { it.words }
+    }
+    if (words.isEmpty()) return
+    val word = words[(today % words.size).toInt()]
+    val added = word.en in progress.cards
+    val extra = AppTheme.extra
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(extra.hero)
+            .padding(20.dp),
+    ) {
+        Text("كلمة اليوم", style = MaterialTheme.typography.labelLarge, color = extra.onHeroMuted)
+        VSpace(6.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Ltr { Text(word.en, style = MaterialTheme.typography.headlineMedium, color = extra.onHero) }
+                Text(word.ar, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            SpeakButton(word.en, size = 46.dp)
+        }
+        VSpace(10.dp)
+        Ltr { Text(word.example, style = MaterialTheme.typography.bodyMedium, color = extra.onHeroMuted, modifier = Modifier.fillMaxWidth()) }
+        VSpace(14.dp)
+        Row(
+            Modifier
+                .clip(CircleShape)
+                .background(if (added) extra.heroTrack else MaterialTheme.colorScheme.primary)
+                .clickable(enabled = !added) { onAdd(word.en) }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (added) Icons.Rounded.Check else Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            HSpace(6.dp)
+            Text(if (added) "في بطاقات المراجعة" else "أضف إلى المراجعة", style = MaterialTheme.typography.labelLarge, color = Color.White)
+        }
     }
 }

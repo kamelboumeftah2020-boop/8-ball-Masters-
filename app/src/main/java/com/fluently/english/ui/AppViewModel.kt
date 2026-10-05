@@ -21,5 +21,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun completeLesson(id: String, correct: Int, total: Int): Int = repo.completeLesson(id, correct, total)
     fun completeExam(level: CefrLevel, correct: Int, total: Int): Int = repo.completeExam(level, correct, total)
     fun reviewCard(word: String, known: Boolean) = repo.reviewCard(word, known)
+    fun recordLessonAnswers(id: String, wrong: List<Int>, right: List<Int>) = repo.recordLessonAnswers(id, wrong, right)
+    fun resolveMistakes(fixed: List<String>): Int = repo.resolveMistakes(fixed)
+    fun completeConversation(id: String, stars: Int, points: Int): Int = repo.completeConversation(id, stars, points)
+    fun completeSound(id: String, percent: Int, correct: Int): Int = repo.completeSound(id, percent, correct)
+    fun completeGame(correct: Int, speedScore: Int? = null): Int = repo.completeGame(correct, speedScore)
+    fun completeDailyChallenge(correct: Int): Int = repo.completeDailyChallenge(correct)
+    fun setReminderHour(hour: Int) {
+        repo.setReminderHour(hour)
+        com.fluently.english.reminder.Reminders.schedule(getApplication(), hour)
+    }
+    fun addWordToReview(word: String) = repo.addWordToReview(word)
     fun reset() = repo.reset()
 }

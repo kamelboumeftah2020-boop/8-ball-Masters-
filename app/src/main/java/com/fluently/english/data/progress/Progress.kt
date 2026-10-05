@@ -28,7 +28,18 @@ data class Progress(
     val reviewsDone: Int = 0,
     /** Days with any activity (last few weeks), for the weekly strip. */
     val activeDays: Set<Long> = emptySet(),
+    /** Questions answered wrongly in lessons ("lessonId#index"), for the mistakes notebook. */
+    val mistakes: Set<String> = emptySet(),
+    val conversationStars: Map<String, Int> = emptyMap(),
+    val soundScores: Map<String, Int> = emptyMap(),
+    val speedBest: Int = 0,
+    val gamesPlayed: Int = 0,
+    val lastChallengeDay: Long = -1,
+    /** Hour of the daily reminder, or -1 when reminders are off. */
+    val reminderHour: Int = -1,
 ) {
+    fun challengeDoneToday(today: Long) = lastChallengeDay == today
+
     fun isLessonDone(id: String) = (lessonScores[id] ?: 0) >= Course.LESSON_PASS_PERCENT
 
     /** A level is mastered by passing its exam, or by placing above it. */
@@ -85,5 +96,8 @@ fun Progress.achievements(): List<Achievement> = listOf(
     Achievement("brain", "ذاكرة قوية", "أتقن 30 كلمة في المراجعة", wordsMastered >= 30),
     Achievement("bolt", "ألف نقطة", "اجمع 1000 نقطة خبرة", xp >= 1000),
     Achievement("cap", "أول شهادة", "اجتز امتحان أي مستوى", examScores.values.any { it >= Course.EXAM_PASS_PERCENT }),
+    Achievement("chat", "متحدث", "أكمل 3 محادثات", conversationStars.size >= 3),
+    Achievement("ear", "أذن ذهبية", "أكمل 3 دروس نطق", soundScores.size >= 3),
+    Achievement("game", "لاعب", "العب 10 ألعاب", gamesPlayed >= 10),
     Achievement("trophy", "محترف", "اجتز مستوى C2", isLevelPassed(CefrLevel.C2)),
 )

@@ -64,10 +64,26 @@ import com.fluently.english.ui.screens.PlacementScreen
 import com.fluently.english.ui.screens.ProfileScreen
 import com.fluently.english.ui.screens.ReviewScreen
 import com.fluently.english.ui.screens.WelcomeScreen
+import com.fluently.english.ui.screens.ConversationListScreen
+import com.fluently.english.ui.screens.ConversationScreen
+import com.fluently.english.ui.screens.DailyChallengeScreen
+import com.fluently.english.ui.screens.DictationGame
+import com.fluently.english.ui.screens.GrammarReferenceScreen
+import com.fluently.english.ui.screens.GuideScreen
+import com.fluently.english.ui.screens.MistakesScreen
+import com.fluently.english.ui.screens.PracticeScreen
+import com.fluently.english.ui.screens.ScrambleGame
+import com.fluently.english.ui.screens.SoundListScreen
+import com.fluently.english.ui.screens.SoundScreen
+import com.fluently.english.ui.screens.SpeedGame
+import com.fluently.english.ui.screens.VerbsScreen
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.rounded.Extension
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector, val iconOutlined: ImageVector) {
     HOME("home", "الرئيسية", Icons.Rounded.Home, Icons.Outlined.Home),
     PATH("path", "المسار", Icons.Rounded.Map, Icons.Outlined.Map),
+    PRACTICE("practice", "تدرّب", Icons.Rounded.Extension, Icons.Outlined.Extension),
     REVIEW("review", "المراجعة", Icons.Rounded.Style, Icons.Outlined.Style),
     PROFILE("profile", "حسابي", Icons.Rounded.Person, Icons.Outlined.Person),
 }
@@ -95,7 +111,7 @@ private fun BottomBar(current: Tab, dueCount: Int, onSelect: (Tab) -> Unit) {
                             Modifier
                                 .clip(CircleShape)
                                 .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                .padding(horizontal = 18.dp, vertical = 5.dp),
+                                .padding(horizontal = 14.dp, vertical = 5.dp),
                         ) {
                             if (t == Tab.REVIEW && dueCount > 0) {
                                 BadgedBox(badge = { Badge(containerColor = Coral) { Text("$dueCount") } }) {
@@ -166,7 +182,66 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                     onOpenLevel = { nav.navigate("level/${it.name}") },
                     onReview = { nav.switchTab(Tab.REVIEW.route) },
                     onPlacement = { nav.navigate("placement") },
+                    onDaily = { nav.navigate("daily") },
+                    onAddWord = vm::addWordToReview,
                 )
+            }
+            composable(Tab.PRACTICE.route) {
+                PracticeScreen(
+                    progress = progress,
+                    onConversations = { nav.navigate("conversations") },
+                    onSounds = { nav.navigate("sounds") },
+                    onScramble = { nav.navigate("game/scramble") },
+                    onSpeed = { nav.navigate("game/speed") },
+                    onDictation = { nav.navigate("game/dictation") },
+                    onMistakes = { nav.navigate("mistakes") },
+                    onVerbs = { nav.navigate("verbs") },
+                    onGrammar = { nav.navigate("grammar") },
+                )
+            }
+            composable("conversations") {
+                ConversationListScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("conversation/$it") })
+            }
+            composable("conversation/{id}") { entry ->
+                ConversationScreen(
+                    id = entry.arguments?.getString("id").orEmpty(),
+                    onComplete = vm::completeConversation,
+                    onClose = { nav.popBackStack() },
+                )
+            }
+            composable("sounds") {
+                SoundListScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("sound/$it") })
+            }
+            composable("sound/{id}") { entry ->
+                SoundScreen(
+                    id = entry.arguments?.getString("id").orEmpty(),
+                    onComplete = vm::completeSound,
+                    onClose = { nav.popBackStack() },
+                )
+            }
+            composable("game/scramble") {
+                ScrambleGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack() })
+            }
+            composable("game/speed") {
+                SpeedGame(progress, onComplete = { correct, score -> vm.completeGame(correct, score) }, onClose = { nav.popBackStack() })
+            }
+            composable("game/dictation") {
+                DictationGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack() })
+            }
+            composable("mistakes") {
+                MistakesScreen(progress, onResolve = vm::resolveMistakes, onClose = { nav.popBackStack() })
+            }
+            composable("verbs") {
+                VerbsScreen(onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack() })
+            }
+            composable("grammar") {
+                GrammarReferenceScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("guide/$it") })
+            }
+            composable("guide/{id}") { entry ->
+                GuideScreen(entry.arguments?.getString("id").orEmpty(), onClose = { nav.popBackStack() })
+            }
+            composable("daily") {
+                DailyChallengeScreen(progress, vm.today(), onComplete = vm::completeDailyChallenge, onClose = { nav.popBackStack() })
             }
             composable(Tab.PATH.route) {
                 PathScreen(progress = progress, onOpenLevel = { nav.navigate("level/${it.name}") })
@@ -187,6 +262,7 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                     onSpeechRateChange = vm::setSpeechRate,
                     onPlacement = { nav.navigate("placement") },
                     onMethods = { nav.navigate("methods") },
+                    onReminderChange = vm::setReminderHour,
                     onReset = {
                         vm.reset()
                         nav.navigate("welcome") { popUpTo(0) }
@@ -207,6 +283,7 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                 LessonScreen(
                     lessonId = entry.arguments?.getString("id").orEmpty(),
                     onComplete = vm::completeLesson,
+                    onAnswers = vm::recordLessonAnswers,
                     onClose = { nav.popBackStack() },
                 )
             }

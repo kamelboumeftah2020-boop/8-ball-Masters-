@@ -141,7 +141,7 @@ private fun slidesFor(lesson: Lesson): List<Slide> {
 
 /** The learning part of a lesson: a short, interactive slide deck. */
 @Composable
-fun LearnPlayer(lesson: Lesson, onClose: () -> Unit, onStart: () -> Unit) {
+fun LearnPlayer(lesson: Lesson, onClose: () -> Unit, onStart: () -> Unit, finishLabel: String? = null) {
     val slides = remember(lesson.id) { slidesFor(lesson) }
     var step by remember { mutableIntStateOf(0) }
     val unlocked = remember { mutableStateMapOf<Int, Boolean>() }
@@ -203,7 +203,7 @@ fun LearnPlayer(lesson: Lesson, onClose: () -> Unit, onStart: () -> Unit) {
                 PrimaryButton(
                     text = when {
                         !canContinue -> if (slide is Slide.WarmUpMatch) "أكمل اللعبة للمتابعة" else "أجب عن السؤال للمتابعة"
-                        last -> "ابدأ التمارين · ${lesson.questions.size}"
+                        last -> finishLabel ?: "ابدأ التمارين · ${lesson.questions.size}"
                         else -> "التالي"
                     },
                     enabled = canContinue,

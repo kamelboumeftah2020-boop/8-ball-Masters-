@@ -38,6 +38,7 @@ import com.fluently.english.data.content.Course
 import com.fluently.english.data.content.Lesson
 import com.fluently.english.data.content.LessonType
 import com.fluently.english.data.progress.ProgressRepository
+import com.fluently.english.ui.components.ltr
 import com.fluently.english.ui.components.AnswerRecord
 import com.fluently.english.ui.components.AppCard
 import com.fluently.english.ui.components.AudioControls
@@ -64,7 +65,12 @@ import com.fluently.english.ui.theme.color
 private enum class Stage { LEARN, PRACTICE, RESULT }
 
 @Composable
-fun LessonScreen(lessonId: String, onComplete: (String, Int, Int) -> Int, onClose: () -> Unit) {
+fun LessonScreen(
+    lessonId: String,
+    onComplete: (String, Int, Int) -> Int,
+    onAnswers: (String, List<Int>, List<Int>) -> Unit,
+    onClose: () -> Unit,
+) {
     val lesson = remember(lessonId) { Course.lesson(lessonId) } ?: return
     var stage by remember { mutableStateOf(Stage.LEARN) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -83,6 +89,9 @@ fun LessonScreen(lessonId: String, onComplete: (String, Int, Int) -> Int, onClos
                 onFinish = {
                     records = it
                     xp = onComplete(lesson.id, it.count { r -> r.correct }, it.size)
+                    // Feed the mistakes notebook (speaking items are never counted as mistakes).
+                    val scored = it.withIndex().filter { r -> r.value.question !is com.fluently.english.data.content.Question.Speak }
+                    onAnswers(lesson.id, scored.filter { r -> !r.value.correct }.map { r -> r.index }, scored.filter { r -> r.value.correct }.map { r -> r.index })
                     stage = Stage.RESULT
                 },
             )
@@ -179,7 +188,7 @@ private fun ResultStage(
                 passed -> "أحسنت، أتممت الدرس"
                 else -> "اقتربت! حاول مرة أخرى"
             },
-            subtitle = "$correct من ${records.size} إجابات صحيحة · +$xp نقطة" +
+            subtitle = "$correct من ${records.size} إجابات صحيحة · ${ltr("+$xp")} نقطة" +
                 if (!passed) "\nتحتاج ${Course.LESSON_PASS_PERCENT}% لفتح الدرس التالي" else "",
         )
         if (passed && lesson.words.isNotEmpty()) {

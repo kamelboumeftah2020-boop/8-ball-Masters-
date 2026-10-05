@@ -1,0 +1,81 @@
+package com.fluently.english.data.content
+
+data class IrregularVerb(val base: String, val past: String, val participle: String, val ar: String)
+
+private fun v(base: String, past: String, participle: String, ar: String) = IrregularVerb(base, past, participle, ar)
+
+/** The most frequent irregular verbs, grouped by pattern to make them easier to learn. */
+val IrregularVerbGroups: List<Pair<String, List<IrregularVerb>>> = listOf(
+    "الأشكال الثلاثة متشابهة (AAA)" to listOf(
+        v("cut", "cut", "cut", "يقطع"),
+        v("put", "put", "put", "يضع"),
+        v("let", "let", "let", "يسمح"),
+        v("hit", "hit", "hit", "يضرب"),
+        v("cost", "cost", "cost", "يكلّف"),
+        v("set", "set", "set", "يضبط"),
+        v("shut", "shut", "shut", "يغلق"),
+        v("read", "read", "read", "يقرأ"),
+    ),
+    "الماضي والتصريف الثالث متشابهان (ABB)" to listOf(
+        v("buy", "bought", "bought", "يشتري"),
+        v("bring", "brought", "brought", "يُحضر"),
+        v("think", "thought", "thought", "يفكر"),
+        v("teach", "taught", "taught", "يعلّم"),
+        v("catch", "caught", "caught", "يمسك"),
+        v("make", "made", "made", "يصنع"),
+        v("say", "said", "said", "يقول"),
+        v("pay", "paid", "paid", "يدفع"),
+        v("send", "sent", "sent", "يرسل"),
+        v("spend", "spent", "spent", "يقضي / ينفق"),
+        v("build", "built", "built", "يبني"),
+        v("feel", "felt", "felt", "يشعر"),
+        v("keep", "kept", "kept", "يحتفظ"),
+        v("sleep", "slept", "slept", "ينام"),
+        v("leave", "left", "left", "يغادر"),
+        v("meet", "met", "met", "يقابل"),
+        v("find", "found", "found", "يجد"),
+        v("have", "had", "had", "يملك"),
+        v("hear", "heard", "heard", "يسمع"),
+        v("lose", "lost", "lost", "يفقد"),
+        v("sell", "sold", "sold", "يبيع"),
+        v("tell", "told", "told", "يخبر"),
+        v("stand", "stood", "stood", "يقف"),
+        v("understand", "understood", "understood", "يفهم"),
+        v("sit", "sat", "sat", "يجلس"),
+        v("win", "won", "won", "يفوز"),
+    ),
+    "الأشكال الثلاثة مختلفة (ABC)" to listOf(
+        v("be", "was / were", "been", "يكون"),
+        v("go", "went", "gone", "يذهب"),
+        v("do", "did", "done", "يفعل"),
+        v("see", "saw", "seen", "يرى"),
+        v("eat", "ate", "eaten", "يأكل"),
+        v("take", "took", "taken", "يأخذ"),
+        v("give", "gave", "given", "يعطي"),
+        v("write", "wrote", "written", "يكتب"),
+        v("drive", "drove", "driven", "يقود"),
+        v("speak", "spoke", "spoken", "يتحدث"),
+        v("break", "broke", "broken", "يكسر"),
+        v("choose", "chose", "chosen", "يختار"),
+        v("forget", "forgot", "forgotten", "ينسى"),
+        v("know", "knew", "known", "يعرف"),
+        v("grow", "grew", "grown", "ينمو"),
+        v("fly", "flew", "flown", "يطير"),
+        v("draw", "drew", "drawn", "يرسم"),
+        v("wear", "wore", "worn", "يرتدي"),
+        v("begin", "began", "begun", "يبدأ"),
+        v("drink", "drank", "drunk", "يشرب"),
+        v("swim", "swam", "swum", "يسبح"),
+        v("sing", "sang", "sung", "يغني"),
+        v("ride", "rode", "ridden", "يركب"),
+        v("fall", "fell", "fallen", "يسقط"),
+        v("get", "got", "got / gotten", "يحصل"),
+    ),
+    "المضارع والتصريف الثالث متشابهان (ABA)" to listOf(
+        v("come", "came", "come", "يأتي"),
+        v("become", "became", "become", "يصبح"),
+        v("run", "ran", "run", "يركض"),
+    ),
+)
+
+val IrregularVerbs: List<IrregularVerb> = IrregularVerbGroups.flatMap { it.second }

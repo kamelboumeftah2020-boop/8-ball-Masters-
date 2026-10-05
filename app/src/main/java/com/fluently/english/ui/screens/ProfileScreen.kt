@@ -24,6 +24,9 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Hearing
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.School
@@ -84,6 +87,9 @@ private fun achievementIcon(key: String): ImageVector = when (key) {
     "brain" -> Icons.Rounded.Psychology
     "bolt" -> Icons.Rounded.Bolt
     "cap" -> Icons.Rounded.School
+    "chat" -> Icons.Rounded.Forum
+    "ear" -> Icons.Rounded.Hearing
+    "game" -> Icons.Rounded.SportsEsports
     else -> Icons.Rounded.EmojiEvents
 }
 
@@ -97,6 +103,7 @@ fun ProfileScreen(
     onPlacement: () -> Unit,
     onMethods: () -> Unit,
     onReset: () -> Unit,
+    onReminderChange: (Int) -> Unit = {},
 ) {
     var editingName by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -220,6 +227,8 @@ fun ProfileScreen(
                 }
             }
             HorizontalDivider(color = border)
+            ReminderSetting(progress.reminderHour, onReminderChange)
+            HorizontalDivider(color = border)
             SpeechRateSetting(progress.speechRate, onSpeechRateChange)
             HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.Explore, Emerald, "إعادة اختبار تحديد المستوى", onPlacement)
@@ -342,6 +351,45 @@ fun MethodsScreen(onBack: () -> Unit) {
                 }
             }
             VSpace(28.dp)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReminderSetting(hour: Int, onChange: (Int) -> Unit) {
+    var pending by remember { mutableStateOf(-1) }
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) onChange(pending) }
+    fun choose(h: Int) {
+        if (h >= 0 && android.os.Build.VERSION.SDK_INT >= 33) {
+            pending = h
+            permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            onChange(h)
+        }
+    }
+    Column(Modifier.padding(16.dp)) {
+        Text("تذكير يومي", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "إشعار لطيف في الوقت الذي تختاره — فقط في الأيام التي لم تدرس فيها بعد.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VSpace(10.dp)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(-1 to "إيقاف", 8 to "8 صباحاً", 13 to "1 ظهراً", 18 to "6 مساءً", 21 to "9 مساءً").forEach { (h, label) ->
+                FilterChip(
+                    selected = hour == h,
+                    onClick = { choose(h) },
+                    label = { Text(label) },
+                    shape = CircleShape,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = Color.White,
+                    ),
+                )
+            }
         }
     }
 }

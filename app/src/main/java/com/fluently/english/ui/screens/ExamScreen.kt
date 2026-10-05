@@ -149,7 +149,7 @@ private fun ExamResult(level: CefrLevel, records: List<AnswerRecord>, xp: Int, o
         ScoreHeader(
             percent, passed,
             title = if (passed) "مبروك! اجتزت المستوى ${level.code}" else "لم تجتز الامتحان هذه المرة",
-            subtitle = "$correct من ${records.size} · +$xp نقطة" +
+            subtitle = "$correct من ${records.size} · ${ltr("+$xp")} نقطة" +
                 if (!passed) "\nراجع أخطاءك والدروس ثم أعد المحاولة" else "",
         )
         if (passed) {

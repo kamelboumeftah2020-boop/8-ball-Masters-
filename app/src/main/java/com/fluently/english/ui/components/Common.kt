@@ -61,7 +61,7 @@ import com.fluently.english.ui.theme.color
 
 // ---------- Bidirectional text ----------
 
-private val latinRun = Regex("[A-Za-z][A-Za-z0-9 '’/()\\-.,?!]*[A-Za-z0-9)'’?!.]|[A-Za-z]")
+private val latinRun = Regex("[A-Za-z][A-Za-z0-9 '’/()\\-.,?!…]*[A-Za-z0-9)'’?!.…]|[A-Za-z]")
 
 /**
  * Wraps English runs inside Arabic text in Unicode direction isolates so their

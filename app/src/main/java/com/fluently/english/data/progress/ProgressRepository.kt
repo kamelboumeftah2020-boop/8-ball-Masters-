@@ -91,6 +91,59 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         ).withXp(REVIEW_XP, today())
     }
 
+    /** Updates the mistakes notebook after a lesson: wrong items are added, right ones removed. */
+    fun recordLessonAnswers(lessonId: String, wrong: List<Int>, right: List<Int>) = update { p ->
+        p.copy(mistakes = p.mistakes + wrong.map { "$lessonId#$it" } - right.map { "$lessonId#$it" }.toSet())
+    }
+
+    /** Mistakes-notebook review: items answered correctly leave the notebook. */
+    fun resolveMistakes(fixed: List<String>): Int {
+        update { p -> p.copy(mistakes = p.mistakes - fixed.toSet()).withXp(fixed.size * 5, today()) }
+        return fixed.size * 5
+    }
+
+    fun completeConversation(id: String, stars: Int, points: Int): Int {
+        val xp = points * 5
+        update { p ->
+            p.copy(conversationStars = p.conversationStars + (id to maxOf(stars, p.conversationStars[id] ?: 0)))
+                .withXp(xp, today())
+        }
+        return xp
+    }
+
+    fun completeSound(id: String, percent: Int, correct: Int): Int {
+        val xp = correct * 3
+        update { p ->
+            p.copy(soundScores = p.soundScores + (id to maxOf(percent, p.soundScores[id] ?: 0))).withXp(xp, today())
+        }
+        return xp
+    }
+
+    /** Records a finished game; returns the XP earned. */
+    fun completeGame(correct: Int, speedScore: Int? = null): Int {
+        val xp = correct * 3
+        update { p ->
+            p.copy(
+                gamesPlayed = p.gamesPlayed + 1,
+                speedBest = maxOf(p.speedBest, speedScore ?: 0),
+            ).withXp(xp, today())
+        }
+        return xp
+    }
+
+    fun completeDailyChallenge(correct: Int): Int {
+        val already = _progress.value.challengeDoneToday(today())
+        val xp = correct * 10 + if (already) 0 else DAILY_BONUS
+        update { p -> p.copy(lastChallengeDay = today()).withXp(xp, today()) }
+        return xp
+    }
+
+    fun setReminderHour(hour: Int) = update { it.copy(reminderHour = hour) }
+
+    fun addWordToReview(word: String) = update { p ->
+        if (word in p.cards) p else p.copy(cards = p.cards + (word to Card(box = 0, dueDay = today())))
+    }
+
     fun reset() = update { Progress() }
 
     private fun load(): Progress {
@@ -111,6 +164,7 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         const val PERFECT_BONUS = 20
         const val EXAM_PASS_BONUS = 100
         const val REVIEW_XP = 2
+        const val DAILY_BONUS = 30
 
         /** Days until the next review for each Leitner box. */
         val INTERVALS = listOf(1, 2, 4, 7, 15, 30)
@@ -159,6 +213,13 @@ internal object ProgressCodec {
         put("speechRate", p.speechRate.toDouble())
         put("reviewsDone", p.reviewsDone)
         put("activeDays", org.json.JSONArray(p.activeDays.toList()))
+        put("mistakes", org.json.JSONArray(p.mistakes.toList()))
+        put("conversationStars", JSONObject(p.conversationStars))
+        put("soundScores", JSONObject(p.soundScores))
+        put("speedBest", p.speedBest)
+        put("gamesPlayed", p.gamesPlayed)
+        put("lastChallengeDay", p.lastChallengeDay)
+        put("reminderHour", p.reminderHour)
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -186,6 +247,13 @@ internal object ProgressCodec {
             speechRate = o.optDouble("speechRate", 0.9).toFloat(),
             reviewsDone = o.optInt("reviewsDone"),
             activeDays = o.optJSONArray("activeDays")?.let { a -> (0 until a.length()).map { a.getLong(it) }.toSet() } ?: emptySet(),
+            mistakes = o.optJSONArray("mistakes")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
+            conversationStars = intMap(o.optJSONObject("conversationStars")),
+            soundScores = intMap(o.optJSONObject("soundScores")),
+            speedBest = o.optInt("speedBest"),
+            gamesPlayed = o.optInt("gamesPlayed"),
+            lastChallengeDay = o.optLong("lastChallengeDay", -1),
+            reminderHour = o.optInt("reminderHour", -1),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))
