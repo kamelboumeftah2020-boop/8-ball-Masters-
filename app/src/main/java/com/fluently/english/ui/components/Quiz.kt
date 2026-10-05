@@ -33,6 +33,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Reorder
 import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.TaskAlt
@@ -143,6 +145,8 @@ private fun QuestionView(
     var choice by remember(key) { mutableStateOf<String?>(null) }
     val picked = remember(key) { mutableStateListOf<Int>() }
     var typed by remember(key) { mutableStateOf("") }
+    var matchMistakes by remember(key) { mutableStateOf<Int?>(null) }
+    var speech by remember(key) { mutableStateOf<Pair<Float, String>?>(null) }
 
     val options = remember(key) { (question as? Question.Choice)?.options?.shuffled() ?: emptyList() }
     val tokens = remember(key) { (question as? Question.Order)?.tokens?.withIndex()?.shuffled() ?: emptyList() }
@@ -151,7 +155,7 @@ private fun QuestionView(
     val audio = when (question) {
         is Question.Choice -> question.audio
         is Question.Typing -> question.audio
-        is Question.Order -> null
+        else -> null
     }
     LaunchedEffect(key) { audio?.let { speaker.speak(it) } }
 
@@ -159,6 +163,8 @@ private fun QuestionView(
         is Question.Choice -> choice != null
         is Question.Order -> picked.size == tokens.size
         is Question.Typing -> typed.isNotBlank()
+        is Question.Match -> matchMistakes != null
+        is Question.Speak -> speech != null
     }
 
     fun evaluate(): AnswerRecord = when (question) {
@@ -168,6 +174,8 @@ private fun QuestionView(
             AnswerRecord(question, words.joinToString(" "), Answers.checkOrder(question, words))
         }
         is Question.Typing -> AnswerRecord(question, typed, Answers.checkTyping(question, typed))
+        is Question.Match -> AnswerRecord(question, "${matchMistakes ?: 0} أخطاء", (matchMistakes ?: 0) <= 1)
+        is Question.Speak -> AnswerRecord(question, speech?.second.orEmpty(), (speech?.first ?: 0f) >= Answers.SPEECH_PASS)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -186,10 +194,20 @@ private fun QuestionView(
                     else Icons.Rounded.TaskAlt to "اختر الإجابة الصحيحة"
                 is Question.Order -> Icons.Rounded.Reorder to "رتّب الكلمات"
                 is Question.Typing -> Icons.Rounded.Edit to "اكتب الإجابة"
+                is Question.Match -> Icons.Rounded.Link to "صِل الكلمات بمعانيها"
+                is Question.Speak -> Icons.Rounded.Mic to "انطق الجملة"
             }
             Pill(kindLabel, MaterialTheme.colorScheme.primary, icon = kindIcon)
             VSpace(14.dp)
-            AutoText(Answers.prompt(question), style = MaterialTheme.typography.headlineSmall)
+            if (question is Question.Speak) {
+                AutoText(question.translation, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                VSpace(6.dp)
+                AutoText(question.sentence, style = MaterialTheme.typography.headlineSmall)
+                VSpace(16.dp)
+                AudioControls(question.sentence)
+            } else {
+                AutoText(Answers.prompt(question), style = MaterialTheme.typography.headlineSmall)
+            }
 
             if (audio != null) {
                 VSpace(18.dp)
@@ -208,6 +226,8 @@ private fun QuestionView(
                     OptionCard(('A' + i).toString(), option, state, enabled = checked == null) { choice = option }
                 }
                 is Question.Order -> OrderBuilder(tokens, picked, enabled = checked == null)
+                is Question.Match -> MatchBoard(question.pairs, enabled = checked == null) { matchMistakes = it }
+                is Question.Speak -> SpeakPractice(question.sentence) { score, heard -> speech = score to heard }
                 is Question.Typing -> Ltr {
                     OutlinedTextField(
                         value = typed,
@@ -257,6 +277,10 @@ private fun QuestionView(
                 )
                 if (allowSkip) {
                     GhostButton("لا أعرف الإجابة", onClick = { onNext(AnswerRecord(question, "", false)) })
+                }
+                if (question is Question.Speak) {
+                    // Speaking is never penalised when the learner can't talk right now.
+                    GhostButton("لا أستطيع التحدث الآن — تخطَّ", onClick = { onNext(AnswerRecord(question, "", true)) })
                 }
             }
         }

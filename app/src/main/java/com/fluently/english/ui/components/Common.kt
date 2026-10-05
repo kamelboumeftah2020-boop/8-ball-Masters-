@@ -68,12 +68,17 @@ private val latinRun = Regex("[A-Za-z][A-Za-z0-9 '’/()\\-.,?!]*[A-Za-z0-9)'’
  * punctuation stays attached (otherwise "I am a student." renders as ".I am a student").
  */
 fun isolateLatin(text: String): String =
-    if (!isArabic(text)) text else latinRun.replace(text) { "⁦${it.value}⁩" }
+    if (!isArabic(text)) text else latinRun.replace(text) { ltr(it.value) }
 
-/** Isolates a left-to-right string for embedding in Arabic text. */
-fun ltr(text: String): String = "⁦$text⁩"
+/**
+ * Embeds a left-to-right string in Arabic text. Uses LRE…PDF plus a trailing LRM
+ * (supported by every Android version) so trailing punctuation stays with the
+ * English words even when the line wraps.
+ */
+fun ltr(text: String): String = "\u202A$text\u200E\u202C"
 
-fun isArabic(text: String): Boolean = text.firstOrNull { it.isLetter() }?.let { it in '؀'..'ۿ' } ?: false
+/** True if the text contains Arabic, i.e. it is an Arabic sentence (possibly with English inside). */
+fun isArabic(text: String): Boolean = text.any { it in '\u0600'..'\u06FF' }
 
 /** Lays out [content] left-to-right (for English text inside the Arabic UI). */
 @Composable

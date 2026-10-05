@@ -97,7 +97,50 @@ sealed interface Question {
         val audio: String? = null,
         override val explanation: String? = null,
     ) : Question
+
+    /** Connect each English item with its Arabic meaning. */
+    data class Match(
+        val pairs: List<Pair<String, String>>,
+        override val explanation: String? = null,
+    ) : Question
+
+    /** Say the sentence aloud; checked with the device's speech recogniser. */
+    data class Speak(
+        val sentence: String,
+        val translation: String,
+        override val explanation: String? = null,
+    ) : Question
 }
+
+/*
+ * Step-by-step explanation for a grammar lesson, shown as slides before practice:
+ * a hook with an analogy, concepts built up one at a time (each with a visual
+ * formula or table, highlighted examples and a quick check), typical mistakes
+ * and a memory trick.
+ */
+
+data class Guide(
+    val hook: String,
+    val goals: List<String>,
+    val concepts: List<Concept>,
+    val mistakes: List<Mistake>,
+    val tip: String,
+)
+
+data class Concept(
+    val title: String,
+    val body: String,
+    /** Parts separated by " + ", rendered as coloured blocks. */
+    val formula: String? = null,
+    val table: Table? = null,
+    /** English may mark the key part in [brackets]; it is highlighted. */
+    val examples: List<Example> = emptyList(),
+    val check: Question.Choice? = null,
+)
+
+data class Table(val headers: List<String>, val rows: List<List<String>>)
+
+data class Mistake(val wrong: String, val right: String, val why: String)
 
 data class Lesson(
     val id: String,
@@ -112,7 +155,9 @@ data class Lesson(
     /** Reading passage, or listening script (hidden until the exercise ends). */
     val passage: String? = null,
     val questions: List<Question>,
-)
+) {
+    val guide: Guide? get() = Guides[id]
+}
 
 data class CourseUnit(
     val id: String,

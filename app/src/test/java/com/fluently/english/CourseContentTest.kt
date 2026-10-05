@@ -2,6 +2,7 @@ package com.fluently.english
 
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.data.content.Course
+import com.fluently.english.data.content.Guides
 import com.fluently.english.data.content.LessonType
 import com.fluently.english.data.content.PlacementBank
 import com.fluently.english.data.content.PlacementEngine
@@ -57,8 +58,28 @@ class CourseContentTest {
                 }
                 is Question.Order -> assertTrue("order too short: ${q.sentence}", q.tokens.size >= 3)
                 is Question.Typing -> assertTrue(q.answers.isNotEmpty() && q.answers.none { it.isBlank() })
+                is Question.Match -> assertEquals(q.pairs.size, q.pairs.map { it.first }.toSet().size)
+                is Question.Speak -> assertTrue(q.sentence.isNotBlank())
             }
         }
+    }
+
+    @Test
+    fun everyGrammarLessonHasAStepByStepGuide() {
+        Course.levels.flatMap { it.lessons }.filter { it.type == LessonType.GRAMMAR }.forEach { lesson ->
+            val guide = lesson.guide
+            assertTrue("${lesson.id} has no guide", guide != null)
+            assertTrue("${lesson.id} needs 2+ concepts", guide!!.concepts.size >= 2)
+            assertTrue("${lesson.id} needs mistakes", guide.mistakes.isNotEmpty())
+            guide.concepts.forEach { c ->
+                assertTrue("${lesson.id}: '${c.title}' needs a quick check", c.check != null)
+                c.check!!.let { assertEquals(it.options.size, it.options.toSet().size) }
+                c.examples.forEach { e ->
+                    assertEquals("unbalanced brackets in ${e.en}", e.en.count { it == '[' }, e.en.count { it == ']' })
+                }
+            }
+        }
+        assertEquals(24, Guides.size)
     }
 
     @Test

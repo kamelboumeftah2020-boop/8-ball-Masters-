@@ -21,6 +21,7 @@ object Course {
         val pool = course.lessons
             .filter { it.type == LessonType.GRAMMAR || it.type == LessonType.VOCABULARY }
             .flatMap { it.questions }
+            .filter { it is Question.Choice || it is Question.Order || it is Question.Typing }
         return (course.examQuestions + pool.shuffled(random).take(EXAM_SAMPLE_SIZE)).shuffled(random)
     }
 

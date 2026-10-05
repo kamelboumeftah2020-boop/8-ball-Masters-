@@ -72,7 +72,7 @@ fun LessonScreen(lessonId: String, onComplete: (String, Int, Int) -> Int, onClos
     var xp by remember { mutableIntStateOf(0) }
 
     when (stage) {
-        Stage.LEARN -> LearnStage(lesson, onClose, onStart = { stage = Stage.PRACTICE })
+        Stage.LEARN -> LearnPlayer(lesson, onClose, onStart = { stage = Stage.PRACTICE })
         Stage.PRACTICE -> key(attempt) {
             QuizRunner(
                 questions = lesson.questions,
@@ -147,116 +147,6 @@ private fun ListeningPlayer(script: String, modifier: Modifier = Modifier, note:
         }
         VSpace(14.dp)
         AudioControls(script)
-    }
-}
-
-@Composable
-private fun LearnStage(lesson: Lesson, onClose: () -> Unit, onStart: () -> Unit) {
-    val c = lesson.level.color()
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        ScreenHeader(lesson.titleAr, onBack = onClose, close = true)
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-        ) {
-            VSpace(8.dp)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill(lesson.level.code, c, solid = true)
-                HSpace(8.dp)
-                Pill(lesson.type.labelAr, MaterialTheme.colorScheme.primary, icon = lesson.type.icon())
-            }
-            VSpace(14.dp)
-            Ltr {
-                Text(lesson.title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.fillMaxWidth())
-            }
-
-            if (lesson.notes.isNotEmpty()) {
-                SectionHeader(if (lesson.type == LessonType.GRAMMAR) "الشرح" else "طريقة الدراسة")
-                lesson.notes.forEachIndexed { i, note ->
-                    Row(Modifier.padding(vertical = 7.dp)) {
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(c.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("${i + 1}", color = c, style = MaterialTheme.typography.labelLarge)
-                        }
-                        HSpace(12.dp)
-                        Text(isolateLatin(note), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-
-            if (lesson.examples.isNotEmpty()) {
-                SectionHeader("أمثلة")
-                AppCard(padding = 0.dp) {
-                    lesson.examples.forEachIndexed { i, ex ->
-                        if (i > 0) HorizontalDivider(color = AppTheme.extra.border)
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                AutoText(ex.en, style = MaterialTheme.typography.titleMedium)
-                                VSpace(2.dp)
-                                AutoText(ex.ar, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            HSpace(10.dp)
-                            SpeakButton(ex.en.substringAfter("→ ").trim())
-                        }
-                    }
-                }
-            }
-
-            if (lesson.type == LessonType.READING && lesson.passage != null) {
-                SectionHeader("النص")
-                AppCard(padding = 20.dp) {
-                    AudioControls(lesson.passage)
-                    VSpace(16.dp)
-                    AutoText(
-                        lesson.passage,
-                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.15f),
-                    )
-                }
-            }
-
-            if (lesson.type == LessonType.LISTENING && lesson.passage != null) {
-                SectionHeader("الاستماع")
-                ListeningPlayer(lesson.passage, note = "سيظهر النص بعد التمارين")
-            }
-
-            if (lesson.words.isNotEmpty()) {
-                SectionHeader("الكلمات · ${lesson.words.size}")
-                AppCard(padding = 0.dp) {
-                    lesson.words.forEachIndexed { i, word ->
-                        if (i > 0) HorizontalDivider(color = AppTheme.extra.border)
-                        WordRow(word.en, word.ar, word.example)
-                    }
-                }
-            }
-            VSpace(20.dp)
-        }
-        Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            HorizontalDivider(color = AppTheme.extra.border)
-            Box(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-                PrimaryButton(
-                    "ابدأ التمارين · ${lesson.questions.size}", onStart,
-                    icon = Icons.AutoMirrored.Rounded.ArrowForward,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun WordRow(en: String, ar: String, example: String) {
-    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Ltr { Text(en, style = MaterialTheme.typography.titleMedium) }
-                HSpace(10.dp)
-                Text(ar, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            VSpace(2.dp)
-            AutoText(example, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        HSpace(10.dp)
-        SpeakButton(en)
     }
 }
 

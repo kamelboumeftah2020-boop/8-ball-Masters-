@@ -64,6 +64,13 @@ class ProgressTest {
     }
 
     @Test
+    fun speechScoreToleratesSmallDifferences() {
+        assertEquals(1f, Answers.speechScore("I am a student.", "i am a student"))
+        assertTrue(Answers.speechScore("She works in a bank", "she work in a bank") >= Answers.SPEECH_PASS)
+        assertTrue(Answers.speechScore("She works in a bank", "hello") < Answers.SPEECH_PASS)
+    }
+
+    @Test
     fun typingIgnoresCaseAndPunctuation() {
         val q = Question.Typing("", listOf("can't", "cannot"))
         assertTrue(Answers.checkTyping(q, "  Can’t. "))
