@@ -9,6 +9,7 @@ import { charOf } from '/shared/characters.js';
 import { stadiumOf } from '/shared/stadiums.js';
 import { clubOf, crestSVG } from '/shared/clubs.js';
 import { integrateMovement } from '/shared/sim.js';
+import { icon } from './icons.js';
 
 const { L, W, GW } = FIELD;
 const HL = L / 2, HW = W / 2;
@@ -424,8 +425,9 @@ export class Match {
     if (!main) return;
     const att = ctx === 'att';
     main.classList.toggle('def', !att); sec.classList.toggle('def', !att);
-    main.innerHTML = att ? '<span class="i">🦶</span><small>تسديد</small>' : gk ? '<span class="i">🧤</span><small>ارتماء</small>' : '<span class="i">🦵</span><small>ضغط/افتكاك</small>';
-    sec.innerHTML = att ? '<span class="i">➡️</span><small>تمرير</small>' : this.local ? '<span class="i">🔄</span><small>تبديل</small>' : '<span class="i">⚡</span><small>ركض</small>';
+    const L = (ic, t) => `<span class="i">${icon(ic)}</span><small>${t}</small>`;
+    main.innerHTML = att ? L('shoot', 'تسديد') : gk ? L('glove', 'ارتماء') : L('press', 'ضغط/افتكاك');
+    sec.innerHTML = att ? L('pass', 'تمرير') : this.local ? L('switch', 'تبديل') : L('sprint', 'ركض');
   }
 
   sendInput(inp, dt) {

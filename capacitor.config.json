@@ -1,0 +1,10 @@
+{
+  "appId": "com.legends.football5v5",
+  "appName": "أساطير الكرة",
+  "webDir": "dist/app",
+  "backgroundColor": "#060814",
+  "android": {
+    "backgroundColor": "#060814",
+    "allowMixedContent": false
+  }
+}

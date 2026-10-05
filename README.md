@@ -64,3 +64,22 @@ npm start
 - `KITS`: أطقم الفريقين والحراس.
 - `SKINS`: سكينات إضافية جاهزة (ذهبي، عسكري، كلاسيكي) — أضف عنصراً جديداً بنمط (`plain`, `pinstripes`, `stripes`, `hoops`, `sash`, `halves`, `gradient`, `camo`, `chevron`) وألوان.
 - مرّر اسم السكين إلى `new Player3D(info, { skin: 'gold' })`.
+
+## 📱 تطبيق أندرويد (APK)
+
+التطبيق يغلّف نسخة "ضد البوتات" (تعمل بدون إنترنت) عبر Capacitor، بشاشة أفقية كاملة وزر رجوع يوقف المباراة بدل إغلاق التطبيق.
+
+```bash
+npm install
+npm run build:app          # يبني dist/app/index.html
+npx cap sync android       # ينسخ اللعبة داخل مشروع الأندرويد
+cd android && ./gradlew assembleRelease
+# الملف: android/app/build/outputs/apk/release/app-release.apk
+```
+
+يحتاج: JDK 21 و Android SDK (platform 35). حدّد مكان الـ SDK في `android/local.properties` (`sdk.dir=...`).
+
+**التوقيع:** ضع ملف المفتاح `legends-release.jks` و `keystore.properties` داخل مجلد `android/` (لا يُرفعان إلى git أبداً).
+بدونهما يُوقَّع التطبيق بمفتاح التصحيح. احتفظ بالمفتاح نفسه دائماً: التحديثات لا تُثبَّت فوق النسخة القديمة إلا إذا وُقّعت بنفس المفتاح، وهو ضروري أيضاً للنشر على Google Play.
+
+لتغيير رقم الإصدار: `versionCode` و `versionName` في `android/app/build.gradle`.

@@ -11,6 +11,7 @@ import { CHARACTERS, charOf } from '/shared/characters.js';
 import { STADIUMS, stadiumOf } from '/shared/stadiums.js';
 import { TEAMS, DIFFICULTY, DURATIONS, TEAM_SIZE, STATE, BALL_R, MODES } from '/shared/constants.js';
 import { CLUBS, clubOf, teamsFromClubs, crestSVG } from '/shared/clubs.js';
+import { icon, hydrateIcons, logoSVG } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,6 +42,22 @@ class App {
     if (isMobile) document.body.classList.add('touch');
     document.body.classList.toggle('lefty', !!this.settings.lefty);
     window.__noVib = this.settings.vibrate === false;
+    // زر الرجوع في تطبيق الأندرويد
+    window.__androidBack = () => {
+      if (this.match) {
+        if (!$('endscreen').classList.contains('hidden')) { $('end-menu').click(); return true; }
+        this.togglePause();
+        return true;
+      }
+      if (this.screen && this.screen !== 'main') { if (this.screen === 'room') $('btn-leave').click(); else this.show('main'); return true; }
+      return false;
+    };
+    if (window.IS_APP) document.body.classList.add('app');
+    // الأيقونات والشعار
+    hydrateIcons();
+    $('sp-logo').innerHTML = logoSVG(96);
+    $('bm-logo').innerHTML = logoSVG(44);
+    $('rotate').querySelector('.rot-ic i').innerHTML = icon('refresh');
     // شاشة البداية: تفعيل الصوت + ملء الشاشة + الوضع الأفقي
     const splash = $('splash');
     splash.addEventListener('click', () => {
@@ -202,6 +219,7 @@ class App {
     $('btn-online').onclick = () => { this.show('online'); this.connectOnline(); };
     $('btn-settings').onclick = () => this.show('settings');
     $('btn-help').onclick = () => this.show('help');
+    $('btn-team2').onclick = () => $('btn-team').click();
     $('btn-team').onclick = () => { this.show('team'); if (!$('char-grid').children.length) { $('char-grid').innerHTML = '<div class="muted">جارٍ تجهيز البطاقات…</div>'; setTimeout(() => this.renderCards(), 30); } };
     $('btn-quick-start').onclick = () => this.startQuick();
     $('btn-cup').onclick = () => this.startCup(0);
@@ -274,7 +292,7 @@ class App {
     audio.init();
     audio.setEnabled(this.settings.sound);
     this.saveSettings();
-    $('hb-sound').textContent = this.settings.sound ? '🔊' : '🔇';
+    $('hb-sound').innerHTML = icon(this.settings.sound ? 'sound' : 'mute');
     this.toast(this.settings.sound ? 'الصوت مفعل 🔊' : 'الصوت مكتوم 🔇');
   }
 
@@ -318,9 +336,9 @@ class App {
     this.markOn(st, '[data-st]', 'st', this.quick.stadium);
     this.seg('quick-dur', DURATIONS.map((d) => [d, `${d / 60} د`]), () => this.quick.duration, (v) => (this.quick.duration = +v));
     this.seg('quick-diff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), () => this.quick.difficulty, (v) => (this.quick.difficulty = v));
-    this.seg('quick-mode', [['real', '⚽ واقعي<small>كرة حقيقية</small>'], ['legends', '✨ أساطير<small>قدرات خارقة</small>']], () => this.quick.mode, (v) => (this.quick.mode = v));
+    this.seg('quick-mode', [['real', `${icon('ball')}واقعي<small>كرة حقيقية</small>`], ['legends', `${icon('spark')}أساطير<small>قدرات خارقة</small>`]], () => this.quick.mode, (v) => (this.quick.mode = v));
     this.renderClubPicks();
-    this.seg('quick-pos', [[3, 'مهاجم ⚽'], [1, 'مدافع 🛡️'], [0, 'حارس 🧤']], () => this.quick.slot, (v) => (this.quick.slot = +v));
+    this.seg('quick-pos', [[3, 'مهاجم'], [1, 'مدافع'], [0, 'حارس']], () => this.quick.slot, (v) => (this.quick.slot = +v));
     // الإعدادات
     this.seg('set-quality', [['low', 'منخفضة'], ['medium', 'متوسطة'], ['high', 'عالية']], () => this.settings.quality, (v) => {
       this.settings.quality = v; this.saveSettings();
@@ -340,7 +358,7 @@ class App {
     $('set-sound').onchange = () => { this.settings.sound = $('set-sound').checked; audio.setEnabled(this.settings.sound); this.saveSettings(); };
     $('set-comm').checked = this.settings.commentary;
     $('set-comm').onchange = () => { this.settings.commentary = $('set-comm').checked; audio.commentary = this.settings.commentary; this.saveSettings(); if (audio.commentary) audio.say('أهلاً بكم في أساطير الكرة'); };
-    $('hb-sound').textContent = this.settings.sound ? '🔊' : '🔇';
+    $('hb-sound').innerHTML = icon(this.settings.sound ? 'sound' : 'mute');
     // الغرفة
     $('room-mode').innerHTML = Object.values(MODES).map((m) => `<option value="${m.id}">وضع: ${m.label}</option>`).join('');
     $('room-home').innerHTML = CLUBS.map((c) => `<option value="${c.id}">🏠 ${c.name}</option>`).join('');
@@ -386,11 +404,11 @@ class App {
       const T = TEAMS[side === 'home' ? 0 : 1];
       el.style.setProperty('--cc', c.primary);
       el.innerHTML = `<span class="cp-label">${side === 'home' ? 'فريقك' : 'الخصم'}</span>
-        <button class="cp-arrow" data-d="-1" aria-label="السابق">›</button>
+        <button class="cp-arrow" data-d="-1" aria-label="السابق">${icon('back')}</button>
         <div class="cp-crest">${crestSVG(c, 84)}</div>
-        <div class="cp-info"><b>${c.name}</b><small>${c.city}</small><div class="ovr">OVR ${c.rating} ${'★'.repeat(Math.max(1, Math.round((c.rating - 75) / 2)))}</div></div>
+        <div class="cp-info"><b>${c.name}</b><small>${c.city}</small><div class="ovr"><b>${c.rating}</b> OVR <span class="stars">${icon('star').repeat(Math.max(1, Math.round((c.rating - 75) / 2)))}</span></div></div>
         <div class="cp-kit">${this.kitSVG(T.kit)}</div>
-        <button class="cp-arrow" data-d="1" aria-label="التالي">‹</button>`;
+        <button class="cp-arrow" data-d="1" aria-label="التالي">${icon('next')}</button>`;
       el.onclick = (e) => {
         const b = e.target.closest('[data-d]');
         if (!b) return;
@@ -401,7 +419,7 @@ class App {
         if (side === 'home') { this.settings.homeClub = CLUBS[i].id; this.saveSettings(); }
         this.applyClubs(this.quick.home, this.quick.away);
         this.renderClubPicks();
-        if (side === 'home') { this.buildPreview(); const cc = charOf(this.settings.char); $('hero-card').innerHTML = cardHTML(cc, { cls: 'big' }); }
+        if (side === 'home') { this.buildPreview(); this.renderHero(); }
       };
     }
   }
@@ -419,14 +437,22 @@ class App {
       <h3>${c.icon} ${c.name} <small class="muted">— ${c.title}</small></h3>
       <div class="ab">✨ <b>${c.ability.name}</b>: ${c.ability.desc} <span class="muted">(${c.ability.cd} ث)</span></div>
       <div class="stats">${bar('السرعة', s.speed)}${bar('التسديد', s.shot)}${bar('التمرير', s.pass)}${bar('المراوغة', s.dribble)}${bar('الافتكاك', s.tackle)}${bar('حراسة المرمى', s.keeper)}</div>`;
-    $('hero-card').innerHTML = cardHTML(c, { cls: 'big' });
-    const r = ratings(c);
-    $('team-sub').textContent = `${c.icon} ${c.name} • ${r.ovr} ${r.pos}`;
+    this.renderHero();
     if (!silent) {
       this.net.send({ t: 'char', char: c.id });
       this.buildPreview();
       if (this.previewP) { this.previewP.prevState = -1; this.previewCeleb = 0.01; }
     }
+  }
+
+  // بطاقة النجم في الواجهة الرئيسية + الصورة الرمزية
+  renderHero() {
+    const c = charOf(this.settings.char);
+    const r = ratings(c);
+    $('hero-card').innerHTML = cardHTML(c, { mini: true, cls: 'hero' });
+    $('team-sub').innerHTML = `${esc(c.name)} <em>${r.ovr} ${r.pos}</em>`;
+    const img = portrait(c.id, 0, 3);
+    $('pc-avatar').innerHTML = img ? `<img src="${img}" alt="">` : icon('user');
   }
 
   quickSettings() { return { stadium: this.quick.stadium, duration: this.quick.duration, difficulty: this.quick.difficulty }; }
@@ -474,9 +500,10 @@ class App {
     }
     const a = t * 0.12;
     const wide = this.width > this.height;
-    const r = wide ? 7 : 8;
-    this.camera.position.set(Math.sin(a) * r * 0.5, 1.9, r);
-    this.camera.lookAt(wide ? 1.35 : 0, wide ? 1.05 : 0.4, 0);
+    // لقطة بطل: اللاعب في منتصف المسرح
+    const r = wide ? 5.4 : 7.5;
+    this.camera.position.set(Math.sin(a) * r * 0.45, 1.55, r);
+    this.camera.lookAt(wide ? -0.55 : 0, wide ? 1.15 : 0.6, 0);
     if (Math.abs(this.camera.fov - 42) > 0.1) { this.camera.fov = 42; this.camera.updateProjectionMatrix(); }
     w.update(dt, new THREE.Vector3(), { excite: 0.25 });
     this.render(w.scene, this.camera);
@@ -493,7 +520,8 @@ class App {
     const c = this.career();
     const l = this.levelOf(c.xp);
     const k = (c.xp - this.levelXp(l)) / (this.levelXp(l + 1) - this.levelXp(l));
-    $('career').innerHTML = `<span class="lvl">⭐ ${l}</span><div class="xpbar"><i style="width:${Math.round(k * 100)}%"></i></div><span>🪙 ${c.coins}</span>${c.cups ? `<span>🏆 ${c.cups}</span>` : ''}`;
+    $('career').innerHTML = `<span class="lvl">${l}</span><div class="xpbar"><i style="width:${Math.round(k * 100)}%"></i></div>`;
+    $('wallet').innerHTML = `<span class="pill coin">${icon('coin')}<b>${c.coins}</b></span><span class="pill cup">${icon('trophy')}<b>${c.cups || 0}</b></span>`;
   }
 
   // ---------- كأس الأساطير ----------
@@ -638,7 +666,7 @@ class App {
       const coins = Math.round(gain / 4) + (this.cup && won && this.cup.round === 2 ? 250 : 0);
       c.xp += gain; c.coins += coins; c.matches++; c.goals += me.g; if (won) c.wins++;
       const after = this.levelOf(c.xp);
-      xpHtml = `<span class="gain">+${gain} XP</span> &nbsp; 🪙 +${coins}${myMvp ? ' &nbsp; ⭐ أفضل لاعب +40' : ''}` + (after > before ? `<br><span class="lvlup">⬆️ مستوى جديد: ${after}!</span>` : '');
+      xpHtml = `<span class="gain">+${gain} XP</span><span class="coins">${icon('coin')} +${coins}</span>${myMvp ? `<span class="mvpb">${icon('star')} أفضل لاعب +40</span>` : ''}` + (after > before ? `<br><span class="lvlup">مستوى جديد: ${after}!</span>` : '');
       this.saveSettings();
     }
     $('end-xp').innerHTML = xpHtml;

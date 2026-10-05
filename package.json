@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "build:offline": "node scripts/build-offline.mjs"
+    "build:offline": "node scripts/build-offline.mjs",
+    "build:app": "node scripts/build-app.mjs",
+    "apk": "node scripts/build-app.mjs && npx cap sync android && cd android && ./gradlew assembleRelease"
   },
   "engines": {
     "node": ">=18"
@@ -17,6 +19,9 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "esbuild": "^0.25.12"
   }
 }

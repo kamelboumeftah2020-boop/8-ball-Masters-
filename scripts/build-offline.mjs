@@ -17,11 +17,12 @@ const res = await build({
   bundle: true, minify: true, format: 'iife', write: false, plugins: [alias], target: 'es2020', legalComments: 'none',
 });
 const js = res.outputFiles[0].text.replace(/<\/script/g, '<\\/script');
-const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+// الخطوط مضمّنة داخل الملف (تعمل بدون إنترنت — ضرورية لتطبيق الأندرويد)
+const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8')
+  .replace(/url\(\.\.\/fonts\/([\w-]+\.woff2)\)/g, (_, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(ROOT, 'public/fonts', f)).toString('base64')})`);
 const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script type="module"'));
 const out = `<title>أساطير الكرة 5×5</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" />
 <style>${css}\n:root{color-scheme:dark}body{background:var(--bg)}</style>
 <div dir="rtl" lang="ar">${body}</div>
 <script>window.OFFLINE_ONLY=true;</script>

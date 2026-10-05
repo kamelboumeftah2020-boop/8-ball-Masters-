@@ -7,8 +7,6 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>أساطير الكرة 5×5</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Oswald:wght@500;700&display=swap" />
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -20,28 +18,59 @@
 <body>
   <canvas id="gl"></canvas>
   <div id="flash"></div>
-  <div id="splash"><div class="ball">⚽</div><h1>أساطير الكرة 5×5</h1><div class="tap">المس للبدء ▶</div><small>🔊 شغّل الصوت لأفضل تجربة</small></div>
+  <div id="splash">
+    <div class="sp-bg"></div>
+    <div class="sp-logo" id="sp-logo"></div>
+    <h1>أساطير الكرة</h1>
+    <div class="sp-sub">LEGENDS&nbsp;5V5 FOOTBALL</div>
+    <div class="sp-load"><i></i></div>
+    <div class="tap">المس الشاشة للبدء</div>
+    <small>شغّل الصوت لأفضل تجربة</small>
+  </div>
 
   <div id="ui">
     <!-- ========== الشاشة الرئيسية ========== -->
     <section id="scr-main" class="screen">
       <header class="topbar">
-        <div class="brandmark"><span class="bm-ball">⚽</span><div><b>أساطير الكرة</b><small>LEGENDS 5V5</small></div></div>
-        <div class="profile">
-          <input id="inp-name" maxlength="14" placeholder="اسمك" aria-label="اسمك" />
-          <div id="career" class="career"></div>
-          <button id="btn-settings" class="icon-btn" title="الإعدادات">⚙️</button>
+        <div class="player-chip">
+          <div class="pc-avatar" id="pc-avatar"></div>
+          <div class="pc-meta">
+            <input id="inp-name" maxlength="14" placeholder="اسمك" aria-label="اسمك" />
+            <div id="career" class="career"></div>
+          </div>
+        </div>
+        <div class="brandmark"><span class="bm-logo" id="bm-logo"></span><div><b>أساطير الكرة</b><small>LEGENDS 5V5</small></div></div>
+        <div class="wallet">
+          <div id="wallet" class="wallet-pills"></div>
+          <button id="btn-settings" class="icon-btn" title="الإعدادات" data-ic="gear"></button>
         </div>
       </header>
       <div class="hub">
-        <nav class="tiles">
-          <button id="btn-quick" class="tile t-hero"><span class="t-k">مباراة سريعة</span><span class="t-t">العب الآن</span><span class="t-s">ضد البوتات • 5 ملاعب</span><span class="t-go">▶</span></button>
-          <button id="btn-cup" class="tile t-gold"><span class="t-k">بطولة</span><span class="t-t">كأس الأساطير</span><span class="t-s">3 أدوار نحو اللقب 🏆</span></button>
-          <button id="btn-online" class="tile t-blue"><span class="t-k">متعدد اللاعبين</span><span class="t-t">أونلاين</span><span class="t-s">العب مع أصدقائك</span></button>
-          <button id="btn-team" class="tile t-team"><span class="t-k">نجمك</span><span class="t-t">اختر اللاعب</span><span class="t-s" id="team-sub"></span></button>
-          <button id="btn-help" class="tile t-help"><span class="t-k">دليل</span><span class="t-t">طريقة اللعب</span></button>
+        <nav class="rail">
+          <button class="rail-btn on" data-ic="home"><span>الرئيسية</span></button>
+          <button id="btn-team" class="rail-btn" data-ic="shirt"><span>النجوم</span></button>
+          <button id="btn-online" class="rail-btn" data-ic="globe"><span>أونلاين</span></button>
+          <button id="btn-help" class="rail-btn" data-ic="book"><span>الدليل</span></button>
         </nav>
-        <div class="hero-side"><div id="hero-card"></div></div>
+        <div class="stage">
+          <div class="stage-plate">
+            <div id="hero-card"></div>
+            <div class="sp-info"><small>نجمك</small><b id="team-sub"></b><button class="tiny ghost" id="btn-team2" data-ic="refresh">تغيير</button></div>
+          </div>
+        </div>
+        <div class="play-col">
+          <button id="btn-cup" class="event-card">
+            <span class="ev-tag">بطولة</span>
+            <span class="ev-ic" data-ic="trophy"></span>
+            <span class="ev-t">كأس الأساطير</span>
+            <span class="ev-s" id="cup-sub">3 أدوار نحو اللقب</span>
+          </button>
+          <button id="btn-quick" class="play-cta">
+            <span class="pl-k">مباراة سريعة</span>
+            <span class="pl-t">العب</span>
+            <span class="pl-go" data-ic="play"></span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -53,7 +82,7 @@
           <div id="char-grid" class="cards"></div>
           <div id="char-info" class="card"></div>
         </div>
-        <div class="actions"><button class="back" data-go="main">↩ رجوع</button><button class="big primary" data-go="main">تأكيد ✓</button></div>
+        <div class="actions"><button class="back" data-go="main" data-ic="back">رجوع</button><button class="big primary" data-go="main" data-ic="check">تأكيد</button></div>
       </div>
     </section>
 
@@ -78,8 +107,8 @@
           </div>
         </div>
         <div class="actions">
-          <button class="back" data-go="main">↩ رجوع</button>
-          <button id="btn-quick-start" class="big primary">ابدأ المباراة ▶</button>
+          <button class="back" data-go="main" data-ic="back">رجوع</button>
+          <button id="btn-quick-start" class="big primary" data-ic="play">ابدأ المباراة</button>
         </div>
       </div>
     </section>
@@ -87,7 +116,7 @@
     <!-- ========== أونلاين ========== -->
     <section id="scr-online" class="screen hidden">
       <div class="panel wide">
-        <h2>🌐 اللعب أونلاين</h2>
+        <h2>اللعب أونلاين</h2>
         <div id="net-status" class="status">جارٍ الاتصال…</div>
         <div class="grid2">
           <div class="card">
@@ -98,14 +127,14 @@
             </div>
             <h4>أو أنشئ غرفتك</h4>
             <label class="check"><input type="checkbox" id="chk-public" checked /> غرفة عامة (تظهر للجميع)</label>
-            <button id="btn-create" class="big accent">➕ إنشاء غرفة</button>
+            <button id="btn-create" class="big accent" data-ic="plus">إنشاء غرفة</button>
           </div>
           <div class="card">
-            <h4>الغرف المتاحة <button id="btn-refresh" class="tiny">↻</button></h4>
+            <h4>الغرف المتاحة <button id="btn-refresh" class="tiny" data-ic="refresh"></button></h4>
             <div id="room-list" class="room-list"><div class="muted">لا توجد غرف حالياً — أنشئ واحدة!</div></div>
           </div>
         </div>
-        <div class="actions"><button class="back" data-go="main">↩ رجوع</button></div>
+        <div class="actions"><button class="back" data-go="main" data-ic="back">رجوع</button></div>
       </div>
     </section>
 
@@ -114,7 +143,7 @@
       <div class="panel wide">
         <div class="room-head">
           <h2>غرفة <span id="room-code" dir="ltr"></span></h2>
-          <button id="btn-copy" class="tiny">🔗 نسخ رابط الدعوة</button>
+          <button id="btn-copy" class="tiny" data-ic="link">نسخ رابط الدعوة</button>
           <span id="room-playing" class="badge hidden">المباراة جارية — اختر مقعداً للدخول</span>
         </div>
         <div class="teams">
@@ -141,9 +170,9 @@
           </div>
         </div>
         <div class="actions">
-          <button id="btn-leave" class="back">↩ مغادرة</button>
-          <button id="btn-spec">👁 متفرج</button>
-          <button id="btn-start" class="big primary">ابدأ المباراة ▶</button>
+          <button id="btn-leave" class="back" data-ic="back">مغادرة</button>
+          <button id="btn-spec" data-ic="eye">متفرج</button>
+          <button id="btn-start" class="big primary" data-ic="play">ابدأ المباراة</button>
         </div>
       </div>
     </section>
@@ -151,7 +180,7 @@
     <!-- ========== الإعدادات ========== -->
     <section id="scr-settings" class="screen hidden">
       <div class="panel">
-        <h2>⚙️ الإعدادات</h2>
+        <h2>الإعدادات</h2>
         <h4>جودة الرسومات</h4>
         <div class="seg" id="set-quality"></div>
         <p class="muted small">"منخفضة" للجوالات الضعيفة • "عالية" تضيف توهجاً وظلالاً أدق</p>
@@ -165,14 +194,14 @@
         <label class="check"><input type="checkbox" id="set-tut" /> إظهار نصائح التعليم مجدداً</label>
         <h4>الكاميرا الافتراضية</h4>
         <div class="seg" id="set-cam"></div>
-        <div class="actions"><button class="back" data-go="main">↩ حفظ ورجوع</button></div>
+        <div class="actions"><button class="back" data-go="main" data-ic="check">حفظ ورجوع</button></div>
       </div>
     </section>
 
     <!-- ========== المساعدة ========== -->
     <section id="scr-help" class="screen hidden">
       <div class="panel">
-        <h2>🎮 طريقة اللعب</h2>
+        <h2>طريقة اللعب</h2>
         <div class="card" style="margin-bottom:8px">
           <b>📱 على الهاتف:</b> العصا على اليسار للحركة (ادفعها للآخر = ركض).<br>
           <b>🦶 الزر الأحمر:</b> تسديد قوي يصوّب تلقائياً • في الدفاع اضغط مطولاً = <b>ضغط تلقائي</b> على حامل الكرة وافتكاك عند الاقتراب.<br>
@@ -198,7 +227,7 @@
         <p class="muted">🎮 يد التحكم مدعومة: A تمرير • B تسديد • X لوب • Y مهارة • RT ركض • LT ضغط • LB تبديل • RB افتكاك</p>
         <p class="muted">📱 على الجوال: عصا تحكم على اليسار وأزرار على اليمين، ادفع العصا للنهاية للركض.</p>
         <p class="muted">💡 اضغط التسديد قبل وصول الكرة إليك لتسديدة مباشرة أو ضربة رأسية!</p>
-        <div class="actions"><button class="back" data-go="main">↩ رجوع</button></div>
+        <div class="actions"><button class="back" data-go="main" data-ic="back">رجوع</button></div>
       </div>
     </section>
 
@@ -212,10 +241,10 @@
         <div id="scorers1" class="scorers r"></div>
       </div>
       <div id="topbtns">
-        <button id="hb-cam" title="الكاميرا (C)">🎥</button>
-        <button id="hb-sound" title="الصوت (M)">🔊</button>
-        <button id="hb-full" title="ملء الشاشة">⛶</button>
-        <button id="hb-menu" title="القائمة (Esc)">☰</button>
+        <button id="hb-cam" title="الكاميرا (C)" data-ic="camera"></button>
+        <button id="hb-sound" title="الصوت (M)" data-ic="sound"></button>
+        <button id="hb-full" title="ملء الشاشة" data-ic="full"></button>
+        <button id="hb-menu" title="القائمة (Esc)" data-ic="pause"></button>
       </div>
       <div id="banner" class="banner"><div id="banner-text"></div><div id="banner-sub"></div></div>
       <div id="countdown" class="hidden"></div>
@@ -233,7 +262,7 @@
       </div>
       <canvas id="minimap" width="200" height="124"></canvas>
       <div id="power" class="hidden"><div id="power-fill"></div></div>
-      <div id="replay" class="hidden"><div class="bars top"></div><div class="bars bottom"></div><div class="tag">⏪ إعادة الهدف <small>اضغط مسافة للتخطي</small></div></div>
+      <div id="replay" class="hidden"><div class="bars top"></div><div class="bars bottom"></div><div class="tag">REPLAY • إعادة الهدف <small>المس للتخطي</small></div></div>
       <div id="emotebar" class="hidden"></div>
       <div id="chatlog"></div>
       <input id="chat-inp" class="hidden" maxlength="80" placeholder="اكتب رسالة ثم Enter" />
@@ -241,14 +270,14 @@
 
     <div id="pause" class="overlay hidden">
       <div class="panel">
-        <h2>⏸ القائمة</h2>
+        <h2>إيقاف مؤقت</h2>
         <div class="menu-buttons">
-          <button id="p-resume" class="big primary">▶ متابعة</button>
-          <button id="p-cam">🎥 تغيير الكاميرا</button>
-          <button id="p-sound">🔊 الصوت</button>
-          <button id="p-help">🎮 التحكم</button>
-          <button id="p-stop" class="hidden">⏹ إنهاء المباراة للجميع</button>
-          <button id="p-quit" class="danger">🚪 الخروج</button>
+          <button id="p-resume" class="big primary" data-ic="play">متابعة</button>
+          <button id="p-cam" data-ic="camera">تغيير الكاميرا</button>
+          <button id="p-sound" data-ic="sound">الصوت</button>
+          <button id="p-help" data-ic="book">التحكم</button>
+          <button id="p-stop" class="hidden" data-ic="stop">إنهاء المباراة للجميع</button>
+          <button id="p-quit" class="danger" data-ic="exit">الخروج</button>
         </div>
       </div>
     </div>
@@ -267,8 +296,8 @@
         </div>
         <div id="end-xp" class="xp"></div>
         <div class="actions">
-          <button id="end-menu" class="back">🏠 القائمة الرئيسية</button>
-          <button id="end-again" class="big primary">🔁 مباراة جديدة</button>
+          <button id="end-menu" class="back" data-ic="home">القائمة الرئيسية</button>
+          <button id="end-again" class="big primary" data-ic="refresh">مباراة جديدة</button>
         </div>
       </div>
     </div>
@@ -278,16 +307,16 @@
       <div class="stick"><div class="knob"></div></div>
       <div class="tctl">
         <button data-t="ability" data-btn="ABILITY" class="tb t-ab">✨</button>
-        <button data-t="second" class="tb t-sec"><span class="i">➡️</span><small>تمرير</small></button>
-        <button data-t="main" class="tb t-main"><span class="i">🦶</span><small>تسديد</small></button>
+        <button data-t="second" class="tb t-sec"><span class="i"></span><small>تمرير</small></button>
+        <button data-t="main" class="tb t-main"><span class="i"></span><small>تسديد</small></button>
       </div>
       <div class="t-hint">اضغط مطولاً على التمرير = كرة عالية</div>
     </div>
 
-    <div id="rotate" class="hidden"><div class="rot-ic">📱↻</div><b>أدِر هاتفك للوضع الأفقي</b><span>للحصول على أفضل رؤية للملعب</span><button id="rot-ok" class="tiny">متابعة هكذا</button></div>
+    <div id="rotate" class="hidden"><div class="rot-ic"><i></i></div><b>أدِر هاتفك للوضع الأفقي</b><span>للحصول على أفضل رؤية للملعب</span><button id="rot-ok" class="tiny">متابعة هكذا</button></div>
     <div id="vs" class="hidden">
       <div class="vs-side l"><div class="vs-team" id="vs-t0"></div><div class="vs-list" id="vs-l0"></div></div>
-      <div class="vs-mid"><div class="vs-logo">VS</div><div id="vs-info"></div><div class="vs-tap">المس للمتابعة</div></div>
+      <div class="vs-mid"><div class="vs-logo">VS</div><div class="vs-bar"></div><div id="vs-info"></div><div class="vs-tap">المس للمتابعة</div></div>
       <div class="vs-side r"><div class="vs-team" id="vs-t1"></div><div class="vs-list" id="vs-l1"></div></div>
     </div>
     <div id="toast"></div>
