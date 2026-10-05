@@ -20,6 +20,8 @@ export function save(key: string, value: unknown) {
 /** useState that persists to localStorage. */
 export function usePersistent<T>(key: string, fallback: T) {
   const [value, setValue] = useState<T>(() => load(key, fallback));
-  useEffect(() => save(key, value), [key, value]);
+  useEffect(() => {
+    save(key, value);
+  }, [key, value]);
   return [value, setValue] as const;
 }

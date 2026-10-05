@@ -18,7 +18,11 @@ import { PlayerProvider, usePlayer } from "./store/player";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  // Block body on purpose: newer WebViews return a Promise from scrollTo, and React
+  // would treat a returned value as the effect's cleanup function.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return null;
 }
 
