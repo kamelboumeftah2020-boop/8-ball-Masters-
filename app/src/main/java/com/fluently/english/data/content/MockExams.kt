@@ -84,21 +84,24 @@ val SpeakingCriteria = listOf(
     "النطق (Pronunciation)" to "هل كان نطقك واضحاً ومفهوماً؟",
 )
 
-private val TFNG = arrayOf("TRUE", "FALSE", "NOT GIVEN")
+internal val TFNG = arrayOf("TRUE", "FALSE", "NOT GIVEN")
 
-private fun tfng(statement: String, answer: String, explain: String) =
+internal fun tfng(statement: String, answer: String, explain: String) =
     Question.Choice(statement, listOf(answer) + TFNG.filter { it != answer }, explanation = explain)
 
-private fun gap(n: Int, vararg options: String, explain: String? = null) =
+internal fun gap(n: Int, vararg options: String, explain: String? = null) =
     Question.Choice("الفراغ ($n): اختر الكلمة المناسبة", options.toList(), explanation = explain)
 
-private fun openGap(n: Int, vararg answers: String, explain: String? = null) =
+internal fun openGap(n: Int, vararg answers: String, explain: String? = null) =
     Question.Typing("الفراغ ($n): اكتب كلمة واحدة فقط", answers.toList(), explanation = explain)
 
-private fun audioQ(audio: String, prompt: String, vararg options: String) =
+internal fun audioQ(audio: String, prompt: String, vararg options: String) =
     Question.Choice(prompt, options.toList(), audio = audio)
 
-val MockExams: List<MockExam> = listOf(
+/** All mock exams: the first set below plus the second set in MockExams2.kt. */
+val MockExams: List<MockExam> by lazy { MockExamsSet1 + MockExamsSet2 }
+
+private val MockExamsSet1: List<MockExam> = listOf(
 
     // ======================== IELTS ACADEMIC ========================
     MockExam(

@@ -68,7 +68,20 @@ private val latinRun = Regex("[A-Za-z][A-Za-z0-9 '’/()\\-.,?!…]*[A-Za-z0-9)'
  * punctuation stays attached (otherwise "I am a student." renders as ".I am a student").
  */
 fun isolateLatin(text: String): String =
-    if (!isArabic(text)) text else latinRun.replace(text) { ltr(it.value) }
+    if (!isArabic(text)) text else latinRun.replace(text) {
+        val core = balanced(it.value)
+        ltr(core) + it.value.substring(core.length)
+    }
+
+/**
+ * Leaves an unmatched closing bracket outside the English run: in "(Task 2)" the
+ * "(" belongs to the Arabic text, so its partner must too, or it renders "Task 2))".
+ */
+private fun balanced(run: String): String {
+    var end = run.length
+    while (end > 0 && run[end - 1] == ')' && run.substring(0, end).count { it == ')' } > run.count { it == '(' }) end--
+    return run.substring(0, end)
+}
 
 /**
  * Embeds a left-to-right string in Arabic text. Uses LRE…PDF plus a trailing LRM
