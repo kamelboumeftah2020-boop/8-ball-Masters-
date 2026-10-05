@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Speech bubble -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,32 h36 a8,8 0 0 1 8,8 v22 a8,8 0 0 1 -8,8 h-18 l-10,9 v-9 h-8 a8,8 0 0 1 -8,-8 v-22 a8,8 0 0 1 8,-8 z" />
+    <!-- Three rising bars: progress from A1 to C2 -->
+    <path android:fillColor="#4F46E5" android:pathData="M42,56 h6 v6 h-6 z" />
+    <path android:fillColor="#4F46E5" android:pathData="M51,49 h6 v13 h-6 z" />
+    <path android:fillColor="#F59E0B" android:pathData="M60,41 h6 v21 h-6 z" />
+</vector>
