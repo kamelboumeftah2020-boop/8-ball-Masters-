@@ -1,8 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+/** Optional settings from gradle properties, local.properties or the environment. */
+val localProps = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun setting(name: String): String =
+    (project.findProperty(name) as String?) ?: localProps.getProperty(name) ?: System.getenv(name) ?: ""
 
 android {
     namespace = "com.fluently.english"
@@ -12,8 +21,12 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.5.0"
+        versionCode = 7
+        versionName = "1.6.0"
+        // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
+        // Without them, accounts and progress are kept on the device.
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${setting("FIREBASE_API_KEY")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${setting("FIREBASE_PROJECT_ID")}\"")
     }
 
     buildTypes {
@@ -35,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

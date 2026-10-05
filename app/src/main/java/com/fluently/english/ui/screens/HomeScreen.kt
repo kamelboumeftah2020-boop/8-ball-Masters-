@@ -77,6 +77,9 @@ fun HomeScreen(
     onPlacement: () -> Unit,
     onDaily: () -> Unit = {},
     onAddWord: (String) -> Unit = {},
+    onOpenRoute: (String) -> Unit = {},
+    onChooseGoal: () -> Unit = {},
+    onReport: () -> Unit = {},
 ) {
     val today = localEpochDay()
     Column(
@@ -90,7 +93,9 @@ fun HomeScreen(
         VSpace(20.dp)
         HeroCard(progress, onOpenLesson, onOpenExam, onOpenLevel)
 
-        SectionHeader("هذا الأسبوع")
+        GoalPlanCard(progress, onOpenRoute, onChooseGoal)
+
+        SectionHeader("هذا الأسبوع", action = "التقرير", onAction = onReport)
         WeekCard(progress, today)
 
         SectionHeader("اليوم")

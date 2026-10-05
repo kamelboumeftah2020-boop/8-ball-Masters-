@@ -3,6 +3,7 @@ package com.fluently.english.data.progress
 import android.content.Context
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.data.content.Course
+import com.fluently.english.data.content.LessonType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,8 +22,17 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
     private fun update(transform: (Progress) -> Progress) {
         val updated = transform(_progress.value)
         _progress.value = updated
-        prefs.edit().putString(KEY, ProgressCodec.encode(updated)).apply()
+        prefs.edit().putString(KEY, ProgressCodec.encode(updated)).putLong(KEY_UPDATED, System.currentTimeMillis()).apply()
+        onChange?.invoke(updated)
     }
+
+    /** When the local progress last changed (ms), to choose between local and cloud copies. */
+    val updatedAt: Long get() = prefs.getLong(KEY_UPDATED, 0)
+
+    /** The account the local progress belongs to ("" = created before signing in). */
+    var owner: String
+        get() = prefs.getString(KEY_OWNER, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_OWNER, value).apply()
 
     fun finishOnboarding(name: String) = update { it.copy(onboarded = true, name = name.trim()) }
 
@@ -50,7 +60,8 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         val xp = correct * 10 + if (correct == total) PERFECT_BONUS else 0
         update { p ->
             val best = maxOf(p.lessonScores[lessonId] ?: 0, percent)
-            var next = p.copy(lessonScores = p.lessonScores + (lessonId to best)).withXp(xp, today())
+            var next = p.copy(lessonScores = p.lessonScores + (lessonId to best))
+                .withSkill(lesson.type.skill(), correct, total).withXp(xp, today())
             if (percent >= Course.LESSON_PASS_PERCENT && lesson.words.isNotEmpty()) {
                 val newCards = lesson.words
                     .filter { it.en !in next.cards }
@@ -106,7 +117,7 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         val xp = points * 5
         update { p ->
             p.copy(conversationStars = p.conversationStars + (id to maxOf(stars, p.conversationStars[id] ?: 0)))
-                .withXp(xp, today())
+                .withSkill(SkillKey.SPEAKING, stars, 3).withXp(xp, today())
         }
         return xp
     }
@@ -114,7 +125,8 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
     fun completeSound(id: String, percent: Int, correct: Int): Int {
         val xp = correct * 3
         update { p ->
-            p.copy(soundScores = p.soundScores + (id to maxOf(percent, p.soundScores[id] ?: 0))).withXp(xp, today())
+            p.copy(soundScores = p.soundScores + (id to maxOf(percent, p.soundScores[id] ?: 0)))
+                .withSkill(SkillKey.SPEAKING, percent / 10, 10).withXp(xp, today())
         }
         return xp
     }
@@ -132,10 +144,12 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
     }
 
     /** Records a finished mock exam; [score] is band × 10 (IELTS) or the scale score (Cambridge). */
-    fun completeMock(id: String, score: Int, correct: Int): Int {
+    fun completeMock(id: String, score: Int, correct: Int, skills: List<Triple<SkillKey, Int, Int>> = emptyList()): Int {
         val xp = correct * 5
         update { p ->
-            p.copy(mockBest = p.mockBest + (id to maxOf(score, p.mockBest[id] ?: 0))).withXp(xp, today())
+            skills.fold(p.copy(mockBest = p.mockBest + (id to maxOf(score, p.mockBest[id] ?: 0)))) { acc, (k, r, t) ->
+                acc.withSkill(k, r, t)
+            }.withXp(xp, today())
         }
         return xp
     }
@@ -148,6 +162,39 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
     }
 
     fun setReminderHour(hour: Int) = update { it.copy(reminderHour = hour) }
+
+    fun setGoal(goal: LearningGoal) = update { it.copy(goal = goal.name) }
+
+    /** Adds answers to the per-skill statistics. */
+    fun recordSkill(skill: SkillKey, right: Int, total: Int) = update { it.withSkill(skill, right, total) }
+
+    /** Marks a reader chapter as read; returns the XP earned (0 if it was already read). */
+    fun completeReaderChapter(storyId: String, chapter: Int, words: Int, right: Int, total: Int): Int {
+        val already = (_progress.value.readerChapters[storyId] ?: 0) > chapter
+        val xp = if (already) right * 2 else words / 10 + right * 5
+        update { p ->
+            p.copy(
+                readerChapters = p.readerChapters + (storyId to maxOf(chapter + 1, p.readerChapters[storyId] ?: 0)),
+                wordsRead = p.wordsRead + if (already) 0 else words,
+            ).withSkill(SkillKey.READING, right, total).withXp(xp, today())
+        }
+        return xp
+    }
+
+    /** Replaces the whole progress (sign-in, restore from backup). */
+    fun replace(p: Progress) = update { p }
+
+    fun exportJson(): String = ProgressCodec.encode(_progress.value)
+
+    /** Restores a backup; returns false if the file is not a valid progress backup. */
+    fun importJson(raw: String): Boolean {
+        val p = runCatching { ProgressCodec.decode(raw) }.getOrNull() ?: return false
+        update { p }
+        return true
+    }
+
+    /** Called after every change (used for cloud sync). */
+    var onChange: ((Progress) -> Unit)? = null
 
     fun addWordToReview(word: String) = update { p ->
         if (word in p.cards) p else p.copy(cards = p.cards + (word to Card(box = 0, dueDay = today())))
@@ -169,6 +216,8 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
 
     companion object {
         private const val KEY = "progress_v1"
+        private const val KEY_UPDATED = "progress_updated"
+        private const val KEY_OWNER = "progress_owner"
         const val PLACEMENT_XP = 50
         const val PERFECT_BONUS = 20
         const val EXAM_PASS_BONUS = 100
@@ -188,6 +237,19 @@ fun localEpochDay(): Long {
     return (now + TimeZone.getDefault().getOffset(now)) / 86_400_000L
 }
 
+internal fun LessonType.skill(): SkillKey = when (this) {
+    LessonType.GRAMMAR -> SkillKey.GRAMMAR
+    LessonType.VOCABULARY -> SkillKey.VOCABULARY
+    LessonType.READING -> SkillKey.READING
+    LessonType.LISTENING -> SkillKey.LISTENING
+}
+
+internal fun Progress.withSkill(skill: SkillKey, right: Int, total: Int): Progress =
+    if (total <= 0) this else copy(
+        skillRight = skillRight + (skill.name to (skillRight[skill.name] ?: 0) + right),
+        skillTotal = skillTotal + (skill.name to (skillTotal[skill.name] ?: 0) + total),
+    )
+
 internal fun Progress.withXp(amount: Int, day: Long): Progress {
     val streakNow = when (lastActiveDay) {
         day -> maxOf(streak, 1)
@@ -201,6 +263,7 @@ internal fun Progress.withXp(amount: Int, day: Long): Progress {
         streak = streakNow,
         bestStreak = maxOf(bestStreak, streakNow),
         activeDays = (activeDays + day).filter { it > day - 35 }.toSet(),
+        dayXp = (dayXp + (day to (dayXp[day] ?: 0) + amount)).filterKeys { it > day - 35 },
     )
 }
 
@@ -230,6 +293,12 @@ internal object ProgressCodec {
         put("lastChallengeDay", p.lastChallengeDay)
         put("reminderHour", p.reminderHour)
         put("mockBest", JSONObject(p.mockBest))
+        put("goal", p.goal)
+        put("dayXp", JSONObject(p.dayXp.mapKeys { it.key.toString() }))
+        put("skillRight", JSONObject(p.skillRight))
+        put("skillTotal", JSONObject(p.skillTotal))
+        put("readerChapters", JSONObject(p.readerChapters))
+        put("wordsRead", p.wordsRead)
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -265,6 +334,12 @@ internal object ProgressCodec {
             lastChallengeDay = o.optLong("lastChallengeDay", -1),
             reminderHour = o.optInt("reminderHour", -1),
             mockBest = intMap(o.optJSONObject("mockBest")),
+            goal = o.optString("goal"),
+            dayXp = intMap(o.optJSONObject("dayXp")).mapKeys { it.key.toLong() },
+            skillRight = intMap(o.optJSONObject("skillRight")),
+            skillTotal = intMap(o.optJSONObject("skillTotal")),
+            readerChapters = intMap(o.optJSONObject("readerChapters")),
+            wordsRead = o.optInt("wordsRead"),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))

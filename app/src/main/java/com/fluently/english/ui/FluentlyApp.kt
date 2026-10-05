@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -55,6 +56,16 @@ import androidx.navigation.compose.rememberNavController
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.screens.ExamScreen
+import com.fluently.english.ui.screens.AccountInfo
+import com.fluently.english.ui.screens.ReaderListScreen
+import com.fluently.english.ui.screens.ReaderScreen
+import com.fluently.english.ui.screens.ReportScreen
+import com.fluently.english.ui.screens.GoalScreen
+import com.fluently.english.account.SyncState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.fluently.english.ui.screens.AuthScreen
+import com.fluently.english.account.Session
 import com.fluently.english.ui.screens.MockExamScreen
 import com.fluently.english.ui.screens.MockListScreen
 import com.fluently.english.ui.screens.HomeScreen
@@ -138,7 +149,26 @@ private fun BottomBar(current: Tab, dueCount: Int, onSelect: (Tab) -> Unit) {
 
 @Composable
 fun FluentlyApp(vm: AppViewModel = viewModel()) {
+    val session by vm.session.collectAsStateWithLifecycle()
+    val current = session
+    if (current == null) {
+        AuthScreen(
+            cloud = vm.cloudAccounts,
+            onSignUp = vm::signUp,
+            onSignIn = vm::signIn,
+            onResetPassword = vm::sendPasswordReset,
+        )
+        return
+    }
+    // A new account gets a fresh navigation graph (and start destination).
+    key(current.uid) { MainApp(vm, current) }
+}
+
+@Composable
+private fun MainApp(vm: AppViewModel, session: Session) {
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val sync by vm.sync.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val speaker = LocalSpeaker.current
     LaunchedEffect(progress.speechRate) { speaker.baseRate = progress.speechRate }
 
@@ -165,12 +195,12 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
         ) {
             composable("welcome") {
                 WelcomeScreen(
-                    onPlacement = { name ->
-                        vm.setName(name)
-                        nav.navigate("placement")
-                    },
-                    onStartFromZero = { name ->
-                        vm.finishOnboarding(name)
+                    name = progress.name.ifBlank { session.name },
+                    goal = progress.learningGoal,
+                    onGoal = vm::setGoal,
+                    onPlacement = { nav.navigate("placement") },
+                    onStartFromZero = {
+                        vm.finishOnboarding(progress.name.ifBlank { session.name })
                         nav.navigate(Tab.HOME.route) { popUpTo("welcome") { inclusive = true } }
                     },
                 )
@@ -186,6 +216,9 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                     onPlacement = { nav.navigate("placement") },
                     onDaily = { nav.navigate("daily") },
                     onAddWord = vm::addWordToReview,
+                    onOpenRoute = { nav.navigate(it) },
+                    onChooseGoal = { nav.navigate("goal") },
+                    onReport = { nav.navigate("report") },
                 )
             }
             composable(Tab.PRACTICE.route) {
@@ -200,7 +233,26 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                     onVerbs = { nav.navigate("verbs") },
                     onGrammar = { nav.navigate("grammar") },
                     onMocks = { nav.navigate("mocks") },
+                    onReaders = { nav.navigate("readers") },
                 )
+            }
+            composable("readers") {
+                ReaderListScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("reader/$it") })
+            }
+            composable("reader/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                ReaderScreen(
+                    id = id,
+                    progress = progress,
+                    onComplete = { ch, words, right, total -> vm.completeReaderChapter(id, ch, words, right, total) },
+                    onClose = { nav.popBackStack() },
+                )
+            }
+            composable("goal") {
+                GoalScreen(progress.learningGoal, onSelect = { vm.setGoal(it); nav.popBackStack() }, onBack = { nav.popBackStack() })
+            }
+            composable("report") {
+                ReportScreen(progress, vm.today(), onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) })
             }
             composable("mocks") {
                 MockListScreen(progress, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("mock/$it") })
@@ -209,7 +261,7 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                 val id = entry.arguments?.getString("id").orEmpty()
                 MockExamScreen(
                     id = id,
-                    onComplete = { score, correct -> vm.completeMock(id, score, correct) },
+                    onComplete = { score, correct, skills -> vm.completeMock(id, score, correct, skills) },
                     onClose = { nav.popBackStack() },
                 )
             }
@@ -281,6 +333,21 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
                         vm.reset()
                         nav.navigate("welcome") { popUpTo(0) }
                     },
+                    account = AccountInfo(
+                        email = session.email,
+                        cloud = session.cloud,
+                        status = when {
+                            !session.cloud -> "حساب محفوظ على هذا الهاتف"
+                            sync == SyncState.SYNCING -> "جارٍ حفظ تقدّمك…"
+                            sync == SyncState.OFFLINE -> "غير متصل — سيُحفظ تقدّمك عند عودة الإنترنت"
+                            else -> "تقدّمك محفوظ في حسابك ✓"
+                        },
+                    ),
+                    onSignOut = { scope.launch { vm.signOut() } },
+                    onReport = { nav.navigate("report") },
+                    onLearningGoal = vm::setGoal,
+                    exportBackup = vm::exportBackup,
+                    importBackup = vm::importBackup,
                 )
             }
             composable("level/{code}") { entry ->

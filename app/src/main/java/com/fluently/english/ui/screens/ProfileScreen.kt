@@ -1,5 +1,17 @@
 package com.fluently.english.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Upload
+import androidx.compose.ui.platform.LocalContext
+import com.fluently.english.data.progress.LearningGoal
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -104,8 +116,32 @@ fun ProfileScreen(
     onMethods: () -> Unit,
     onReset: () -> Unit,
     onReminderChange: (Int) -> Unit = {},
+    account: AccountInfo? = null,
+    onSignOut: () -> Unit = {},
+    onReport: () -> Unit = {},
+    onLearningGoal: (LearningGoal) -> Unit = {},
+    exportBackup: () -> String = { "" },
+    importBackup: (String) -> Boolean = { false },
 ) {
     var editingName by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
+    var pickingGoal by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            backupMessage = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(exportBackup().toByteArray()) }
+                "تم حفظ النسخة الاحتياطية ✓"
+            }.getOrDefault("تعذّر حفظ الملف")
+        }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val raw = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+            backupMessage = if (raw != null && importBackup(raw)) "تمت استعادة تقدّمك ✓" else "الملف ليس نسخة احتياطية صالحة"
+        }
+    }
     var confirmReset by remember { mutableStateOf(false) }
     val border = AppTheme.extra.border
 
@@ -154,6 +190,39 @@ fun ProfileScreen(
                     Icons.Rounded.WorkspacePremium, Emerald,
                     "${CefrLevel.entries.count { progress.isLevelPassed(it) }}", "شهادة", Modifier.weight(1f),
                 )
+            }
+        }
+
+        if (account != null) {
+            SectionHeader("حسابي")
+            AppCard(padding = 0.dp) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconTile(if (account.cloud) Icons.Rounded.Cloud else Icons.Rounded.PhoneAndroid, MaterialTheme.colorScheme.primary, size = 40.dp)
+                    HSpace(12.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(ltr(account.email), style = MaterialTheme.typography.titleSmall)
+                        Text(account.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                HorizontalDivider(color = border)
+                SettingRow(Icons.AutoMirrored.Rounded.Logout, Danger, "تسجيل الخروج", { confirmSignOut = true }, textColor = Danger)
+            }
+        }
+
+        SectionHeader("تقدّمي")
+        AppCard(padding = 0.dp) {
+            SettingRow(Icons.Rounded.Insights, Emerald, "تقريري الأسبوعي ونقاط ضعفي", onReport)
+            HorizontalDivider(color = border)
+            SettingRow(
+                progress.learningGoal?.icon() ?: Icons.Rounded.Flag, Coral,
+                "هدفي: ${progress.learningGoal?.titleAr ?: "لم أختر بعد"}", { pickingGoal = true },
+            )
+            HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.Download, Gold, "حفظ نسخة احتياطية في ملف", { exporter.launch("fluently-backup.json") })
+            HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.Upload, Gold, "استعادة من نسخة احتياطية", { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+            backupMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
             }
         }
 
@@ -248,6 +317,32 @@ fun ProfileScreen(
             text = { OutlinedTextField(text, { text = it }, singleLine = true) },
             confirmButton = { TextButton(onClick = { onNameChange(text); editingName = false }) { Text("حفظ") } },
             dismissButton = { TextButton(onClick = { editingName = false }) { Text("إلغاء") } },
+        )
+    }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text("تسجيل الخروج؟") },
+            text = {
+                Text(
+                    if (account?.cloud == true) "تقدّمك محفوظ في حسابك، وستجده عند تسجيل الدخول مرة أخرى."
+                    else "تقدّمك محفوظ في حسابك على هذا الهاتف، وستجده عند تسجيل الدخول مرة أخرى.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmSignOut = false; onSignOut() }) { Text("خروج", color = Danger) } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("إلغاء") } },
+        )
+    }
+    if (pickingGoal) {
+        AlertDialog(
+            onDismissRequest = { pickingGoal = false },
+            title = { Text("لماذا تتعلم الإنجليزية؟") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    GoalPicker(progress.learningGoal) { onLearningGoal(it); pickingGoal = false }
+                }
+            },
+            confirmButton = { TextButton(onClick = { pickingGoal = false }) { Text("إغلاق") } },
         )
     }
     if (confirmReset) {
@@ -393,3 +488,6 @@ private fun ReminderSetting(hour: Int, onChange: (Int) -> Unit) {
         }
     }
 }
+
+/** What the profile shows about the signed-in account. */
+data class AccountInfo(val email: String, val cloud: Boolean, val status: String)

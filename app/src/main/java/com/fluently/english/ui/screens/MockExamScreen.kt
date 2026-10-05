@@ -63,6 +63,7 @@ import com.fluently.english.data.content.SpeakingCriteria
 import com.fluently.english.data.content.SpeakingPart
 import com.fluently.english.data.content.WritingCriteria
 import com.fluently.english.data.progress.Progress
+import com.fluently.english.data.progress.SkillKey
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.components.AnswerRecord
 import com.fluently.english.ui.components.AppCard
@@ -184,7 +185,11 @@ private sealed interface MockStage {
 internal data class SectionScore(val section: MockSection, val percent: Int, val band: Double, val correct: Int, val total: Int)
 
 @Composable
-fun MockExamScreen(id: String, onComplete: (score: Int, correct: Int) -> Int, onClose: () -> Unit) {
+fun MockExamScreen(
+    id: String,
+    onComplete: (score: Int, correct: Int, skills: List<Triple<SkillKey, Int, Int>>) -> Int,
+    onClose: () -> Unit,
+) {
     val exam = remember(id) { MockExams.first { it.id == id } }
     var attempt by remember { mutableIntStateOf(0) }
     key(attempt) {
@@ -193,7 +198,7 @@ fun MockExamScreen(id: String, onComplete: (score: Int, correct: Int) -> Int, on
 }
 
 @Composable
-private fun MockRun(exam: MockExam, onComplete: (Int, Int) -> Int, onClose: () -> Unit, onAgain: () -> Unit) {
+private fun MockRun(exam: MockExam, onComplete: (Int, Int, List<Triple<SkillKey, Int, Int>>) -> Int, onClose: () -> Unit, onAgain: () -> Unit) {
     var stage by remember { mutableStateOf<MockStage>(MockStage.Intro) }
     val records = remember { mutableStateMapOf<Int, List<AnswerRecord>>() }
     val ratings = remember { mutableStateMapOf<Int, List<Int>>() }
@@ -286,7 +291,20 @@ private fun MockRun(exam: MockExam, onComplete: (Int, Int) -> Int, onClose: () -
                     MockScoring.cambridgeScale(exam.kind, scores.map { it.percent }.average().toInt())
                 }
             }
-            val xp = remember { onComplete(stored, correct) }
+            val xp = remember {
+                val skills = exam.sections.mapIndexed { i, section ->
+                    val key = when (section.type) {
+                        SectionType.LISTENING -> SkillKey.LISTENING
+                        SectionType.READING -> SkillKey.READING
+                        SectionType.USE_OF_ENGLISH -> SkillKey.GRAMMAR
+                        SectionType.WRITING -> SkillKey.WRITING
+                        SectionType.SPEAKING -> SkillKey.SPEAKING
+                    }
+                    if (section.autoScored) Triple(key, scores[i].correct, scores[i].total)
+                    else Triple(key, ratings[i].orEmpty().sum(), ratings[i].orEmpty().size * 3)
+                }
+                onComplete(stored, correct, skills)
+            }
             MockResult(exam, scores, stored, xp, records.values.flatten(), onAgain = onAgain, onDone = onClose)
         }
     }

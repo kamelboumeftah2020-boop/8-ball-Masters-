@@ -39,7 +39,27 @@ data class Progress(
     val reminderHour: Int = -1,
     /** Best mock exam results: IELTS band × 10, or Cambridge scale score. */
     val mockBest: Map<String, Int> = emptyMap(),
+    /** The learner's main reason for learning (a [LearningGoal] name), or "" if not chosen. */
+    val goal: String = "",
+    /** XP earned per day (last five weeks), for the weekly report. */
+    val dayXp: Map<Long, Int> = emptyMap(),
+    /** Answers per skill (see [SkillKey]): right and total, for the skills report. */
+    val skillRight: Map<String, Int> = emptyMap(),
+    val skillTotal: Map<String, Int> = emptyMap(),
+    /** Graded readers: chapters finished per story, and total words read. */
+    val readerChapters: Map<String, Int> = emptyMap(),
+    val wordsRead: Int = 0,
 ) {
+    val learningGoal: LearningGoal? get() = LearningGoal.entries.firstOrNull { it.name == goal }
+
+    /** Accuracy (0..100) per skill, only for skills with answers. */
+    fun skillAccuracy(): Map<SkillKey, Int> = SkillKey.entries.mapNotNull { k ->
+        val total = skillTotal[k.name] ?: 0
+        if (total == 0) null else k to (skillRight[k.name] ?: 0) * 100 / total
+    }.toMap()
+
+    fun xpBetween(fromDay: Long, toDay: Long): Int = dayXp.filterKeys { it in fromDay..toDay }.values.sum()
+
     fun challengeDoneToday(today: Long) = lastChallengeDay == today
 
     fun isLessonDone(id: String) = (lessonScores[id] ?: 0) >= Course.LESSON_PASS_PERCENT
@@ -103,3 +123,22 @@ fun Progress.achievements(): List<Achievement> = listOf(
     Achievement("game", "لاعب", "العب 10 ألعاب", gamesPlayed >= 10),
     Achievement("trophy", "محترف", "اجتز مستوى C2", isLevelPassed(CefrLevel.C2)),
 )
+
+/** Skills tracked by the weekly report. */
+enum class SkillKey(val labelAr: String) {
+    GRAMMAR("القواعد"),
+    VOCABULARY("المفردات"),
+    READING("القراءة"),
+    LISTENING("الاستماع"),
+    SPEAKING("المحادثة والنطق"),
+    WRITING("الكتابة"),
+}
+
+/** Why the learner studies English; drives the personal plan on the home screen. */
+enum class LearningGoal(val titleAr: String, val descAr: String) {
+    TRAVEL("السفر والسياحة", "المطار والفندق والمطعم والتسوق"),
+    WORK("العمل والوظيفة", "المقابلات والاجتماعات والبريد المهني"),
+    STUDY("الدراسة الأكاديمية", "القراءة الأكاديمية والمحاضرات والكتابة"),
+    EXAM("اختبار دولي", "IELTS وCambridge وTOEFL"),
+    DAILY("التواصل اليومي", "المحادثة مع الناس والأفلام والإنترنت"),
+}

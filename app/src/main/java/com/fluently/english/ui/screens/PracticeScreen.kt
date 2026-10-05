@@ -75,6 +75,7 @@ fun PracticeScreen(
     onVerbs: () -> Unit,
     onGrammar: () -> Unit,
     onMocks: () -> Unit,
+    onReaders: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()),
@@ -108,6 +109,9 @@ fun PracticeScreen(
                     Pill("أنجزت ${progress.mockBest.size} من ${MockExams.size}", Gold)
                 }
             }
+
+            VSpace(12.dp)
+            ReadersEntryCard(progress, onReaders)
 
             SectionHeader("مهارات")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

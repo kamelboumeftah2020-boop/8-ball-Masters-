@@ -1,5 +1,7 @@
 package com.fluently.english.ui.screens
 
+import com.fluently.english.data.progress.LearningGoal
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,8 +52,13 @@ import com.fluently.english.ui.theme.Gold
 import com.fluently.english.ui.theme.color
 
 @Composable
-fun WelcomeScreen(onPlacement: (String) -> Unit, onStartFromZero: (String) -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }
+fun WelcomeScreen(
+    name: String,
+    goal: LearningGoal?,
+    onGoal: (LearningGoal) -> Unit,
+    onPlacement: () -> Unit,
+    onStartFromZero: () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -69,6 +76,10 @@ fun WelcomeScreen(onPlacement: (String) -> Unit, onStartFromZero: (String) -> Un
         }
 
         VSpace(36.dp)
+        if (name.isNotBlank()) {
+            Text("أهلاً ${name.trim()} 👋", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            VSpace(4.dp)
+        }
         Text("تعلّم الإنجليزية", style = MaterialTheme.typography.displaySmall)
         Text("من الصفر حتى الاحتراف", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
         VSpace(12.dp)
@@ -87,23 +98,17 @@ fun WelcomeScreen(onPlacement: (String) -> Unit, onStartFromZero: (String) -> Un
         Feature(Icons.Rounded.WorkspacePremium, Gold, "امتحان وشهادة لكل مستوى", "من A1 حتى C2")
 
         VSpace(24.dp)
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            placeholder = { Text("اسمك (اختياري)") },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = AppTheme.extra.border,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-            ),
-            modifier = Modifier.fillMaxWidth(),
+        Text("لماذا تتعلم الإنجليزية؟", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "نبني لك خطة تناسب هدفك (يمكنك تغييره لاحقاً)",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        VSpace(14.dp)
-        PrimaryButton("حدد مستواك الآن", onClick = { onPlacement(name) }, icon = Icons.AutoMirrored.Rounded.ArrowForward)
         VSpace(10.dp)
-        SecondaryButton("أنا مبتدئ، أبدأ من الصفر", onClick = { onStartFromZero(name) })
+        GoalPicker(goal, onGoal)
+        VSpace(14.dp)
+        PrimaryButton("حدد مستواك الآن", onClick = onPlacement, icon = Icons.AutoMirrored.Rounded.ArrowForward)
+        VSpace(10.dp)
+        SecondaryButton("أنا مبتدئ، أبدأ من الصفر", onClick = onStartFromZero)
         VSpace(28.dp)
     }
 }
