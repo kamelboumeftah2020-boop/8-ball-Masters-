@@ -4,9 +4,10 @@
 
 <p>
 <img src="docs/screenshots/01_welcome.png" width="200">
+<img src="docs/screenshots/09_path.png" width="200">
 <img src="docs/screenshots/05_home.png" width="200">
 <img src="docs/screenshots/06_lesson_learn.png" width="200">
-<img src="docs/screenshots/08_feedback_wrong.png" width="200">
+<img src="docs/screenshots/07_lesson_q_selected.png" width="200">
 </p>
 
 ## المزايا
@@ -56,3 +57,5 @@ app/src/main/java/com/fluently/english/
 ```
 
 **التقنيات:** Kotlin · Jetpack Compose · Material 3 · Navigation Compose · Android TextToSpeech.
+
+الخط: [IBM Plex Sans Arabic](https://github.com/IBM/plex) — رخصة SIL Open Font License 1.1.

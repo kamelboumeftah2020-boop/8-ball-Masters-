@@ -137,6 +137,7 @@ internal fun Progress.withXp(amount: Int, day: Long): Progress {
         lastActiveDay = day,
         streak = streakNow,
         bestStreak = maxOf(bestStreak, streakNow),
+        activeDays = (activeDays + day).filter { it > day - 35 }.toSet(),
     )
 }
 
@@ -157,6 +158,7 @@ internal object ProgressCodec {
         put("dailyGoal", p.dailyGoal)
         put("speechRate", p.speechRate.toDouble())
         put("reviewsDone", p.reviewsDone)
+        put("activeDays", org.json.JSONArray(p.activeDays.toList()))
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -183,6 +185,7 @@ internal object ProgressCodec {
             dailyGoal = o.optInt("dailyGoal", 50),
             speechRate = o.optDouble("speechRate", 0.9).toFloat(),
             reviewsDone = o.optInt("reviewsDone"),
+            activeDays = o.optJSONArray("activeDays")?.let { a -> (0 until a.length()).map { a.getLong(it) }.toSet() } ?: emptySet(),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))

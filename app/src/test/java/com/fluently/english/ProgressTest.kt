@@ -58,7 +58,7 @@ class ProgressTest {
             unlockedLevel = CefrLevel.B1, lessonScores = mapOf("a1-u1-l1" to 90),
             examScores = mapOf(CefrLevel.A1 to 75), xp = 420, streak = 3, bestStreak = 5,
             lastActiveDay = 20000, todayXp = 30, dailyGoal = 100, speechRate = 0.8f,
-            cards = mapOf("hello" to Card(2, 20003)), reviewsDone = 7,
+            cards = mapOf("hello" to Card(2, 20003)), reviewsDone = 7, activeDays = setOf(19999L, 20000L),
         )
         assertEquals(p, ProgressCodec.decode(ProgressCodec.encode(p)))
     }

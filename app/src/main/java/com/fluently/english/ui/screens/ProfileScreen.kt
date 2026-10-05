@@ -14,20 +14,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,25 +49,43 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.data.content.LearningMethods
 import com.fluently.english.data.progress.Progress
 import com.fluently.english.data.progress.achievements
 import com.fluently.english.tts.LocalSpeaker
-import com.fluently.english.ui.components.AppTopBar
+import com.fluently.english.ui.components.AppCard
+import com.fluently.english.ui.components.CircleIconButton
 import com.fluently.english.ui.components.HSpace
+import com.fluently.english.ui.components.IconTile
 import com.fluently.english.ui.components.LevelBadge
-import com.fluently.english.ui.components.SectionTitle
+import com.fluently.english.ui.components.Pill
+import com.fluently.english.ui.components.ScreenHeader
+import com.fluently.english.ui.components.SectionHeader
 import com.fluently.english.ui.components.StatItem
 import com.fluently.english.ui.components.VSpace
+import com.fluently.english.ui.components.ltr
+import com.fluently.english.ui.theme.AppTheme
+import com.fluently.english.ui.theme.Coral
 import com.fluently.english.ui.theme.Danger
-import com.fluently.english.ui.theme.Indigo
-import com.fluently.english.ui.theme.IndigoDeep
+import com.fluently.english.ui.theme.Emerald
+import com.fluently.english.ui.theme.Gold
+import com.fluently.english.ui.theme.color
+
+private fun achievementIcon(key: String): ImageVector = when (key) {
+    "start" -> Icons.Rounded.Flag
+    "compass" -> Icons.Rounded.Explore
+    "flame" -> Icons.Rounded.LocalFireDepartment
+    "book" -> Icons.Rounded.Style
+    "brain" -> Icons.Rounded.Psychology
+    "bolt" -> Icons.Rounded.Bolt
+    "cap" -> Icons.Rounded.School
+    else -> Icons.Rounded.EmojiEvents
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -74,126 +100,135 @@ fun ProfileScreen(
 ) {
     var editingName by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
+    val border = AppTheme.extra.border
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())) {
-            // Header
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+    ) {
+        VSpace(20.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-                    .background(Brush.linearGradient(listOf(Indigo, IndigoDeep)))
-                    .padding(24.dp),
+                Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(64.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(progress.name.firstOrNull()?.uppercase() ?: "👤", color = Color.White, fontSize = 28.sp)
-                    }
-                    HSpace(16.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            progress.name.ifBlank { "متعلم طموح" },
-                            style = MaterialTheme.typography.headlineSmall, color = Color.White,
-                        )
-                        Text(
-                            "المستوى الحالي: ${progress.currentLevel.code} — ${progress.currentLevel.titleAr}",
-                            style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.85f),
-                        )
-                    }
-                    IconButton(onClick = { editingName = true }) { Icon(Icons.Rounded.Edit, "تعديل الاسم", tint = Color.White) }
+                Text(
+                    progress.name.firstOrNull()?.uppercase() ?: "ط",
+                    color = Color.White, style = MaterialTheme.typography.headlineSmall,
+                )
+            }
+            HSpace(16.dp)
+            Column(Modifier.weight(1f)) {
+                Text(progress.name.ifBlank { "متعلم طموح" }, style = MaterialTheme.typography.headlineSmall)
+                VSpace(4.dp)
+                Pill(
+                    "المستوى ${progress.currentLevel.code} · ${progress.currentLevel.titleAr}",
+                    progress.currentLevel.color(),
+                )
+            }
+            CircleIconButton(Icons.Rounded.Edit, { editingName = true })
+        }
+
+        VSpace(24.dp)
+        AppCard(padding = 20.dp) {
+            Row {
+                StatItem(Icons.Rounded.Bolt, Gold, "${progress.xp}", "نقطة", Modifier.weight(1f))
+                StatItem(Icons.Rounded.LocalFireDepartment, Coral, "${progress.streak}", "سلسلة", Modifier.weight(1f))
+                StatItem(Icons.Rounded.EmojiEvents, Gold, "${progress.bestStreak}", "أطول سلسلة", Modifier.weight(1f))
+            }
+            VSpace(20.dp)
+            Row {
+                StatItem(Icons.AutoMirrored.Rounded.MenuBook, Emerald, "${progress.lessonsCompleted}", "درس", Modifier.weight(1f))
+                StatItem(Icons.Rounded.Style, Emerald, "${progress.wordsLearned}", "كلمة", Modifier.weight(1f))
+                StatItem(
+                    Icons.Rounded.WorkspacePremium, Emerald,
+                    "${CefrLevel.entries.count { progress.isLevelPassed(it) }}", "شهادة", Modifier.weight(1f),
+                )
+            }
+        }
+
+        SectionHeader("الشهادات")
+        AppCard {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                CefrLevel.entries.forEach { level ->
+                    LevelBadge(level, size = 44.dp, locked = !progress.isLevelPassed(level), filled = progress.isLevelPassed(level))
                 }
             }
+            if (progress.placementTaken) {
+                VSpace(14.dp)
+                Text(
+                    "نتيجة اختبار تحديد المستوى: ${ltr(progress.placementLevel?.code ?: "Pre-A1")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                VSpace(20.dp)
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(vertical = 18.dp)) {
-                        Row {
-                            StatItem("⚡", "${progress.xp}", "نقطة خبرة", Modifier.weight(1f))
-                            StatItem("🔥", "${progress.streak}", "سلسلة حالية", Modifier.weight(1f))
-                            StatItem("🏅", "${progress.bestStreak}", "أطول سلسلة", Modifier.weight(1f))
-                        }
-                        VSpace(16.dp)
-                        Row {
-                            StatItem("📘", "${progress.lessonsCompleted}", "درس مكتمل", Modifier.weight(1f))
-                            StatItem("📚", "${progress.wordsLearned}", "كلمة", Modifier.weight(1f))
-                            StatItem("🎓", "${CefrLevel.entries.count { progress.isLevelPassed(it) }}", "مستوى مجتاز", Modifier.weight(1f))
-                        }
-                    }
-                }
-
-                SectionTitle("الشهادات")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    CefrLevel.entries.forEach { level ->
-                        val passed = progress.isLevelPassed(level)
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            LevelBadge(level, size = 48.dp, locked = !passed)
-                            VSpace(4.dp)
-                            Text(
-                                if (passed) "✓" else "—", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                if (progress.placementTaken) {
+        SectionHeader("الإنجازات")
+        val achievements = progress.achievements()
+        Text(
+            "${achievements.count { it.unlocked }} من ${achievements.size}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            maxItemsInEachRow = 4,
+        ) {
+            achievements.forEach { a ->
+                Column(
+                    Modifier.weight(1f).alpha(if (a.unlocked) 1f else 0.38f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    IconTile(
+                        achievementIcon(a.icon),
+                        if (a.unlocked) Gold else MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 52.dp,
+                    )
+                    VSpace(6.dp)
+                    Text(a.title, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
                     Text(
-                        "نتيجة اختبار تحديد المستوى: ${progress.placementLevel?.code ?: "Pre-A1"}",
-                        style = MaterialTheme.typography.bodySmall,
+                        a.description, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
+            }
+        }
 
-                SectionTitle("الإنجازات")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    maxItemsInEachRow = 4,
-                ) {
-                    progress.achievements().forEach { a ->
-                        Column(
-                            Modifier.weight(1f).alpha(if (a.unlocked) 1f else 0.35f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Box(
-                                Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiaryContainer),
-                                contentAlignment = Alignment.Center,
-                            ) { Text(a.icon, fontSize = 24.sp) }
-                            VSpace(4.dp)
-                            Text(a.title, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
-                            Text(
-                                a.description, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                SectionTitle("الهدف اليومي")
+        SectionHeader("الإعدادات")
+        AppCard(padding = 0.dp) {
+            Column(Modifier.padding(16.dp)) {
+                Text("الهدف اليومي", style = MaterialTheme.typography.titleSmall)
+                VSpace(10.dp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(20 to "خفيف", 50 to "متوسط", 100 to "جاد", 200 to "مكثف").forEach { (goal, label) ->
                         FilterChip(
                             selected = progress.dailyGoal == goal,
                             onClick = { onGoalChange(goal) },
-                            label = { Text("$label • $goal") },
+                            label = { Text("$label · $goal") },
+                            shape = CircleShape,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = Color.White,
+                            ),
                         )
                     }
                 }
-
-                SectionTitle("سرعة النطق")
-                SpeechRateSetting(progress.speechRate, onSpeechRateChange)
-
-                SectionTitle("المزيد")
-                SettingRow("🧭", "إعادة اختبار تحديد المستوى", onPlacement)
-                SettingRow("📖", "المنهجية والمصادر العالمية", onMethods)
-                SettingRow("🗑️", "إعادة ضبط التقدم", { confirmReset = true }, color = Danger)
-                VSpace(24.dp)
             }
+            HorizontalDivider(color = border)
+            SpeechRateSetting(progress.speechRate, onSpeechRateChange)
+            HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.Explore, Emerald, "إعادة اختبار تحديد المستوى", onPlacement)
+            HorizontalDivider(color = border)
+            SettingRow(Icons.AutoMirrored.Rounded.MenuBook, Gold, "المنهجية والمصادر العالمية", onMethods)
+            HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.DeleteOutline, Danger, "إعادة ضبط التقدم", { confirmReset = true }, textColor = Danger)
         }
+        VSpace(28.dp)
     }
 
     if (editingName) {
@@ -223,84 +258,90 @@ fun ProfileScreen(
 private fun SpeechRateSetting(rate: Float, onChange: (Float) -> Unit) {
     val speaker = LocalSpeaker.current
     var value by remember(rate) { mutableFloatStateOf(rate) }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
-            Row {
-                Text("بطيء", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                Text("×${"%.1f".format(value)}", style = MaterialTheme.typography.labelLarge)
-                Text("سريع", style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-            }
-            Slider(
-                value = value,
-                onValueChange = { value = it },
-                valueRange = 0.5f..1.3f,
-                steps = 7,
-                onValueChangeFinished = {
-                    onChange(value)
-                    speaker.baseRate = value
-                    speaker.speak("This is how I sound now.")
-                },
-            )
+    Column(Modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("سرعة النطق", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Pill("×${"%.1f".format(java.util.Locale.US, value)}", MaterialTheme.colorScheme.primary)
+        }
+        Slider(
+            value = value,
+            onValueChange = { value = it },
+            valueRange = 0.5f..1.3f,
+            steps = 7,
+            onValueChangeFinished = {
+                onChange(value)
+                speaker.baseRate = value
+                speaker.speak("This is how I sound now.")
+            },
+        )
+        Row {
+            Text("أبطأ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text("أسرع", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun SettingRow(emoji: String, title: String, onClick: () -> Unit, color: Color = Color.Unspecified) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(CardDefaults.shape).clickable(onClick = onClick),
+private fun SettingRow(icon: ImageVector, tint: Color, title: String, onClick: () -> Unit, textColor: Color = Color.Unspecified) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(emoji, fontSize = 20.sp)
-            HSpace(14.dp)
-            Text(title, style = MaterialTheme.typography.titleMedium, color = color, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        IconTile(icon, tint, size = 36.dp)
+        HSpace(14.dp)
+        Text(title, style = MaterialTheme.typography.titleSmall, color = textColor, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 fun MethodsScreen(onBack: () -> Unit) {
-    Scaffold(
-        topBar = { AppTopBar("المنهجية والمصادر", onBack = onBack) },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        ScreenHeader("المنهجية والمصادر", onBack = onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+            VSpace(8.dp)
             Text(
-                "صُمم «طلاقة» بالاعتماد على أشهر المعايير والطرق العلمية في تعليم اللغة الإنجليزية حول العالم:",
+                "صُمم «طلاقة» بالاعتماد على أشهر المعايير والطرق العلمية في تعليم الإنجليزية حول العالم.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            VSpace(8.dp)
-            LearningMethods.forEach { (title, body) ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        VSpace(4.dp)
-                        Text(body, style = MaterialTheme.typography.bodyMedium)
+            VSpace(12.dp)
+            LearningMethods.forEachIndexed { i, (title, body) ->
+                AppCard(modifier = Modifier.padding(vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(
+                            Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+                        HSpace(12.dp)
+                        Column {
+                            Text(title, style = MaterialTheme.typography.titleSmall)
+                            VSpace(4.dp)
+                            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
-            SectionTitle("جدول المستويات")
-            CefrLevel.entries.forEach { level ->
-                Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LevelBadge(level)
-                    HSpace(12.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text("${level.titleAr} • ${level.cambridge}", style = MaterialTheme.typography.titleSmall)
-                        Text(level.canDoAr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            "IELTS ${level.ielts}  •  TOEFL ${level.toefl}",
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
-                        )
+            SectionHeader("جدول المستويات")
+            AppCard(padding = 0.dp) {
+                CefrLevel.entries.forEachIndexed { i, level ->
+                    if (i > 0) HorizontalDivider(color = AppTheme.extra.border)
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                        LevelBadge(level, filled = true)
+                        HSpace(12.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text("${level.titleAr} · ${ltr(level.cambridge)}", style = MaterialTheme.typography.titleSmall)
+                            Text(level.canDoAr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            VSpace(4.dp)
+                            Text(
+                                "IELTS ${ltr(level.ielts)} · TOEFL ${ltr(level.toefl)}",
+                                style = MaterialTheme.typography.labelSmall, color = level.color(),
+                            )
+                        }
                     }
                 }
             }
-            VSpace(24.dp)
+            VSpace(28.dp)
         }
     }
 }

@@ -3,5 +3,5 @@
     <style name="Theme.Fluently" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
     </style>
-    <color name="background">#0B0F19</color>
+    <color name="background">#0F1115</color>
 </resources>

@@ -3,6 +3,6 @@
     <style name="Theme.Fluently" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
     </style>
-    <color name="background">#F7F7FB</color>
-    <color name="ic_background">#4F46E5</color>
+    <color name="background">#F7F5F1</color>
+    <color name="ic_background">#0E8A6A</color>
 </resources>

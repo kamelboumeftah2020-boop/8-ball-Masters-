@@ -26,6 +26,8 @@ data class Progress(
     val speechRate: Float = 0.9f,
     val cards: Map<String, Card> = emptyMap(),
     val reviewsDone: Int = 0,
+    /** Days with any activity (last few weeks), for the weekly strip. */
+    val activeDays: Set<Long> = emptySet(),
 ) {
     fun isLessonDone(id: String) = (lessonScores[id] ?: 0) >= Course.LESSON_PASS_PERCENT
 
@@ -72,15 +74,16 @@ data class Progress(
         cards.filter { it.value.dueDay <= today }.toList().sortedBy { it.second.dueDay }.map { it.first }
 }
 
+/** [icon] is a key the UI maps to an icon. */
 data class Achievement(val icon: String, val title: String, val description: String, val unlocked: Boolean)
 
 fun Progress.achievements(): List<Achievement> = listOf(
-    Achievement("🎯", "البداية", "أكمل أول درس", lessonsCompleted >= 1),
-    Achievement("🧭", "اعرف مستواك", "أكمل اختبار تحديد المستوى", placementTaken),
-    Achievement("🔥", "أسبوع كامل", "حافظ على سلسلة 7 أيام", bestStreak >= 7),
-    Achievement("📚", "جامع الكلمات", "تعلم 50 كلمة", wordsLearned >= 50),
-    Achievement("🧠", "ذاكرة قوية", "أتقن 30 كلمة في المراجعة", wordsMastered >= 30),
-    Achievement("⚡", "ألف نقطة", "اجمع 1000 نقطة خبرة", xp >= 1000),
-    Achievement("🎓", "أول شهادة", "اجتز امتحان أي مستوى", examScores.values.any { it >= Course.EXAM_PASS_PERCENT }),
-    Achievement("🏆", "محترف", "اجتز مستوى C2", isLevelPassed(CefrLevel.C2)),
+    Achievement("start", "البداية", "أكمل أول درس", lessonsCompleted >= 1),
+    Achievement("compass", "اعرف مستواك", "أكمل اختبار تحديد المستوى", placementTaken),
+    Achievement("flame", "أسبوع كامل", "حافظ على سلسلة 7 أيام", bestStreak >= 7),
+    Achievement("book", "جامع الكلمات", "تعلم 50 كلمة", wordsLearned >= 50),
+    Achievement("brain", "ذاكرة قوية", "أتقن 30 كلمة في المراجعة", wordsMastered >= 30),
+    Achievement("bolt", "ألف نقطة", "اجمع 1000 نقطة خبرة", xp >= 1000),
+    Achievement("cap", "أول شهادة", "اجتز امتحان أي مستوى", examScores.values.any { it >= Course.EXAM_PASS_PERCENT }),
+    Achievement("trophy", "محترف", "اجتز مستوى C2", isLevelPassed(CefrLevel.C2)),
 )

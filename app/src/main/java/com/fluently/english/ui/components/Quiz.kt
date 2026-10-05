@@ -1,8 +1,12 @@
 package com.fluently.english.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,28 +17,31 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Reorder
+import androidx.compose.material.icons.rounded.SlowMotionVideo
+import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -54,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.fluently.english.data.content.Answers
 import com.fluently.english.data.content.Question
 import com.fluently.english.tts.LocalSpeaker
+import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Danger
 import com.fluently.english.ui.theme.Success
 
@@ -78,44 +88,43 @@ fun QuizRunner(
 ) {
     var index by remember(questions) { mutableIntStateOf(0) }
     val records = remember(questions) { mutableStateListOf<AnswerRecord>() }
+    val animated by animateFloatAsState(index.toFloat() / questions.size.coerceAtLeast(1), label = "progress")
 
-    Scaffold(
-        topBar = {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "إغلاق") }
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    if (title != null) {
-                        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        VSpace(4.dp)
-                    }
-                    LinearMeter((index.toFloat()) / questions.size.coerceAtLeast(1))
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircleIconButton(Icons.Rounded.Close, onClose)
+            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                if (title != null) {
+                    Text(
+                        isolateLatin(title), style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    )
+                    VSpace(6.dp)
                 }
-                Text(
-                    "${index + 1}/${questions.size}",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
+                LinearMeter(animated, height = 8.dp)
             }
-        },
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            val question = questions.getOrNull(index) ?: return@Column
-            QuestionView(
-                question = question,
-                key = index,
-                instantFeedback = instantFeedback,
-                allowSkip = allowSkip,
-                context = contextFor(index),
-                header = header,
-                onNext = { record ->
-                    records += record
-                    if (index + 1 >= questions.size) onFinish(records.toList()) else index++
-                },
+            Text(
+                "${index + 1}/${questions.size}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        val question = questions.getOrNull(index) ?: return@Column
+        QuestionView(
+            question = question,
+            key = index,
+            instantFeedback = instantFeedback,
+            allowSkip = allowSkip,
+            context = contextFor(index),
+            header = header,
+            onNext = { record ->
+                records += record
+                if (index + 1 >= questions.size) onFinish(records.toList()) else index++
+            },
+        )
     }
 }
 
@@ -163,41 +172,40 @@ private fun QuestionView(
 
     Column(Modifier.fillMaxSize()) {
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             header?.invoke()
             if (context != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                ) {
-                    AutoText(context, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge)
+                AppCard(color = AppTheme.extra.subtle, bordered = false, modifier = Modifier.padding(bottom = 18.dp)) {
+                    AutoText(context, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            val heading = when (question) {
-                is Question.Choice -> if (question.audio != null) "استمع ثم أجب" else "اختر الإجابة الصحيحة"
-                is Question.Order -> "رتّب الكلمات لتكوين جملة صحيحة"
-                is Question.Typing -> "اكتب الإجابة"
+            val (kindIcon, kindLabel) = when (question) {
+                is Question.Choice ->
+                    if (question.audio != null) Icons.Rounded.Headphones to "استمع ثم أجب"
+                    else Icons.Rounded.TaskAlt to "اختر الإجابة الصحيحة"
+                is Question.Order -> Icons.Rounded.Reorder to "رتّب الكلمات"
+                is Question.Typing -> Icons.Rounded.Edit to "اكتب الإجابة"
             }
-            Text(heading, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            VSpace(8.dp)
-            AutoText(Answers.prompt(question), style = MaterialTheme.typography.titleLarge)
+            Pill(kindLabel, MaterialTheme.colorScheme.primary, icon = kindIcon)
+            VSpace(14.dp)
+            AutoText(Answers.prompt(question), style = MaterialTheme.typography.headlineSmall)
 
             if (audio != null) {
-                VSpace(16.dp)
+                VSpace(18.dp)
                 AudioControls(audio)
             }
-            VSpace(20.dp)
+            VSpace(24.dp)
 
             when (question) {
-                is Question.Choice -> options.forEach { option ->
+                is Question.Choice -> options.forEachIndexed { i, option ->
                     val state = when {
                         checked == null || !instantFeedback -> if (option == choice) OptionState.Selected else OptionState.Idle
                         option == question.answer -> OptionState.Correct
                         option == choice -> OptionState.Wrong
-                        else -> OptionState.Idle
+                        else -> OptionState.Dimmed
                     }
-                    OptionCard(option, state, enabled = checked == null) { choice = option }
+                    OptionCard(('A' + i).toString(), option, state, enabled = checked == null) { choice = option }
                 }
                 is Question.Order -> OrderBuilder(tokens, picked, enabled = checked == null)
                 is Question.Typing -> Ltr {
@@ -206,15 +214,20 @@ private fun QuestionView(
                         onValueChange = { typed = it },
                         enabled = checked == null,
                         singleLine = true,
-                        placeholder = { Text("Type here…") },
+                        placeholder = { Text("Type your answer…") },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.None,
                             autoCorrectEnabled = false,
                             imeAction = ImeAction.Done,
                         ),
                         shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = AppTheme.extra.border,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        ),
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.titleMedium,
+                        textStyle = MaterialTheme.typography.titleLarge,
                     )
                 }
             }
@@ -225,10 +238,12 @@ private fun QuestionView(
         if (result != null && instantFeedback) {
             FeedbackPanel(result) { onNext(result) }
         } else {
-            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(20.dp)) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 PrimaryButton(
                     text = if (instantFeedback) "تحقق" else "التالي",
                     enabled = ready,
+                    color = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
                     onClick = {
                         speaker.stop()
                         val record = evaluate()
@@ -241,10 +256,7 @@ private fun QuestionView(
                     },
                 )
                 if (allowSkip) {
-                    TextButton(
-                        onClick = { onNext(AnswerRecord(question, "", false)) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("لا أعرف الإجابة") }
+                    GhostButton("لا أعرف الإجابة", onClick = { onNext(AnswerRecord(question, "", false)) })
                 }
             }
         }
@@ -254,43 +266,83 @@ private fun QuestionView(
 @Composable
 fun AudioControls(text: String) {
     val speaker = LocalSpeaker.current
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        FilledTonalButton(onClick = { speaker.speak(text) }) {
-            Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(20.dp))
-            HSpace(8.dp)
-            Text("استمع")
-        }
-        FilledTonalButton(onClick = { speaker.speak(text, 0.6f) }) {
-            Icon(Icons.Rounded.SlowMotionVideo, null, Modifier.size(20.dp))
-            HSpace(8.dp)
-            Text("ببطء")
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        AudioChip(Icons.AutoMirrored.Rounded.VolumeUp, "استمع", primary = true) { speaker.speak(text) }
+        AudioChip(Icons.Rounded.SlowMotionVideo, "ببطء", primary = false) { speaker.speak(text, 0.6f) }
     }
 }
 
-private enum class OptionState { Idle, Selected, Correct, Wrong }
+@Composable
+private fun AudioChip(icon: ImageVector, label: String, primary: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .clip(CircleShape)
+            .background(if (primary) scheme.primary else scheme.surface)
+            .border(1.dp, if (primary) scheme.primary else AppTheme.extra.border, CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val fg = if (primary) Color.White else scheme.onSurface
+        Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
+        HSpace(8.dp)
+        Text(label, color = fg, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+private enum class OptionState { Idle, Selected, Correct, Wrong, Dimmed }
 
 @Composable
-private fun OptionCard(text: String, state: OptionState, enabled: Boolean, onClick: () -> Unit) {
+private fun OptionCard(letter: String, text: String, state: OptionState, enabled: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val (border, container) = when (state) {
-        OptionState.Idle -> scheme.outlineVariant to scheme.surface
-        OptionState.Selected -> scheme.primary to scheme.primaryContainer.copy(alpha = 0.5f)
-        OptionState.Correct -> Success to Success.copy(alpha = 0.12f)
-        OptionState.Wrong -> Danger to Danger.copy(alpha = 0.12f)
+    val border = AppTheme.extra.border
+    val (stroke, container, accent) = when (state) {
+        OptionState.Idle, OptionState.Dimmed -> Triple(border, scheme.surface, scheme.onSurfaceVariant)
+        OptionState.Selected -> Triple(scheme.primary, scheme.primaryContainer.copy(alpha = 0.45f), scheme.primary)
+        OptionState.Correct -> Triple(Success, Success.copy(alpha = 0.10f), Success)
+        OptionState.Wrong -> Triple(Danger, Danger.copy(alpha = 0.08f), Danger)
     }
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         color = container,
-        border = BorderStroke(if (state == OptionState.Idle) 1.dp else 2.dp, border),
+        border = BorderStroke(if (state == OptionState.Idle || state == OptionState.Dimmed) 1.dp else 1.5.dp, stroke),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .heightIn(min = 56.dp)
+            .padding(vertical = 5.dp)
+            .heightIn(min = 60.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(enabled = enabled, onClick = onClick),
     ) {
-        Box(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), contentAlignment = Alignment.CenterStart) {
-            AutoText(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Ltr {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                val filled = state != OptionState.Idle && state != OptionState.Dimmed
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (filled) accent else scheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (state) {
+                        OptionState.Correct -> Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        OptionState.Wrong -> Icon(Icons.Rounded.Close, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        else -> Text(
+                            letter, style = MaterialTheme.typography.labelLarge,
+                            color = if (filled) Color.White else scheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                HSpace(14.dp)
+                Box(Modifier.weight(1f)) {
+                    AutoText(
+                        text,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = if (state == OptionState.Dimmed) scheme.onSurfaceVariant else Color.Unspecified,
+                    )
+                }
+            }
         }
     }
 }
@@ -300,13 +352,23 @@ private fun OptionCard(text: String, state: OptionState, enabled: Boolean, onCli
 private fun OrderBuilder(tokens: List<IndexedValue<String>>, picked: MutableList<Int>, enabled: Boolean) {
     Ltr {
         Column {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 96.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(AppTheme.extra.subtle)
+                    .padding(12.dp),
             ) {
+                if (picked.isEmpty()) {
+                    Text(
+                        "Tap the words below…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.CenterStart).padding(6.dp),
+                    )
+                }
                 FlowRow(
-                    Modifier.padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -315,10 +377,11 @@ private fun OrderBuilder(tokens: List<IndexedValue<String>>, picked: MutableList
                     }
                 }
             }
-            VSpace(20.dp)
+            VSpace(22.dp)
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 tokens.forEach { token ->
                     val used = token.index in picked
@@ -336,18 +399,18 @@ private fun WordChip(text: String, filled: Boolean, enabled: Boolean, faded: Boo
         shape = RoundedCornerShape(12.dp),
         color = when {
             faded -> scheme.surfaceVariant
-            filled -> scheme.primaryContainer
+            filled -> scheme.surface
             else -> scheme.surface
         },
-        border = if (faded) null else BorderStroke(1.dp, if (filled) scheme.primary else scheme.outline),
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
+        border = if (faded) null else BorderStroke(1.dp, if (filled) scheme.primary else AppTheme.extra.border),
+        shadowElevation = if (faded) 0.dp else 1.dp,
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClick = onClick),
     ) {
         Text(
             text,
-            color = if (faded) Color.Transparent else scheme.onSurface,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            color = if (faded) Color.Transparent else if (filled) scheme.primary else scheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
         )
     }
 }
@@ -355,23 +418,40 @@ private fun WordChip(text: String, filled: Boolean, enabled: Boolean, faded: Boo
 @Composable
 private fun FeedbackPanel(record: AnswerRecord, onContinue: () -> Unit) {
     val color = if (record.correct) Success else Danger
-    AnimatedVisibility(visible = true, enter = slideInVertically { it }) {
-        Surface(color = color.copy(alpha = 0.12f), modifier = Modifier.fillMaxWidth()) {
+    AnimatedVisibility(visible = true, enter = slideInVertically { it } + fadeIn()) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            border = BorderStroke(1.dp, AppTheme.extra.border),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(Modifier.navigationBarsPadding().padding(20.dp)) {
-                Text(
-                    if (record.correct) "أحسنت! إجابة صحيحة 🎉" else "ليست صحيحة",
-                    color = color, style = MaterialTheme.typography.titleLarge,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape).background(color),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(if (record.correct) Icons.Rounded.Check else Icons.Rounded.Close, null, tint = Color.White)
+                    }
+                    HSpace(12.dp)
+                    Text(
+                        if (record.correct) "إجابة صحيحة، أحسنت!" else "ليست صحيحة",
+                        color = color, style = MaterialTheme.typography.titleLarge,
+                    )
+                }
                 if (!record.correct) {
-                    VSpace(6.dp)
-                    Text("الإجابة الصحيحة:", style = MaterialTheme.typography.labelLarge, color = color)
+                    VSpace(14.dp)
+                    Text("الإجابة الصحيحة", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    VSpace(2.dp)
                     AutoText(Answers.correctAnswer(record.question), style = MaterialTheme.typography.titleMedium)
                 }
                 record.question.explanation?.let {
-                    VSpace(6.dp)
-                    AutoText(it, style = MaterialTheme.typography.bodyMedium)
+                    VSpace(10.dp)
+                    AppCard(color = AppTheme.extra.subtle, bordered = false, padding = 12.dp) {
+                        AutoText(it, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
-                VSpace(14.dp)
+                VSpace(16.dp)
                 PrimaryButton("متابعة", onContinue, color = color)
             }
         }
@@ -383,44 +463,55 @@ private fun FeedbackPanel(record: AnswerRecord, onContinue: () -> Unit) {
 fun MistakesReview(records: List<AnswerRecord>) {
     val wrong = records.filter { !it.correct }
     if (wrong.isEmpty()) return
-    SectionTitle("راجع أخطاءك (${wrong.size})")
+    SectionHeader("راجع أخطاءك · ${wrong.size}")
     wrong.forEach { r ->
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                AutoText(Answers.prompt(r.question), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        AppCard(modifier = Modifier.padding(vertical = 5.dp), padding = 16.dp) {
+            AutoText(Answers.prompt(r.question), style = MaterialTheme.typography.titleSmall)
+            VSpace(10.dp)
+            if (r.given.isNotBlank()) {
+                AnswerLine(Icons.Rounded.Close, Danger, r.given)
                 VSpace(6.dp)
-                if (r.given.isNotBlank()) {
-                    AutoText("✗  ${r.given}", style = MaterialTheme.typography.bodyMedium, color = Danger)
-                }
-                AutoText("✓  ${Answers.correctAnswer(r.question)}", style = MaterialTheme.typography.bodyMedium, color = Success)
-                r.question.explanation?.let {
-                    VSpace(4.dp)
-                    AutoText(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            }
+            AnswerLine(Icons.Rounded.Check, Success, Answers.correctAnswer(r.question))
+            r.question.explanation?.let {
+                VSpace(8.dp)
+                AutoText(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
 @Composable
+private fun AnswerLine(icon: ImageVector, color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
+        }
+        HSpace(10.dp)
+        Box(Modifier.weight(1f)) { AutoText(text, style = MaterialTheme.typography.bodyMedium, color = color) }
+    }
+}
+
+@Composable
 fun ScoreHeader(percent: Int, passed: Boolean, title: String, subtitle: String) {
+    val animated by animateFloatAsState(percent / 100f, label = "score")
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         ProgressRing(
-            progress = percent / 100f,
+            progress = animated,
             color = if (passed) Success else MaterialTheme.colorScheme.tertiary,
-            stroke = 12.dp,
-            modifier = Modifier.size(150.dp),
+            stroke = 10.dp,
+            modifier = Modifier.size(156.dp),
         ) {
-            Text("$percent%", style = MaterialTheme.typography.headlineLarge)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("$percent%", style = MaterialTheme.typography.displaySmall)
+                Text("النتيجة", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        VSpace(20.dp)
+        VSpace(24.dp)
         Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         VSpace(6.dp)
         Text(
-            subtitle, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center,
+            subtitle, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

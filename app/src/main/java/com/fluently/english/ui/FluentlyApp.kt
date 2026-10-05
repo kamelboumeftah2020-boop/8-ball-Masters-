@@ -1,5 +1,29 @@
 package com.fluently.english.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.fluently.english.ui.components.VSpace
+import com.fluently.english.ui.theme.AppTheme
+import com.fluently.english.ui.theme.Coral
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -7,14 +31,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,11 +65,57 @@ import com.fluently.english.ui.screens.ProfileScreen
 import com.fluently.english.ui.screens.ReviewScreen
 import com.fluently.english.ui.screens.WelcomeScreen
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
-    HOME("home", "الرئيسية", Icons.Rounded.Home),
-    PATH("path", "المسار", Icons.Rounded.Route),
-    REVIEW("review", "المراجعة", Icons.Rounded.Style),
-    PROFILE("profile", "حسابي", Icons.Rounded.Person),
+private enum class Tab(val route: String, val label: String, val icon: ImageVector, val iconOutlined: ImageVector) {
+    HOME("home", "الرئيسية", Icons.Rounded.Home, Icons.Outlined.Home),
+    PATH("path", "المسار", Icons.Rounded.Map, Icons.Outlined.Map),
+    REVIEW("review", "المراجعة", Icons.Rounded.Style, Icons.Outlined.Style),
+    PROFILE("profile", "حسابي", Icons.Rounded.Person, Icons.Outlined.Person),
+}
+
+@Composable
+private fun BottomBar(current: Tab, dueCount: Int, onSelect: (Tab) -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column {
+            HorizontalDivider(color = AppTheme.extra.border)
+            Row(
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp),
+            ) {
+                Tab.entries.forEach { t ->
+                    val selected = t == current
+                    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { onSelect(t) }
+                            .padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .padding(horizontal = 18.dp, vertical = 5.dp),
+                        ) {
+                            if (t == Tab.REVIEW && dueCount > 0) {
+                                BadgedBox(badge = { Badge(containerColor = Coral) { Text("$dueCount") } }) {
+                                    Icon(if (selected) t.icon else t.iconOutlined, null, tint = tint)
+                                }
+                            } else {
+                                Icon(if (selected) t.icon else t.iconOutlined, null, tint = tint)
+                            }
+                        }
+                        VSpace(4.dp)
+                        Text(
+                            t.label, color = tint,
+                            style = if (selected) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                            else MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -66,25 +133,9 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
     val dueCount = progress.dueCards(vm.today()).size
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (tab != null) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    Tab.entries.forEach { t ->
-                        NavigationBarItem(
-                            selected = t == tab,
-                            onClick = { nav.switchTab(t.route) },
-                            icon = {
-                                if (t == Tab.REVIEW && dueCount > 0) {
-                                    BadgedBox(badge = { Badge { Text("$dueCount") } }) { Icon(t.icon, null) }
-                                } else {
-                                    Icon(t.icon, null)
-                                }
-                            },
-                            label = { Text(t.label) },
-                        )
-                    }
-                }
-            }
+            if (tab != null) BottomBar(tab, dueCount) { nav.switchTab(it.route) }
         },
     ) { padding ->
         NavHost(
