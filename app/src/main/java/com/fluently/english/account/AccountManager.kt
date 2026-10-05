@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-enum class SyncState { IDLE, SYNCING, SYNCED, OFFLINE }
+enum class SyncState { IDLE, SYNCING, SYNCED, OFFLINE, EXPIRED }
 
 /**
  * Signs learners up and in, remembers the session, and keeps their progress saved
@@ -40,7 +40,7 @@ class AccountManager(
     init {
         repo.onChange = { schedulePush() }
         // Pick up changes made on another device since the last launch.
-        _session.value?.let { s -> scope.launch { runCatching { merge(s) } } }
+        _session.value?.takeIf { !it.guest }?.let { s -> scope.launch { runCatching { merge(s) } } }
     }
 
     suspend fun signUp(name: String, email: String, password: String) {
@@ -55,23 +55,71 @@ class AccountManager(
 
     suspend fun sendPasswordReset(email: String) = backend.sendPasswordReset(email)
 
-    /** Sends the confirmation link again. */
-    suspend fun resendVerification() {
-        val s = _session.value ?: return
-        updateSession(backend.sendVerification(s))
+    /** Emails a confirmation link to the learner's address (optional). */
+    suspend fun sendVerification() {
+        val s = _session.value?.takeIf { it.cloud && !it.guest } ?: return
+        updateSession(guard { backend.sendVerification(s) })
     }
 
-    /** Re-checks the address; returns true once it has been confirmed. */
+    /** Re-checks the address (confirmed? changed via link?); returns true once confirmed. */
     suspend fun checkVerified(): Boolean {
-        val s = _session.value ?: return false
-        val fresh = backend.refreshVerified(s)
+        val s = _session.value?.takeIf { it.cloud && !it.guest } ?: return true
+        val fresh = guard { backend.refreshVerified(s) }
         updateSession(fresh)
         return fresh.emailVerified
+    }
+
+    /**
+     * Changes the address after confirming the password. Returns true when the
+     * change waits for the learner to click a link sent to the new address.
+     */
+    suspend fun changeEmail(newEmail: String, password: String): Boolean {
+        val s = _session.value?.takeIf { !it.guest } ?: return false
+        AuthValidation.emailError(newEmail)?.let { throw AuthException(it) }
+        if (newEmail.trim().equals(s.email, ignoreCase = true)) throw AuthException("هذا هو بريدك الحالي")
+        // Signing in again proves the password and gives a fresh token for this sensitive change.
+        val fresh = backend.signIn(s.email, password).copy(name = s.name)
+        val (updated, pending) = backend.changeEmail(fresh, newEmail)
+        _session.value = updated
+        saveSession(updated)
+        return pending
+    }
+
+    /** Uses the app without an account; progress stays on this device only. */
+    fun continueAsGuest() {
+        val guest = Session(uid = "guest", name = "", email = "", cloud = false, guest = true)
+        repo.owner = ""
+        _session.value = guest
+        saveSession(guest)
+    }
+
+    /** Leaves guest mode for the sign-up screen, keeping the progress so a new account can adopt it. */
+    fun leaveGuest() {
+        _session.value = null
+        saveSession(null)
+    }
+
+    /**
+     * After the login expired: back to the sign-in screen without clearing local
+     * progress, so signing in again (same account) uploads anything not yet saved.
+     */
+    fun signInAgain() {
+        _session.value = null
+        saveSession(null)
+        _sync.value = SyncState.IDLE
+    }
+
+    private suspend fun <T> guard(block: suspend () -> T): T = try {
+        block()
+    } catch (e: SessionExpiredException) {
+        _sync.value = SyncState.EXPIRED
+        throw e
     }
 
     /** Uploads the latest progress, then forgets the session and clears local progress. */
     suspend fun signOut() {
         val s = _session.value ?: return
+        if (s.guest) { leaveGuest(); return }
         pushJob?.cancel()
         runCatching { backend.push(s, RemoteProgress(repo.exportJson(), repo.updatedAt)) }
         _session.value = null
@@ -123,7 +171,7 @@ class AccountManager(
     }
 
     private fun schedulePush() {
-        val s = _session.value ?: return
+        val s = _session.value?.takeIf { !it.guest } ?: return
         pushJob?.cancel()
         pushJob = scope.launch {
             delay(if (backend.cloud) 2500 else 300)
@@ -137,6 +185,8 @@ class AccountManager(
             updateSession(backend.push(_session.value ?: s, RemoteProgress(repo.exportJson(), repo.updatedAt)))
             publishScore()
             SyncState.SYNCED
+        } catch (e: SessionExpiredException) {
+            SyncState.EXPIRED
         } catch (e: AuthException) {
             SyncState.OFFLINE
         }
@@ -168,7 +218,7 @@ class AccountManager(
 
     /** This week's top learners (empty for device accounts). */
     suspend fun leaderboard(): List<LeaderEntry> {
-        val s = _session.value ?: return emptyList()
+        val s = _session.value?.takeIf { !it.guest } ?: return emptyList()
         publishScore()
         val (fresh, list) = backend.topScores(s, weekIndex(repo.today()))
         updateSession(fresh)
@@ -198,8 +248,9 @@ class AccountManager(
                 o.getString("uid"), o.getString("name"), o.getString("email"), o.getBoolean("cloud"),
                 o.optString("idToken"), o.optString("refreshToken"), o.optLong("tokenTime"),
                 emailVerified = o.optBoolean("emailVerified", !o.getBoolean("cloud")),
+                guest = o.optBoolean("guest"),
             )
-        }.getOrNull()?.takeIf { it.cloud == backend.cloud }
+        }.getOrNull()?.takeIf { it.guest || it.cloud == backend.cloud }
     }
 
     private fun saveSession(s: Session?) {
@@ -207,7 +258,7 @@ class AccountManager(
             JSONObject()
                 .put("uid", it.uid).put("name", it.name).put("email", it.email).put("cloud", it.cloud)
                 .put("idToken", it.idToken).put("refreshToken", it.refreshToken).put("tokenTime", it.tokenTime)
-                .put("emailVerified", it.emailVerified)
+                .put("emailVerified", it.emailVerified).put("guest", it.guest)
                 .toString()
         }
         prefs.edit().putString("session", raw).apply()

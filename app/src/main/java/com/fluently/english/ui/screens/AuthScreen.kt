@@ -78,7 +78,9 @@ fun AuthScreen(
     onSignUp: suspend (name: String, email: String, password: String) -> Unit,
     onSignIn: suspend (email: String, password: String) -> Unit,
     onResetPassword: suspend (email: String) -> Unit,
+    onGuest: () -> Unit = {},
 ) {
+    var confirmGuest by rememberSaveable { mutableStateOf(false) }
     var signUp by rememberSaveable { mutableStateOf(true) }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
@@ -130,7 +132,7 @@ fun AuthScreen(
         )
         VSpace(6.dp)
         Text(
-            if (signUp) "حسابك يحفظ تقدّمك ومستواك ونقاطك. استخدم بريداً حقيقياً — سنرسل إليه رابط تأكيد."
+            if (signUp) "حسابك يحفظ تقدّمك ومستواك ونقاطك، فلا يضيع شيء مما تعلمته."
             else "سجّل الدخول لتكمل من حيث توقفت.",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -225,7 +227,15 @@ fun AuthScreen(
                 }.padding(12.dp),
             )
         }
-        VSpace(20.dp)
+        VSpace(4.dp)
+        Text(
+            "تخطَّ الآن وادخل كضيف",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { confirmGuest = true }.padding(12.dp),
+        )
+        VSpace(12.dp)
         AppCard(color = AppTheme.extra.subtle, bordered = false, padding = 14.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -241,6 +251,20 @@ fun AuthScreen(
             }
         }
         VSpace(28.dp)
+    }
+
+    if (confirmGuest) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmGuest = false },
+            title = { Text("الدخول كضيف") },
+            text = {
+                Text(
+                    "يمكنك استخدام التطبيق كاملاً، لكن تقدّمك لن يُحفظ في حساب: إذا حذفت التطبيق أو غيّرت هاتفك ستفقد كل ما تعلمته، ولن تظهر في ترتيب المتعلمين.\n\nيمكنك إنشاء حساب في أي وقت من صفحة «حسابي»، وسيُنقل إليه تقدّمك.",
+                )
+            },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmGuest = false; onGuest() }) { Text("متابعة كضيف") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmGuest = false }) { Text("إنشاء حساب") } },
+        )
     }
 }
 
@@ -306,118 +330,4 @@ private fun TextBox(
         ),
         modifier = Modifier.fillMaxWidth(),
     )
-}
-
-/**
- * Shown after sign-up (and on sign-in) until the learner clicks the link that
- * Firebase emailed them. It checks again by itself every few seconds.
- */
-@Composable
-fun VerifyEmailScreen(
-    email: String,
-    onCheck: suspend () -> Boolean,
-    onResend: suspend () -> Unit,
-    onSignOut: () -> Unit,
-) {
-    var message by rememberSaveable { mutableStateOf<String?>(null) }
-    var error by rememberSaveable { mutableStateOf(false) }
-    var cooldown by rememberSaveable { mutableStateOf(60) }
-    var checking by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(1000)
-            if (cooldown > 0) cooldown--
-        }
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(5000)
-            runCatching { onCheck() }
-        }
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        VSpace(56.dp)
-        Box(
-            Modifier.size(96.dp).clip(RoundedCornerShape(30.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Rounded.MarkEmailUnread, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-        }
-        VSpace(24.dp)
-        Text("أكّد بريدك الإلكتروني", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-        VSpace(10.dp)
-        Text("أرسلنا رابط تأكيد إلى:", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        VSpace(4.dp)
-        Text(email, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        VSpace(24.dp)
-        AppCard(color = AppTheme.extra.subtle, bordered = false) {
-            listOf(
-                "افتح بريدك (وتحقق من مجلد Spam أو الرسائل غير المرغوب فيها).",
-                "اضغط على الرابط في رسالة «Verify your email».",
-                "ارجع إلى التطبيق — سيُفتح تلقائياً خلال ثوانٍ.",
-            ).forEachIndexed { i, step ->
-                Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
-                    Box(
-                        Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("${i + 1}", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                    }
-                    HSpace(10.dp)
-                    Text(step, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                }
-            }
-        }
-        message?.let {
-            VSpace(14.dp)
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = if (error) Danger else Success, textAlign = TextAlign.Center)
-        }
-        VSpace(24.dp)
-        if (checking) {
-            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-        } else {
-            PrimaryButton("لقد أكّدت بريدي", onClick = {
-                checking = true
-                scope.launch {
-                    val ok = try { onCheck() } catch (e: AuthException) { message = e.message; error = true; false }
-                    if (!ok && !error) { message = "لم يتم التأكيد بعد. اضغط الرابط في الرسالة ثم حاول مجدداً."; error = true }
-                    checking = false
-                }
-            }, icon = Icons.AutoMirrored.Rounded.ArrowForward)
-        }
-        VSpace(10.dp)
-        SecondaryButton(
-            if (cooldown > 0) "إعادة إرسال الرسالة (${cooldown} ث)" else "إعادة إرسال الرسالة",
-            onClick = {
-                if (cooldown > 0) return@SecondaryButton
-                scope.launch {
-                    try {
-                        onResend()
-                        message = "أعدنا إرسال رسالة التأكيد ✓"; error = false; cooldown = 60
-                    } catch (e: AuthException) {
-                        message = e.message; error = true
-                    }
-                }
-            },
-        )
-        VSpace(6.dp)
-        Text(
-            "البريد خاطئ؟ أنشئ حساباً جديداً",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onSignOut).padding(12.dp),
-        )
-        VSpace(28.dp)
-    }
 }

@@ -24,6 +24,8 @@ data class Session(
     val tokenTime: Long = 0,
     /** Whether the learner confirmed the address via the emailed link (always true for device accounts). */
     val emailVerified: Boolean = true,
+    /** Using the app without an account: nothing is saved to an account. */
+    val guest: Boolean = false,
 )
 
 /** A saved copy of the learner's progress and when it was written. */
@@ -33,7 +35,10 @@ data class RemoteProgress(val json: String, val updatedAt: Long)
 data class LeaderEntry(val uid: String, val name: String, val xp: Int, val level: String, val streak: Int)
 
 /** An error with a message ready to show to the learner (Arabic). */
-class AuthException(message: String) : Exception(message)
+open class AuthException(message: String) : Exception(message)
+
+/** The saved login is no longer valid (e.g. after changing the email); the learner must sign in again. */
+class SessionExpiredException : AuthException("انتهت الجلسة، سجّل الدخول من جديد")
 
 interface AuthBackend {
     val cloud: Boolean
@@ -44,8 +49,14 @@ interface AuthBackend {
     /** Emails a confirmation link to the learner's address. */
     suspend fun sendVerification(session: Session): Session = session
 
-    /** Asks the server whether the address has been confirmed yet. */
+    /** Asks the server whether the address has been confirmed yet (and picks up a changed address). */
     suspend fun refreshVerified(session: Session): Session = session
+
+    /**
+     * Changes the account's address. Returns the updated session and whether the
+     * change still waits for the learner to click a link sent to the new address.
+     */
+    suspend fun changeEmail(session: Session, newEmail: String): Pair<Session, Boolean>
 
     suspend fun pull(session: Session): Pair<Session, RemoteProgress?>
     suspend fun push(session: Session, progress: RemoteProgress): Session
@@ -131,7 +142,7 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             "https://identitytoolkit.googleapis.com/v1/accounts:update?key=$apiKey",
             JSONObject().put("idToken", session.idToken).put("displayName", name.trim()).put("returnSecureToken", false),
         )
-        return sendVerification(session)
+        return session
     }
 
     override suspend fun sendVerification(session: Session): Session {
@@ -150,7 +161,21 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             JSONObject().put("idToken", s.idToken),
         )
         val user = res.optJSONArray("users")?.optJSONObject(0)
-        return s.copy(emailVerified = user?.optBoolean("emailVerified") == true)
+        return s.copy(
+            emailVerified = user?.optBoolean("emailVerified") == true,
+            email = user?.optString("email")?.takeIf { it.isNotBlank() } ?: s.email,
+        )
+    }
+
+    override suspend fun changeEmail(session: Session, newEmail: String): Pair<Session, Boolean> {
+        val s = fresh(session)
+        // Projects with email-enumeration protection only allow a verified change:
+        // the address switches once the learner clicks the link sent to it.
+        post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$apiKey",
+            JSONObject().put("requestType", "VERIFY_AND_CHANGE_EMAIL").put("idToken", s.idToken).put("newEmail", newEmail.trim()),
+        )
+        return s to true
     }
 
     override suspend fun signIn(email: String, password: String): Session {
@@ -252,7 +277,7 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             "POST", "https://securetoken.googleapis.com/v1/token?key=$apiKey", form, null,
             contentType = "application/x-www-form-urlencoded",
         )
-        if (code !in 200..299) throw AuthException("انتهت الجلسة، سجّل الدخول من جديد")
+        if (code !in 200..299) throw SessionExpiredException()
         val o = JSONObject(body)
         return s.copy(
             idToken = o.getString("id_token"),
@@ -321,7 +346,8 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
                 code.startsWith("INVALID_EMAIL") -> "البريد الإلكتروني غير صحيح"
                 code.startsWith("USER_DISABLED") -> "تم إيقاف هذا الحساب"
                 code.startsWith("TOO_MANY_ATTEMPTS") -> "محاولات كثيرة، انتظر قليلاً ثم حاول مرة أخرى"
-                code.startsWith("INVALID_ID_TOKEN") || code.startsWith("TOKEN_EXPIRED") -> "انتهت الجلسة، سجّل الدخول من جديد"
+                code.startsWith("INVALID_ID_TOKEN") || code.startsWith("TOKEN_EXPIRED") || code.startsWith("CREDENTIAL_TOO_OLD") ->
+                    "انتهت الجلسة، سجّل الدخول من جديد"
                 code.startsWith("CONFIGURATION_NOT_FOUND") || code.startsWith("OPERATION_NOT_ALLOWED") ->
                     "خدمة الحسابات غير مفعّلة بعد على الخادم، حاول لاحقاً"
                 code.contains("has not been used") || code.contains("is disabled") -> "قاعدة البيانات غير مفعّلة بعد على الخادم"
@@ -364,6 +390,14 @@ class LocalBackend(context: Context) : AuthBackend {
 
     override suspend fun sendPasswordReset(email: String) {
         throw AuthException("استعادة كلمة السر تحتاج إلى حساب سحابي")
+    }
+
+    override suspend fun changeEmail(session: Session, newEmail: String): Pair<Session, Boolean> {
+        if (prefs.contains(key(newEmail))) throw AuthException("هذا البريد مسجّل مسبقاً")
+        val raw = prefs.getString(key(session.email), null) ?: throw AuthException("الحساب غير موجود على هذا الجهاز")
+        val o = JSONObject(raw).put("email", newEmail.trim())
+        prefs.edit().remove(key(session.email)).putString(key(newEmail), o.toString()).apply()
+        return session.copy(email = newEmail.trim()) to false
     }
 
     override suspend fun pull(session: Session): Pair<Session, RemoteProgress?> {

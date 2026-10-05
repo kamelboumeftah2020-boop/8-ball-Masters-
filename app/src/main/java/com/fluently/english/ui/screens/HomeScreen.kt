@@ -81,6 +81,8 @@ fun HomeScreen(
     onChooseGoal: () -> Unit = {},
     onReport: () -> Unit = {},
     onLeaderboard: () -> Unit = {},
+    guest: Boolean = false,
+    onCreateAccount: () -> Unit = {},
 ) {
     val today = localEpochDay()
     Column(
@@ -91,6 +93,16 @@ fun HomeScreen(
             .padding(horizontal = 20.dp),
     ) {
         TopRow(progress)
+        if (guest) {
+            VSpace(14.dp)
+            AppCard(onClick = onCreateAccount, color = com.fluently.english.ui.theme.Gold.copy(alpha = 0.12f), bordered = false, padding = 14.dp) {
+                Text("أنت تستخدم التطبيق كضيف", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "تقدّمك غير محفوظ في حساب وقد يضيع. اضغط هنا لإنشاء حساب مجاني وسيُنقل إليه كل ما تعلمته.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
         VSpace(20.dp)
         HeroCard(progress, onOpenLesson, onOpenExam, onOpenLevel)
 

@@ -57,6 +57,7 @@ import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.screens.ExamScreen
 import com.fluently.english.ui.screens.AccountInfo
+import com.fluently.english.ui.screens.AccountActions
 import com.fluently.english.ui.screens.ReaderListScreen
 import com.fluently.english.ui.screens.ReaderScreen
 import com.fluently.english.ui.screens.ReportScreen
@@ -68,7 +69,6 @@ import com.fluently.english.account.SyncState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.fluently.english.ui.screens.AuthScreen
-import com.fluently.english.ui.screens.VerifyEmailScreen
 import com.fluently.english.account.Session
 import com.fluently.english.ui.screens.MockExamScreen
 import com.fluently.english.ui.screens.MockListScreen
@@ -161,16 +161,7 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
             onSignUp = vm::signUp,
             onSignIn = vm::signIn,
             onResetPassword = vm::sendPasswordReset,
-        )
-        return
-    }
-    if (current.cloud && !current.emailVerified) {
-        val scope = rememberCoroutineScope()
-        VerifyEmailScreen(
-            email = current.email,
-            onCheck = vm::checkVerified,
-            onResend = vm::resendVerification,
-            onSignOut = { scope.launch { vm.signOut() } },
+            onGuest = vm::continueAsGuest,
         )
         return
     }
@@ -234,6 +225,8 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     onChooseGoal = { nav.navigate("goal") },
                     onReport = { nav.navigate("report") },
                     onLeaderboard = { nav.navigate("leaderboard") },
+                    guest = session.guest,
+                    onCreateAccount = vm::leaveGuest,
                 )
             }
             composable(Tab.PRACTICE.route) {
@@ -267,7 +260,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
             }
             composable("leaderboard") {
                 LeaderboardScreen(
-                    progress = progress, uid = session.uid, cloud = session.cloud, today = vm.today(),
+                    progress = progress, uid = session.uid, cloud = session.cloud && !session.guest, today = vm.today(),
                     load = vm::leaderboard, onToggleShow = vm::setShowOnLeaderboard, onBack = { nav.popBackStack() },
                 )
             }
@@ -366,12 +359,24 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     account = AccountInfo(
                         email = session.email,
                         cloud = session.cloud,
+                        guest = session.guest,
+                        verified = session.emailVerified,
+                        expired = sync == SyncState.EXPIRED,
                         status = when {
+                            session.guest -> "أنت ضيف — تقدّمك على هذا الهاتف فقط ولا يُحفظ في حساب"
                             !session.cloud -> "حساب محفوظ على هذا الهاتف"
+                            sync == SyncState.EXPIRED -> "انتهت الجلسة — سجّل الدخول من جديد"
                             sync == SyncState.SYNCING -> "جارٍ حفظ تقدّمك…"
                             sync == SyncState.OFFLINE -> "غير متصل — سيُحفظ تقدّمك عند عودة الإنترنت"
                             else -> "تقدّمك محفوظ في حسابك ✓"
                         },
+                    ),
+                    accountActions = AccountActions(
+                        sendVerification = vm::sendVerification,
+                        checkVerified = vm::checkVerified,
+                        changeEmail = vm::changeEmail,
+                        createAccount = vm::leaveGuest,
+                        signInAgain = vm::signInAgain,
                     ),
                     onSignOut = { scope.launch { vm.signOut() } },
                     onReport = { nav.navigate("report") },

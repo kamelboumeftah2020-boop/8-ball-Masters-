@@ -1,5 +1,22 @@
 package com.fluently.english.ui.screens
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.rounded.AlternateEmail
+import androidx.compose.material.icons.rounded.Login
+import androidx.compose.material.icons.rounded.MarkEmailRead
+import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.LayoutDirection
+import com.fluently.english.account.AuthException
+import com.fluently.english.account.AuthValidation
+import kotlinx.coroutines.launch
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -120,6 +137,7 @@ fun ProfileScreen(
     onReset: () -> Unit,
     onReminderChange: (Int) -> Unit = {},
     account: AccountInfo? = null,
+    accountActions: AccountActions = AccountActions(),
     onSignOut: () -> Unit = {},
     onReport: () -> Unit = {},
     onLeaderboard: () -> Unit = {},
@@ -129,6 +147,12 @@ fun ProfileScreen(
 ) {
     var editingName by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
+    var changingEmail by remember { mutableStateOf(false) }
+    var accountMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(account?.verified) {
+        if (account != null && account.cloud && !account.guest && !account.verified) runCatching { accountActions.checkVerified() }
+    }
     var pickingGoal by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -201,15 +225,54 @@ fun ProfileScreen(
             SectionHeader("حسابي")
             AppCard(padding = 0.dp) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconTile(if (account.cloud) Icons.Rounded.Cloud else Icons.Rounded.PhoneAndroid, MaterialTheme.colorScheme.primary, size = 40.dp)
+                    IconTile(
+                        when {
+                            account.guest -> Icons.Rounded.PersonOutline
+                            account.cloud -> Icons.Rounded.Cloud
+                            else -> Icons.Rounded.PhoneAndroid
+                        },
+                        if (account.guest || account.expired) Gold else MaterialTheme.colorScheme.primary, size = 40.dp,
+                    )
                     HSpace(12.dp)
                     Column(Modifier.weight(1f)) {
-                        Text(ltr(account.email), style = MaterialTheme.typography.titleSmall)
+                        if (!account.guest) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(ltr(account.email), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f, fill = false))
+                                if (account.cloud) {
+                                    HSpace(6.dp)
+                                    Pill(if (account.verified) "مؤكَّد ✓" else "غير مؤكَّد", if (account.verified) Emerald else Gold)
+                                }
+                            }
+                        } else {
+                            Text("ضيف", style = MaterialTheme.typography.titleSmall)
+                        }
                         Text(account.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                accountMessage?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
+                }
                 HorizontalDivider(color = border)
-                SettingRow(Icons.AutoMirrored.Rounded.Logout, Danger, "تسجيل الخروج", { confirmSignOut = true }, textColor = Danger)
+                when {
+                    account.guest -> SettingRow(Icons.Rounded.PersonAdd, Emerald, "إنشاء حساب أو تسجيل الدخول (يُنقل تقدّمك)", accountActions.createAccount)
+                    account.expired -> SettingRow(Icons.Rounded.Login, Gold, "سجّل الدخول من جديد", accountActions.signInAgain)
+                    else -> {
+                        if (account.cloud && !account.verified) {
+                            SettingRow(Icons.Rounded.MarkEmailRead, Emerald, "تأكيد البريد الإلكتروني (اختياري)", {
+                                scope.launch {
+                                    accountMessage = try {
+                                        accountActions.sendVerification()
+                                        "أرسلنا رابط التأكيد إلى بريدك (تحقق من مجلد Spam أيضاً)."
+                                    } catch (e: AuthException) { e.message }
+                                }
+                            })
+                            HorizontalDivider(color = border)
+                        }
+                        SettingRow(Icons.Rounded.AlternateEmail, MaterialTheme.colorScheme.primary, "تغيير البريد الإلكتروني", { changingEmail = true })
+                        HorizontalDivider(color = border)
+                        SettingRow(Icons.AutoMirrored.Rounded.Logout, Danger, "تسجيل الخروج", { confirmSignOut = true }, textColor = Danger)
+                    }
+                }
             }
         }
 
@@ -337,6 +400,59 @@ fun ProfileScreen(
             },
             confirmButton = { TextButton(onClick = { confirmSignOut = false; onSignOut() }) { Text("خروج", color = Danger) } },
             dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("إلغاء") } },
+        )
+    }
+    if (changingEmail && account != null) {
+        var newEmail by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+        var busy by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!busy) changingEmail = false },
+            title = { Text("تغيير البريد الإلكتروني") },
+            text = {
+                Column {
+                    Text("البريد الحالي: ${ltr(account.email)}", style = MaterialTheme.typography.bodySmall)
+                    VSpace(10.dp)
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Column {
+                            OutlinedTextField(newEmail, { newEmail = it.trim(); error = null }, label = { Text("New email") }, singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                            VSpace(8.dp)
+                            OutlinedTextField(password, { password = it; error = null }, label = { Text("Password") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                        }
+                    }
+                    AuthValidation.suggestion(newEmail)?.let { fixed ->
+                        Text("هل تقصد ${ltr(fixed)}؟", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 6.dp).clickable { newEmail = fixed })
+                    }
+                    VSpace(6.dp)
+                    Text("للأمان نحتاج كلمة السر الحالية.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Danger) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy, onClick = {
+                    AuthValidation.emailError(newEmail)?.let { error = it; return@TextButton }
+                    if (password.isEmpty()) { error = "اكتب كلمة السر"; return@TextButton }
+                    busy = true
+                    scope.launch {
+                        try {
+                            val pending = accountActions.changeEmail(newEmail, password)
+                            accountMessage = if (pending) "أرسلنا رابطاً إلى ${ltr(newEmail)} — سيتغيّر بريدك بعد الضغط عليه، ثم سجّل الدخول بالبريد الجديد."
+                            else "تم تغيير بريدك ✓"
+                            changingEmail = false
+                        } catch (e: AuthException) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }) { Text(if (busy) "…" else "تغيير") }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { changingEmail = false }) { Text("إلغاء") } },
         )
     }
     if (pickingGoal) {
@@ -496,4 +612,21 @@ private fun ReminderSetting(hour: Int, onChange: (Int) -> Unit) {
 }
 
 /** What the profile shows about the signed-in account. */
-data class AccountInfo(val email: String, val cloud: Boolean, val status: String)
+data class AccountInfo(
+    val email: String,
+    val cloud: Boolean,
+    val status: String,
+    val guest: Boolean = false,
+    val verified: Boolean = true,
+    val expired: Boolean = false,
+)
+
+/** Account operations the profile can trigger. */
+class AccountActions(
+    val sendVerification: suspend () -> Unit = {},
+    val checkVerified: suspend () -> Boolean = { true },
+    /** Returns true when the change waits for a link sent to the new address. */
+    val changeEmail: suspend (newEmail: String, password: String) -> Boolean = { _, _ -> false },
+    val createAccount: () -> Unit = {},
+    val signInAgain: () -> Unit = {},
+)
