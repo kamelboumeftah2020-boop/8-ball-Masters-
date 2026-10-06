@@ -83,6 +83,7 @@ fun HomeScreen(
     onLeaderboard: () -> Unit = {},
     guest: Boolean = false,
     onCreateAccount: () -> Unit = {},
+    onRestoreStreak: () -> Unit = {},
 ) {
     val today = localEpochDay()
     Column(
@@ -94,6 +95,13 @@ fun HomeScreen(
     ) {
         TopRow(progress)
         com.fluently.english.ui.components.VoiceWarning(Modifier.padding(top = 14.dp))
+        if (progress.canRestoreStreak(today)) {
+            com.fluently.english.ads.RewardedOffer(
+                "🔥 انقطعت سلسلة ${progress.lostStreak} يوماً — استعدها الآن",
+                onReward = onRestoreStreak,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+        }
         if (guest) {
             VSpace(14.dp)
             AppCard(onClick = onCreateAccount, color = com.fluently.english.ui.theme.Gold.copy(alpha = 0.12f), bordered = false, padding = 14.dp) {

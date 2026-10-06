@@ -40,6 +40,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         repo.completeReaderChapter(storyId, chapter, words, right, total)
     fun completeWriting(id: String, words: Int, rating: Int): Int = repo.completeWriting(id, words, rating)
     fun setShowOnLeaderboard(show: Boolean) = repo.setShowOnLeaderboard(show)
+    fun addBonusXp(amount: Int) = repo.addBonusXp(amount)
+    fun restoreStreak() = repo.restoreStreak()
     fun exportBackup(): String = repo.exportJson()
     fun importBackup(raw: String): Boolean = repo.importJson(raw)
 

@@ -56,6 +56,15 @@ import androidx.navigation.compose.rememberNavController
 import com.fluently.english.data.content.CefrLevel
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.screens.ExamScreen
+import com.fluently.english.ads.Ads
+import com.fluently.english.ads.AdBanner
+import com.fluently.english.ads.AdConsentDialog
+import com.fluently.english.ads.LocalAddBonusXp
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.fluently.english.ui.screens.AccountInfo
 import com.fluently.english.ui.screens.AccountActions
 import com.fluently.english.ui.screens.ReaderListScreen
@@ -171,8 +180,17 @@ fun FluentlyApp(vm: AppViewModel = viewModel()) {
 }
 
 @Composable
-private fun MainApp(vm: AppViewModel, session: Session) {
+private fun MainApp(vm: AppViewModel, session: Session) = CompositionLocalProvider(LocalAddBonusXp provides vm::addBonusXp) {
+    MainAppContent(vm, session)
+}
+
+@Composable
+private fun MainAppContent(vm: AppViewModel, session: Session) {
+    val context = LocalContext.current
     val progress by vm.progress.collectAsStateWithLifecycle()
+    // Ask once about personalised ads, after the learner is set up.
+    var askAds by remember { mutableStateOf(!Ads.consentAsked(context)) }
+    if (askAds && progress.onboarded) AdConsentDialog(onDone = { askAds = false })
     val sync by vm.sync.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val speaker = LocalSpeaker.current
@@ -189,7 +207,13 @@ private fun MainApp(vm: AppViewModel, session: Session) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (tab != null) BottomBar(tab, dueCount) { nav.switchTab(it.route) }
+            if (tab != null) {
+                Column {
+                    // Banners only on the list tabs, never on lessons or tests.
+                    if (tab == Tab.PATH || tab == Tab.PRACTICE) AdBanner()
+                    BottomBar(tab, dueCount) { nav.switchTab(it.route) }
+                }
+            }
         },
     ) { padding ->
         NavHost(
@@ -228,6 +252,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     onLeaderboard = { nav.navigate("leaderboard") },
                     guest = session.guest,
                     onCreateAccount = vm::leaveGuest,
+                    onRestoreStreak = { vm.restoreStreak() },
                 )
             }
             composable(Tab.PRACTICE.route) {
@@ -255,7 +280,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     id = id,
                     progress = progress,
                     onComplete = { ch, words, right, total -> vm.completeReaderChapter(id, ch, words, right, total) },
-                    onClose = { nav.popBackStack() },
+                    onClose = { nav.popBackStack(); Ads.activityFinished(context) },
                     onAddWord = vm::addWordToReview,
                 )
             }
@@ -297,7 +322,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                 ConversationScreen(
                     id = entry.arguments?.getString("id").orEmpty(),
                     onComplete = vm::completeConversation,
-                    onClose = { nav.popBackStack() },
+                    onClose = { nav.popBackStack(); Ads.activityFinished(context) },
                 )
             }
             composable("sounds") {
@@ -307,17 +332,17 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                 SoundScreen(
                     id = entry.arguments?.getString("id").orEmpty(),
                     onComplete = vm::completeSound,
-                    onClose = { nav.popBackStack() },
+                    onClose = { nav.popBackStack(); Ads.activityFinished(context) },
                 )
             }
             composable("game/scramble") {
-                ScrambleGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack() })
+                ScrambleGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack(); Ads.activityFinished(context) })
             }
             composable("game/speed") {
-                SpeedGame(progress, onComplete = { correct, score -> vm.completeGame(correct, score) }, onClose = { nav.popBackStack() })
+                SpeedGame(progress, onComplete = { correct, score -> vm.completeGame(correct, score) }, onClose = { nav.popBackStack(); Ads.activityFinished(context) })
             }
             composable("game/dictation") {
-                DictationGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack() })
+                DictationGame(progress, onComplete = { vm.completeGame(it) }, onClose = { nav.popBackStack(); Ads.activityFinished(context) })
             }
             composable("mistakes") {
                 MistakesScreen(progress, onResolve = vm::resolveMistakes, onClose = { nav.popBackStack() })
@@ -405,7 +430,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                     lessonId = entry.arguments?.getString("id").orEmpty(),
                     onComplete = vm::completeLesson,
                     onAnswers = vm::recordLessonAnswers,
-                    onClose = { nav.popBackStack() },
+                    onClose = { nav.popBackStack(); Ads.activityFinished(context) },
                 )
             }
             composable("exam/{code}") { entry ->

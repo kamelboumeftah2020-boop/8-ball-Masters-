@@ -191,6 +191,10 @@ private fun ResultStage(
             subtitle = "$correct من ${records.size} إجابات صحيحة · ${ltr("+$xp")} نقطة" +
                 if (!passed) "\nتحتاج ${Course.LESSON_PASS_PERCENT}% لفتح الدرس التالي" else "",
         )
+        if (passed) {
+            VSpace(14.dp)
+            com.fluently.english.ads.DoubleXpOffer(xp)
+        }
         if (passed && lesson.words.isNotEmpty()) {
             VSpace(14.dp)
             Pill("أُضيفت ${lesson.words.size} كلمات إلى المراجعة", MaterialTheme.colorScheme.primary, icon = Icons.Rounded.Psychology)

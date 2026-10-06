@@ -53,7 +53,12 @@ data class Progress(
     val writingDone: Set<String> = emptySet(),
     /** Whether the learner's name and weekly XP appear on the shared leaderboard. */
     val showOnLeaderboard: Boolean = true,
+    /** A streak broken by missing exactly one day, restorable today (rewarded ad). */
+    val lostStreak: Int = 0,
+    val lostStreakDay: Long = -1,
 ) {
+    fun canRestoreStreak(today: Long) = lostStreak > 1 && lostStreakDay == today && streak <= 1
+
     val learningGoal: LearningGoal? get() = LearningGoal.entries.firstOrNull { it.name == goal }
 
     /** Accuracy (0..100) per skill, only for skills with answers. */

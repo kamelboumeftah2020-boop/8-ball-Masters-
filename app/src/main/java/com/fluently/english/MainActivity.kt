@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         CrashReporter.install(this)
+        com.fluently.english.ads.Ads.init(this)
         enableEdgeToEdge()
         speaker = Speaker(this)
         setContent {

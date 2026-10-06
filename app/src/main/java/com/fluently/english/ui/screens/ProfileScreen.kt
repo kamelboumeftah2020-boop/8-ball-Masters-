@@ -389,6 +389,18 @@ fun ProfileScreen(
             HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.PrivacyTip, MaterialTheme.colorScheme.primary, "سياسة الخصوصية", onPrivacy)
             HorizontalDivider(color = border)
+            var personalized by remember { mutableStateOf(com.fluently.english.ads.Ads.personalized(context)) }
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("إعلانات مخصصة", style = MaterialTheme.typography.titleSmall)
+                    Text("عند الإيقاف تظهر إعلانات عامة غير مرتبطة باهتماماتك", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                androidx.compose.material3.Switch(checked = personalized, onCheckedChange = {
+                    personalized = it
+                    com.fluently.english.ads.Ads.setPersonalized(context, it)
+                })
+            }
+            HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.DeleteOutline, Danger, "إعادة ضبط التقدم", { confirmReset = true }, textColor = Danger)
         }
         VSpace(28.dp)

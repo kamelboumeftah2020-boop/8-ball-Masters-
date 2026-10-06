@@ -189,6 +189,27 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         return xp
     }
 
+    /** Extra XP (e.g. the "double XP" rewarded ad). */
+    fun addBonusXp(amount: Int) = update { it.withXp(amount, today()) }
+
+    /** Brings back a streak broken by one missed day (after a rewarded ad). */
+    fun restoreStreak(): Boolean {
+        val p = _progress.value
+        if (!p.canRestoreStreak(today())) return false
+        // Today's study (if any) continues the restored streak.
+        val restored = p.lostStreak + if (p.lastActiveDay == today()) 1 else 0
+        update {
+            it.copy(
+                streak = restored,
+                bestStreak = maxOf(it.bestStreak, restored),
+                lastActiveDay = if (it.lastActiveDay == today()) today() else today() - 1,
+                lostStreak = 0,
+                lostStreakDay = -1,
+            )
+        }
+        return true
+    }
+
     fun setShowOnLeaderboard(show: Boolean) = update { it.copy(showOnLeaderboard = show) }
 
     /** Replaces the whole progress (sign-in, restore from backup). */
@@ -220,6 +241,8 @@ class ProgressRepository(context: Context, private val today: () -> Long = ::loc
         return when {
             p.lastActiveDay == day -> p
             p.lastActiveDay == day - 1 -> p.copy(todayXp = 0)
+            // Missed exactly one day: remember the streak so it can be restored today.
+            p.lastActiveDay == day - 2 && p.streak > 1 -> p.copy(todayXp = 0, streak = 0, lostStreak = p.streak, lostStreakDay = day)
             else -> p.copy(todayXp = 0, streak = 0)
         }
     }
@@ -311,6 +334,8 @@ internal object ProgressCodec {
         put("wordsRead", p.wordsRead)
         put("writingDone", org.json.JSONArray(p.writingDone.toList()))
         put("showOnLeaderboard", p.showOnLeaderboard)
+        put("lostStreak", p.lostStreak)
+        put("lostStreakDay", p.lostStreakDay)
         put("cards", JSONObject().apply {
             p.cards.forEach { (word, card) -> put(word, JSONObject().put("box", card.box).put("due", card.dueDay)) }
         })
@@ -354,6 +379,8 @@ internal object ProgressCodec {
             wordsRead = o.optInt("wordsRead"),
             writingDone = o.optJSONArray("writingDone")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
             showOnLeaderboard = o.optBoolean("showOnLeaderboard", true),
+            lostStreak = o.optInt("lostStreak"),
+            lostStreakDay = o.optLong("lostStreakDay", -1),
             cards = cardsObj?.keys()?.asSequence()?.associateWith {
                 val c = cardsObj.getJSONObject(it)
                 Card(c.getInt("box"), c.getLong("due"))

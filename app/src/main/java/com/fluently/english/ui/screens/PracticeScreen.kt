@@ -227,6 +227,8 @@ fun PracticeResult(
         ScoreHeader(percent, percent >= 60, title, subtitle)
         VSpace(14.dp)
         Pill("${ltr("+$xp")} نقطة خبرة", Gold)
+        VSpace(12.dp)
+        com.fluently.english.ads.DoubleXpOffer(xp)
         extra()
         VSpace(32.dp)
         PrimaryButton("انتهيت", onDone)

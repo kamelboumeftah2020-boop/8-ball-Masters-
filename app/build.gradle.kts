@@ -21,8 +21,8 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.9.0"
+        versionCode = 16
+        versionName = "1.10.0"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
         // Phones only (the offline speech engine ships native code per CPU type).
@@ -87,6 +87,8 @@ dependencies {
     // Offline English speech recognition for phones without Google's speech service.
     implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // Unity Ads (interstitial, rewarded and banner ads).
+    implementation("com.unity3d.ads:unity-ads:4.21.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
