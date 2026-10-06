@@ -39,7 +39,10 @@ fun NativeAdCard(modifier: Modifier = Modifier) {
             .withActivity(activity)
             .withListener(object : LevelPlayNativeAdListener {
                 override fun onAdLoaded(nativeAd: LevelPlayNativeAd?, adInfo: AdInfo?) { loaded = nativeAd }
-                override fun onAdLoadFailed(nativeAd: LevelPlayNativeAd?, error: IronSourceError?) { loaded = null }
+                override fun onAdLoadFailed(nativeAd: LevelPlayNativeAd?, error: IronSourceError?) {
+                    loaded = null
+                    Ads.note("إعلان أصلي: ${error?.errorCode} ${error?.errorMessage}")
+                }
                 override fun onAdClicked(nativeAd: LevelPlayNativeAd?, adInfo: AdInfo?) {}
                 override fun onAdImpression(nativeAd: LevelPlayNativeAd?, adInfo: AdInfo?) {}
             })

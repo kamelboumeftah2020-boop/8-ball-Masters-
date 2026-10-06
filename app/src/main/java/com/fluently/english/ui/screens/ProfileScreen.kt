@@ -34,6 +34,7 @@ import com.fluently.english.data.progress.LearningGoal
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -389,21 +390,10 @@ fun ProfileScreen(
             HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.PrivacyTip, MaterialTheme.colorScheme.primary, "سياسة الخصوصية", onPrivacy)
             HorizontalDivider(color = border)
-            var personalized by remember { mutableStateOf(com.fluently.english.ads.Ads.personalized(context)) }
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("إعلانات مخصصة", style = MaterialTheme.typography.titleSmall)
-                    Text("عند الإيقاف تظهر إعلانات عامة غير مرتبطة باهتماماتك", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                androidx.compose.material3.Switch(checked = personalized, onCheckedChange = {
-                    personalized = it
-                    com.fluently.english.ads.Ads.setPersonalized(context, it)
-                })
-            }
-            HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.DeleteOutline, Danger, "إعادة ضبط التقدم", { confirmReset = true }, textColor = Danger)
         }
-        VSpace(28.dp)
+        VersionLine()
+        VSpace(20.dp)
     }
 
     if (editingName) {
@@ -577,6 +567,24 @@ private fun SpeechRateSetting(rate: Float, onChange: (Float) -> Unit) {
             Text("أسرع", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+/** The app version; a long press opens the hidden ads diagnostics. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun VersionLine() {
+    var diagnostics by remember { mutableStateOf(false) }
+    Text(
+        "طلاقة · الإصدار ${com.fluently.english.BuildConfig.VERSION_NAME}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = {}, onLongClick = { diagnostics = true })
+            .padding(vertical = 12.dp),
+    )
+    if (diagnostics) com.fluently.english.ads.AdsDiagnosticsDialog(onDismiss = { diagnostics = false })
 }
 
 @Composable

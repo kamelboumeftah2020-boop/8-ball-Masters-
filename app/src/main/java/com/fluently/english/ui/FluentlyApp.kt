@@ -58,7 +58,6 @@ import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.ui.screens.ExamScreen
 import com.fluently.english.ads.Ads
 import com.fluently.english.ads.AdBanner
-import com.fluently.english.ads.AdConsentDialog
 import com.fluently.english.ads.LocalAddBonusXp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
@@ -188,9 +187,6 @@ private fun MainApp(vm: AppViewModel, session: Session) = CompositionLocalProvid
 private fun MainAppContent(vm: AppViewModel, session: Session) {
     val context = LocalContext.current
     val progress by vm.progress.collectAsStateWithLifecycle()
-    // Ask once about personalised ads, after the learner is set up.
-    var askAds by remember { mutableStateOf(!Ads.consentAsked(context)) }
-    if (askAds && progress.onboarded) AdConsentDialog(onDone = { askAds = false })
     val sync by vm.sync.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val speaker = LocalSpeaker.current

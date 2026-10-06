@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,7 +64,11 @@ fun AdBanner(modifier: Modifier = Modifier) {
         LevelPlayBannerAdView(activity, Ads.BANNER_ID, config).apply {
             setBannerListener(object : LevelPlayBannerAdViewListener {
                 override fun onAdLoaded(adInfo: LevelPlayAdInfo) { loaded = true }
-                override fun onAdLoadFailed(error: LevelPlayAdError) { loaded = false }
+                override fun onAdLoadFailed(error: LevelPlayAdError) {
+                    loaded = false
+                    Ads.note("بانر: ${error.errorCode} ${error.errorMessage}")
+                    postDelayed({ runCatching { loadAd() } }, 60_000)
+                }
             })
             loadAd()
         }
@@ -102,25 +110,28 @@ fun RewardedOffer(label: String, onReward: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-/** Asked once: personalised ads or general ones (GDPR / privacy consent for Unity). */
+/** Hidden diagnostics: what LevelPlay reported, plus its test suite (shows the networks set up for each ad unit). */
 @Composable
-fun AdConsentDialog(onDone: () -> Unit) {
+fun AdsDiagnosticsDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    var suite by remember { mutableStateOf(Ads.testSuiteEnabled(context)) }
     AlertDialog(
-        onDismissRequest = {},
-        title = { Text("الإعلانات في طلاقة") },
+        onDismissRequest = onDismiss,
+        title = { Text("حالة الإعلانات") },
         text = {
-            Text(
-                "طلاقة مجاني بالكامل، ونعرض إعلانات قليلة لا تظهر أبداً أثناء الدروس أو الاختبارات.\n\n" +
-                    "هل تسمح بإعلانات مخصصة حسب اهتماماتك؟ (تستخدم شركة Unity معرّف الإعلانات في هاتفك). " +
-                    "يمكنك تغيير اختيارك في أي وقت من «حسابي».",
-            )
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Text(if (Ads.initialized) "LevelPlay: مُهيّأ" else "LevelPlay: غير مُهيّأ", style = MaterialTheme.typography.titleSmall)
+                if (Ads.log.isEmpty()) Text("لا توجد أحداث بعد", style = MaterialTheme.typography.bodySmall)
+                Ads.log.forEach { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 2.dp)) }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("أداة اختبار LevelPlay (بعد إعادة فتح التطبيق)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Switch(checked = suite, onCheckedChange = { suite = it; Ads.setTestSuiteEnabled(context, it) })
+                }
+            }
         },
-        confirmButton = {
-            TextButton(onClick = { Ads.setPersonalized(context, true); onDone() }) { Text("نعم، أسمح") }
-        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } },
         dismissButton = {
-            TextButton(onClick = { Ads.setPersonalized(context, false); onDone() }) { Text("لا، إعلانات عامة") }
+            if (suite && Ads.initialized) TextButton(onClick = { Ads.launchTestSuite(context) }) { Text("فتح أداة الاختبار") }
         },
     )
 }

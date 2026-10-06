@@ -21,8 +21,8 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 17
-        versionName = "1.11.0"
+        versionCode = 18
+        versionName = "1.11.1"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
         // Phones only (the offline speech engine ships native code per CPU type).
@@ -91,6 +91,9 @@ dependencies {
     implementation("com.unity3d.ads-mediation:mediation-sdk:9.6.1")
     implementation("com.unity3d.ads-mediation:unityads-adapter:5.14.0")
     implementation("com.unity3d.ads:unity-ads:4.21.0")
+    // Recommended by LevelPlay: advertising ID and app-set ID for ad requests.
+    implementation("com.google.android.gms:play-services-ads-identifier:18.2.0")
+    implementation("com.google.android.gms:play-services-appset:16.1.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
