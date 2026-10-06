@@ -7,8 +7,8 @@ android {
         applicationId "app.nur.quran"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "3.0" + (project.hasProperty("lite") ? "-lite" : "")
+        versionCode 13
+        versionName "3.1" + (project.hasProperty("lite") ? "-lite" : "")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

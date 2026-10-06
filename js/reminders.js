@@ -4,7 +4,9 @@ import { nativePlugin } from './native.js';
 import { getKhatma, wirdToday } from './khatma.js';
 import { toHijri } from './hijri.js';
 
+export const PRE_MINUTES = [5, 10, 15, 20, 30];
 export const REMINDERS = [
+  { key: 'pre', name: 'تذكير باقتراب الأذان', hint: 'قبل كل صلاة بالمدة التي تختارها، لتتهيأ للصلاة' },
   { key: 'morning', name: 'أذكار الصباح', hint: 'بعد الفجر بعشرين دقيقة' },
   { key: 'evening', name: 'أذكار المساء', hint: 'بعد العصر بعشرين دقيقة' },
   { key: 'kahf', name: 'سورة الكهف يوم الجمعة', hint: 'صباح الجمعة قبل الظهر بساعة ونصف' },
@@ -13,9 +15,21 @@ export const REMINDERS = [
   { key: 'seasons', name: 'المواسم', hint: 'قبل عاشوراء وعرفة، وأول عشر ذي الحجة، والعشر الأواخر، وست شوّال، واقتراب رمضان' },
   { key: 'wird', name: 'الورد اليومي من الختمة', hint: 'في الوقت الذي تختاره، ما دامت لك ختمة' },
 ];
-const DEFAULTS = { morning: true, evening: true, kahf: true, fast: true, white: true, seasons: true, wird: true, wirdTime: '20:00' };
+const DEFAULTS = { pre: true, preMin: 10, morning: true, evening: true, kahf: true, fast: true, white: true, seasons: true, wird: true, wirdTime: '20:00' };
 export const remCfg = () => ({ ...DEFAULTS, ...store.get('reminders', {}) });
 export const setRem = o => store.set('reminders', { ...remCfg(), ...o });
+
+// التذكير باقتراب الأذان: الصلوات الخمس، مع تذكير بسنّة من سنن الاستعداد للصلاة
+const PRE_PRAYERS = [['Fajr', 'الفجر'], ['Dhuhr', 'الظهر'], ['Asr', 'العصر'], ['Maghrib', 'المغرب'], ['Isha', 'العشاء']];
+const PRE_TEXT = [
+  'تهيّأ للصلاة: «من توضأ فأحسن الوضوء خرجت خطاياه من جسده حتى تخرج من تحت أظفاره» (رواه مسلم).',
+  'تهيّأ للصلاة: «لو يعلم الناس ما في النداء والصف الأول ثم لم يجدوا إلا أن يستهموا عليه لاستهموا» (متفق عليه).',
+  'تهيّأ للصلاة: «من غدا إلى المسجد أو راح أعدّ الله له في الجنة نُزُلًا كلما غدا أو راح» (متفق عليه).',
+  'تهيّأ للصلاة: «لا يزال أحدكم في صلاة ما دامت الصلاة تحبسه» (متفق عليه).',
+  'تهيّأ للصلاة: «الدعاء لا يُردّ بين الأذان والإقامة» (رواه أبو داود والترمذي، وصححه الألباني).',
+];
+const PRE_JUMUA = '«من اغتسل يوم الجمعة ثم راح فكأنما قرّب بدنة…» (متفق عليه). واستمع للخطبة وأنصت.';
+export const minLabel = n => n === 10 ? '١٠ دقائق' : n <= 10 ? `${arNum(n)} دقائق` : `${arNum(n)} دقيقة`;
 
 // "05:17 (CET)" → تاريخ في يوم d
 function at(hhmm, d, addMin = 0) {
@@ -39,6 +53,19 @@ export async function scheduleReminders(days) {
   for (const { date: d, day } of days) {
     const t = day.timings;
     const dow = d.getDay();
+    if (c.pre) {
+      PRE_PRAYERS.forEach(([key, name], idx) => {
+        const when = at(t[key], d, -c.preMin);
+        if (when <= now) return;
+        const jumua = key === 'Dhuhr' && dow === 5;
+        items.push({
+          id: 100000 + ((when.getMonth() + 1) * 100 + when.getDate()) * 10 + idx, at: when.getTime(),
+          title: jumua ? `اقتربت صلاة الجمعة (بعد ${minLabel(c.preMin)})` : `اقترب أذان ${name} (بعد ${minLabel(c.preMin)})`,
+          text: jumua ? PRE_JUMUA : PRE_TEXT[idx % PRE_TEXT.length],
+          route: '#/adhan',
+        });
+      });
+    }
     if (c.morning) add(1, at(t.Fajr, d, 20), 'أذكار الصباح', 'حان وقت أذكار الصباح، فاجعل أول يومك ذكرًا لله.', '#/adhkar/morning');
     if (c.evening) add(2, at(t.Asr, d, 20), 'أذكار المساء', 'حان وقت أذكار المساء.', '#/adhkar/evening');
     if (c.kahf && dow === 5) add(3, at(t.Dhuhr, d, -90), 'يوم الجمعة: سورة الكهف', '«من قرأ سورة الكهف يوم الجمعة أضاء له من النور ما بين الجمعتين» — صححه الألباني. وأكثروا من الصلاة على النبي ﷺ.', '#/mushaf/18');

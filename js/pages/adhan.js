@@ -91,7 +91,7 @@ export function renderAdhan(view, args, ctx) {
         </label>
         ${isNative ? `<div class="adhan-status" id="adhanStatus"><div class="loader small"><div class="spinner"></div></div></div>
         <button class="btn ghost block" id="testAdhan">${icons.bell} تجربة الأذان والشاشة مطفأة (بعد ٣٠ ثانية)</button>
-        <a class="btn ghost block" href="#/reminders">${icons.bell} التذكيرات: الأذكار والكهف والصيام والورد</a>` : ''}
+        <a class="btn ghost block" href="#/reminders">${icons.bell} التذكير قبل الأذان، والأذكار والكهف والصيام والورد</a>` : ''}
         <div class="note-box">${icons.info} ${isNative
           ? 'يُرفع الأذان على صوت المنبّه، فيُسمع حتى في الوضع الصامت؛ ويمكنك إيقافه من الإشعار. ويمكنك إيقاف الأذان لصلاة معيّنة من زر الجرس بجانبها.'
           : 'يُرفع الأذان تلقائيًا عند دخول الوقت ما دام التطبيق مفتوحًا. ويمكنك إيقاف الأذان لأي صلاة من زر الجرس بجانبها.'}</div>

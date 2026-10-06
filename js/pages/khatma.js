@@ -2,7 +2,7 @@
 import { $, $$, store, arNum, esc, toast, icons } from '../core.js';
 import { surahName } from '../player.js';
 import { PLANS, PAGES, getKhatma, startKhatma, stopKhatma, wirdToday, setPos, finishToday, completedCount } from '../khatma.js';
-import { REMINDERS, remCfg, setRem } from '../reminders.js';
+import { REMINDERS, PRE_MINUTES, remCfg, setRem, minLabel } from '../reminders.js';
 import { scheduleAdhans } from '../prayer.js';
 import { isNative } from '../native.js';
 import { getPages } from './quran.js';
@@ -125,11 +125,12 @@ export function renderReminders(view, args, ctx) {
     <div class="note-box">${icons.info} ${isNative ? 'تصلك هذه التذكيرات بإشعار في وقتها حتى والتطبيق مغلق، وتُحسب من مواقيت الصلاة في مدينتك.' : 'التذكيرات بالإشعارات تعمل في تطبيق أندرويد. وفي المتصفح تظهر التذكيرات في الصفحة الرئيسية.'}</div>
     <div class="card settings" id="rems">
       ${REMINDERS.map(r => `<label class="switch-row"><span>${r.name}<small>${r.hint}</small></span><span class="switch"><input type="checkbox" data-k="${r.key}" ${c[r.key] ? 'checked' : ''}><i></i></span></label>`).join('')}
+      <div class="field"><label for="preMin">التذكير قبل الأذان بـ</label><select class="select" id="preMin">${PRE_MINUTES.map(n => `<option value="${n}" ${n === c.preMin ? 'selected' : ''}>${minLabel(n)}</option>`).join('')}</select></div>
       <div class="field"><label for="wirdTime">وقت تذكير الورد</label><input class="input" id="wirdTime" type="time" value="${c.wirdTime}"></div>
     </div>
     <a class="btn ghost block" href="#/khatma">${icons.target} الختمة والورد اليومي</a>`;
   const save = () => {
-    const o = { wirdTime: $('#wirdTime').value || '20:00' };
+    const o = { wirdTime: $('#wirdTime').value || '20:00', preMin: +$('#preMin').value };
     $$('#rems [data-k]').forEach(i => { o[i.dataset.k] = i.checked; });
     setRem(o);
     scheduleAdhans();

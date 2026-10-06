@@ -94,7 +94,7 @@ public final class ReminderScheduler {
         Intent open = new Intent(c, MainActivity.class).putExtra("route", route)
             .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent content = PendingIntent.getActivity(c, 600000 + (id % 400000), open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        nm.notify(8000 + (id % 1000), new NotificationCompat.Builder(c, CHANNEL)
+        nm.notify(9000000 + id, new NotificationCompat.Builder(c, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_adhan)
             .setColor(0xFF0F6B5C)
             .setContentTitle(title)

@@ -2,7 +2,7 @@
 import { $, store, arNum, fetchJSON, toast, icons } from './core.js';
 import { audio } from './player.js';
 import { isNative, Notifications, BUNDLED_ADHANS, nativePlugin } from './native.js';
-import { scheduleReminders } from './reminders.js';
+import { scheduleReminders, remCfg, minLabel } from './reminders.js';
 
 export const PRAYERS = [
   { key: 'Fajr', name: 'الفجر', icon: 'dawn' },
@@ -212,10 +212,24 @@ export function qibla(lat, lng) {
 
 /* ── رفع الأذان عند دخول الوقت ── */
 let lastFired = store.get('lastFired', '');
+let lastPre = '';
 function checkAdhan() {
   if (!times.today) return;
   const now = new Date();
   if (times.day !== dateKey(now)) { if (!times.loading) loadTimes(true); return; }
+  // التذكير باقتراب الأذان داخل الصفحة (في أندرويد يصل بإشعار مجدول ولو كان التطبيق مغلقًا)
+  const rc = remCfg();
+  if (!isNative && rc.pre) {
+    for (const p of PRAYERS) {
+      if (p.noAdhan) continue;
+      const left = toDate(times.today.timings[p.key]) - now;
+      const id = dateKey(now) + p.key;
+      if (left <= rc.preMin * 60e3 && left > (rc.preMin - 1) * 60e3 && lastPre !== id) {
+        lastPre = id;
+        toast(`اقترب أذان ${p.name} (بعد ${minLabel(rc.preMin)})، فتهيّأ للصلاة`);
+      }
+    }
+  }
   for (const p of PRAYERS) {
     if (p.noAdhan || !cfg.on[p.key]) continue;
     const diff = now - toDate(times.today.timings[p.key]);
