@@ -19,10 +19,11 @@ public class MediaPlaybackPlugin extends Plugin {
 
     @Override
     public void load() {
-        MediaPlaybackService.listener = (action, position) -> {
+        MediaPlaybackService.listener = (action, position, mediaId) -> {
             JSObject data = new JSObject();
             data.put("action", action);
             if (position >= 0) data.put("position", position);
+            if (mediaId != null) data.put("mediaId", mediaId);
             notifyListeners("action", data);
         };
     }
@@ -40,7 +41,7 @@ public class MediaPlaybackPlugin extends Plugin {
 
         getActivity().runOnUiThread(() -> {
             MediaPlaybackService service = MediaPlaybackService.instance;
-            if (service != null) {
+            if (service != null && (service.started || !state.getBoolean("playing"))) {
                 service.apply(state);
             } else if (state.getBoolean("playing")) {
                 // Only start the foreground service on user-initiated playback (app is in the foreground).
@@ -48,6 +49,18 @@ public class MediaPlaybackPlugin extends Plugin {
                 intent.putExtras(state);
                 ContextCompat.startForegroundService(getContext(), intent);
             }
+            call.resolve();
+        });
+    }
+
+    /** Library snapshot for Android Auto: [{id, title, artwork, items: [{id, title, subtitle, artwork}]}]. */
+    @PluginMethod
+    public void setLibrary(PluginCall call) {
+        String json = call.getArray("sections", new com.getcapacitor.JSArray()).toString();
+        getContext().getSharedPreferences(MediaPlaybackService.AUTO_PREFS, android.content.Context.MODE_PRIVATE)
+            .edit().putString(MediaPlaybackService.AUTO_KEY, json).apply();
+        getActivity().runOnUiThread(() -> {
+            if (MediaPlaybackService.instance != null) MediaPlaybackService.instance.libraryChanged();
             call.resolve();
         });
     }

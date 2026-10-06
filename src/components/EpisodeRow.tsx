@@ -6,7 +6,7 @@ import { useLibrary } from "../store/library";
 import { usePlayer } from "../store/player";
 import { Artwork } from "./Artwork";
 import { DownloadButton } from "./DownloadButton";
-import { IconHeart, IconPause, IconPlay, IconQueue, IconWifiOff } from "./Icons";
+import { IconHeart, IconPause, IconPlay, IconQueue, IconVideo, IconWifiOff } from "./Icons";
 
 interface Props {
   episode: Episode;
@@ -35,11 +35,14 @@ export const EpisodeRow = memo(function EpisodeRow({ episode, queue, showArtwork
       {showArtwork && <Artwork src={episode.artwork} alt="" className="episode-art" />}
       <div className="episode-body">
         <div className="episode-meta">
+          {episode.mediaType === "video" && (
+            <span className="video-badge"><IconVideo size={13} /> فيديو</span>
+          )}
           {formatDate(episode.releaseDate)}
           {showPodcast && (
             <>
               {" · "}
-              <Link to={`/podcast/${episode.podcastId}`} className="link">{episode.podcastTitle}</Link>
+              <Link to={episode.podcastId.startsWith("quran-") ? "/quran" : `/podcast/${episode.podcastId}`} className="link">{episode.podcastTitle}</Link>
             </>
           )}
         </div>

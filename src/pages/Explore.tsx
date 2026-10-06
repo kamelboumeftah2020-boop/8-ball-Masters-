@@ -87,6 +87,10 @@ export function Explore() {
         <>
           <h2 className="section-title">تصفّح حسب التصنيف</h2>
           <div className="genre-grid">
+            <Link to="/quran" className="genre-tile" style={{ "--c1": "#0f5132", "--c2": "#b8862f" } as React.CSSProperties}>
+              <span>القرآن الكريم</span>
+              <span className="genre-emoji">📖</span>
+            </Link>
             {GENRES.map((g) => (
               <Link
                 key={g.id}

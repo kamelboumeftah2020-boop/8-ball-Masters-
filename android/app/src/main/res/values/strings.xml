@@ -4,4 +4,5 @@
     <string name="title_activity_main">صدى</string>
     <string name="package_name">com.sada.podcasts</string>
     <string name="custom_url_scheme">com.sada.podcasts</string>
+    <string name="widget_description">ما يتم تشغيله الآن مع زر تشغيل وإيقاف</string>
 </resources>

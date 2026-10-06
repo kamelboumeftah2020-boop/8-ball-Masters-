@@ -89,6 +89,7 @@ public class EpisodeCheckerPlugin extends Plugin {
                 JSONObject entry = new JSONObject();
                 entry.put("id", id);
                 entry.put("title", p.optString("title"));
+                if (!p.optString("feedUrl").isEmpty()) entry.put("feedUrl", p.optString("feedUrl"));
                 stored.put(entry);
                 // Keep whichever "newest known episode" date is later: the app's or the worker's.
                 String fromApp = p.optString("latest", "");

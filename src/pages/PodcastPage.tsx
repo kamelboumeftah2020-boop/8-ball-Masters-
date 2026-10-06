@@ -7,34 +7,47 @@ import { IconHeart, IconPlay, IconSearch } from "../components/Icons";
 import { Empty, ErrorState, Loading } from "../components/States";
 import { podcastWithEpisodes } from "../lib/api";
 import type { Podcast } from "../lib/types";
+import { isRssId } from "../lib/rss";
 import { useQuery } from "../lib/useAsync";
 import { useLibrary } from "../store/library";
 import { usePlayer } from "../store/player";
+
+const PAGE = 50;
 
 export function PodcastPage() {
   const { id = "" } = useParams();
   const preview = (useLocation().state as { podcast?: Podcast } | null)?.podcast;
   const { country, isFavPodcast, toggleFavPodcast, favPodcasts, download, downloads } = useLibrary();
   const { play } = usePlayer();
-  const { data, loading, error, retry } = useQuery(() => podcastWithEpisodes(id, country), [id, country]);
+  // Apple's newest 200 first; the show's full RSS history only when asked for.
+  const [feedFor, setFeedFor] = useState<string | null>(null);
+  const withFeed = feedFor === id;
+  const { data, loading, error, retry, refreshing } = useQuery(
+    () => podcastWithEpisodes(id, country, 200, withFeed),
+    [id, country, withFeed]
+  );
+  const [lastData, setLastData] = useState<typeof data>(undefined);
+  if (data && data !== lastData) setLastData(data);
+  const shownData = data ?? (withFeed ? lastData : undefined);
   const [filter, setFilter] = useState("");
   const [oldest, setOldest] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [limit, setLimit] = useState(PAGE);
 
   // Fall back to whatever we already know while loading (from the card or favorites).
   const podcast: Podcast | undefined =
-    (data?.podcast && { ...preview, ...data.podcast, summary: preview?.summary ?? data.podcast.summary }) ??
+    (shownData?.podcast && { ...preview, ...shownData.podcast, summary: preview?.summary ?? shownData.podcast.summary }) ??
     preview ??
     favPodcasts.find((p) => p.id === id);
 
   const episodes = useMemo(() => {
-    let list = data?.episodes ?? [];
+    let list = shownData?.episodes ?? [];
     if (filter.trim()) {
       const f = filter.trim().toLowerCase();
       list = list.filter((e) => e.title.toLowerCase().includes(f) || e.description.toLowerCase().includes(f));
     }
     return oldest ? [...list].reverse() : list;
-  }, [data, filter, oldest]);
+  }, [shownData, filter, oldest]);
 
   const fav = isFavPodcast(id);
 
@@ -48,13 +61,14 @@ export function PodcastPage() {
         <p className="podcast-author">{podcast?.author}</p>
         <div className="podcast-tags">
           {podcast?.genre && <span className="badge">{podcast.genre}</span>}
-          {data && <span className="badge">{data.episodes.length} حلقة</span>}
+          {shownData && <span className="badge">{shownData.episodes.length} حلقة</span>}
+          {shownData?.episodes.some((e) => e.mediaType === "video") && <span className="badge">🎬 فيديو</span>}
         </div>
         <div className="podcast-actions">
           <button
             className="btn primary"
-            disabled={!data?.episodes.length}
-            onClick={() => data && play(data.episodes[0], data.episodes)}
+            disabled={!shownData?.episodes.length}
+            onClick={() => shownData && play(shownData.episodes[0], shownData.episodes)}
           >
             <IconPlay size={18} /> أحدث حلقة
           </button>
@@ -74,11 +88,11 @@ export function PodcastPage() {
         )}
       </div>
 
-      {loading ? (
+      {loading && !shownData ? (
         <Loading />
       ) : error ? (
         <ErrorState onRetry={retry} error={error} />
-      ) : !data?.episodes.length ? (
+      ) : !shownData?.episodes.length ? (
         <Empty icon="🎙️" title="لا توجد حلقات متاحة">قد يكون هذا البودكاست غير متوفر في بلدك المختار.</Empty>
       ) : (
         <>
@@ -91,15 +105,32 @@ export function PodcastPage() {
             <button
               className="chip"
               title="تحميل آخر 5 حلقات"
-              onClick={() => data.episodes.slice(0, 5).filter((e) => !downloads[e.id]).forEach(download)}
+              onClick={() => shownData.episodes.slice(0, 5).filter((e) => !downloads[e.id]).forEach(download)}
             >
               تحميل آخر 5
             </button>
           </div>
           <div className="episode-list">
-            {episodes.map((e) => <EpisodeRow key={e.id} episode={e} queue={episodes} />)}
+            {episodes.slice(0, limit).map((e) => <EpisodeRow key={e.id} episode={e} queue={episodes} />)}
             {!episodes.length && <Empty title="لا توجد حلقات مطابقة" />}
           </div>
+          {!withFeed && !isRssId(id) && (shownData?.episodes.length ?? 0) >= 200 && episodes.length <= limit && (
+            <div className="load-more">
+              <button className="btn ghost" onClick={() => setFeedFor(id)}>
+                عرض كل الحلقات الأقدم
+              </button>
+            </div>
+          )}
+          {withFeed && (loading || refreshing) && (
+            <div className="load-more"><span className="muted">جارٍ جلب كل الحلقات من خلاصة البرنامج…</span></div>
+          )}
+          {episodes.length > limit && (
+            <div className="load-more">
+              <button className="btn ghost" onClick={() => setLimit((l) => l + PAGE)}>
+                عرض المزيد ({episodes.length - limit} حلقة أخرى)
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -3,6 +3,7 @@ import type { PluginListenerHandle } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { EpisodeChecker, isNative } from "./native";
+import { AutoBridge } from "./components/AutoBridge";
 import { BottomNav } from "./components/BottomNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FullPlayer } from "./components/FullPlayer";
@@ -13,6 +14,9 @@ import { Explore } from "./pages/Explore";
 import { Home } from "./pages/Home";
 import { Library } from "./pages/Library";
 import { PodcastPage } from "./pages/PodcastPage";
+import { Privacy } from "./pages/Privacy";
+import { Quran } from "./pages/Quran";
+import { Settings } from "./pages/Settings";
 import { LibraryProvider } from "./store/library";
 import { PlayerProvider, usePlayer } from "./store/player";
 import { SubscriptionsProvider } from "./store/subscriptions";
@@ -62,10 +66,19 @@ function BackHandler() {
 /** Tapping a "new episode" notification opens that podcast. */
 function NotificationRoutes() {
   const navigate = useNavigate();
+  const { toggle, isPlaying } = usePlayer();
+  const playerRef = useRef({ toggle, isPlaying });
+  playerRef.current = { toggle, isPlaying };
   useEffect(() => {
     if (!isNative) return;
     const go = (route?: string | null) => {
-      if (route && route.startsWith("/")) navigate(route);
+      if (!route) return;
+      // Home-screen widget: resume the last episode.
+      if (route === "action:play") {
+        if (!playerRef.current.isPlaying) playerRef.current.toggle();
+        return;
+      }
+      if (route.startsWith("/")) navigate(route);
     };
     EpisodeChecker.consumeRoute().then((r) => go(r.route)).catch(() => {});
     const sub = EpisodeChecker.addListener("openRoute", (e) => go(e.route));
@@ -84,6 +97,7 @@ function Shell() {
       <ScrollToTop />
       <BackHandler />
       <NotificationRoutes />
+      <AutoBridge />
       <main>
         <ErrorBoundary resetKey={pathname}>
         <Routes>
@@ -93,6 +107,9 @@ function Shell() {
           <Route path="/genre/:id" element={<Chart />} />
           <Route path="/podcast/:id" element={<PodcastPage />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/quran" element={<Quran />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/downloads" element={<Downloads />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

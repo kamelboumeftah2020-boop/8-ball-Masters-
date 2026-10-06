@@ -25,6 +25,8 @@ interface LibraryValue {
   favPodcasts: Podcast[];
   isFavPodcast: (id: string) => boolean;
   toggleFavPodcast: (p: Podcast) => void;
+  /** Add or update several favourite podcasts at once (imports). */
+  upsertFavPodcasts: (list: Podcast[]) => void;
 
   favEpisodes: Episode[];
   isFavEpisode: (id: string) => boolean;
@@ -32,7 +34,7 @@ interface LibraryValue {
 
   downloads: Record<string, DownloadInfo>;
   active: Record<string, ActiveDownload>;
-  download: (e: Episode) => void;
+  download: (e: Episode) => Promise<void>;
   cancelDownload: (id: string) => void;
   removeDownload: (id: string) => Promise<void>;
   offlineUrl: (id: string) => Promise<string | null>;
@@ -88,6 +90,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const toggleFavPodcast = useCallback(
     (p: Podcast) =>
       setFavPodcasts((list) => (list.some((x) => x.id === p.id) ? list.filter((x) => x.id !== p.id) : [p, ...list])),
+    [setFavPodcasts]
+  );
+  const upsertFavPodcasts = useCallback(
+    (list: Podcast[]) =>
+      setFavPodcasts((cur) => {
+        const byId = new Map(cur.map((p) => [p.id, p]));
+        for (const p of list) byId.set(p.id, { ...byId.get(p.id), ...p });
+        const added = list.filter((p) => !cur.some((c) => c.id === p.id));
+        return [...added, ...cur.map((c) => byId.get(c.id)!)];
+      }),
     [setFavPodcasts]
   );
   const toggleFavEpisode = useCallback(
@@ -213,6 +225,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       favPodcasts,
       isFavPodcast: (id) => favP.has(id),
       toggleFavPodcast,
+      upsertFavPodcasts,
       favEpisodes,
       isFavEpisode: (id) => favE.has(id),
       toggleFavEpisode,
@@ -228,7 +241,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       clearHistory,
     };
   }, [
-    country, setCountry, favPodcasts, toggleFavPodcast, favEpisodes, toggleFavEpisode, downloads, active,
+    country, setCountry, favPodcasts, toggleFavPodcast, upsertFavPodcasts, favEpisodes, toggleFavEpisode, downloads, active,
     download, cancelDownload, removeDownload, offlineUrl, progress, history, recordProgress, clearHistory,
   ]);
 

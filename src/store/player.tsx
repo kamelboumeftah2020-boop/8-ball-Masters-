@@ -1,8 +1,10 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
+import { fetchChapters } from "../lib/api";
+import { AudioFx, type FxSettings } from "../lib/audioFx";
 import { load, save } from "../lib/storage";
-import type { Episode } from "../lib/types";
+import type { Chapter, Episode } from "../lib/types";
 import { isNative, MediaPlayback, type MediaAction } from "../native";
 import { useLibrary } from "./library";
 
@@ -14,10 +16,18 @@ interface PlayerValue {
   isPlaying: boolean;
   isLoading: boolean;
   isOffline: boolean;
+  isVideo: boolean;
+  /** The <video> element, for the full player to mount while a video episode plays. */
+  videoEl: HTMLVideoElement;
   error: string | null;
   rate: number;
   sleep: SleepTimer;
   expanded: boolean;
+  chapters: Chapter[];
+  fx: FxSettings;
+  /** Whether voice boost / silence trimming is applied to what's playing right now. */
+  fxActive: boolean;
+  timeSaved: number;
   setExpanded: (v: boolean) => void;
   play: (ep: Episode, queue?: Episode[]) => void;
   toggle: () => void;
@@ -27,6 +37,7 @@ interface PlayerValue {
   prev: () => void;
   setRate: (r: number) => void;
   setSleep: (s: SleepTimer) => void;
+  setFx: (fx: FxSettings) => void;
   addToQueue: (ep: Episode) => void;
 }
 
@@ -48,28 +59,57 @@ export function usePlayer() {
 export const usePlayerTime = () => useContext(TimeContext);
 
 const SAVE_EVERY_MS = 5000;
+/** Hosts known to send CORS headers, so Web Audio effects can read their streams. */
+const CORS_HOSTS = /(^|\.)mp3quran\.net$/;
+
+function canProcess(src: string): boolean {
+  if (src.startsWith("blob:")) return true;
+  try {
+    const u = new URL(src, window.location.href);
+    return u.origin === window.location.origin || CORS_HOSTS.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const lib = useLibrary();
   const libRef = useRef(lib);
   libRef.current = lib;
 
-  const audio = useMemo(() => {
-    const a = new Audio();
-    a.preload = "metadata";
-    return a;
+  // Three elements: plain audio (any host), video, and an audio element wired to Web Audio
+  // effects (only for sources it is allowed to read — see AudioFx).
+  const els = useMemo(() => {
+    const audio = new Audio();
+    audio.preload = "metadata";
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.playsInline = true;
+    video.className = "fp-video";
+    const fxAudio = new Audio();
+    fxAudio.preload = "metadata";
+    fxAudio.crossOrigin = "anonymous";
+    return { audio, video, fxAudio };
   }, []);
+  const media = useRef<HTMLMediaElement>(els.audio);
+  const el = () => media.current;
+  const fxEngine = useRef<AudioFx | null>(null);
 
   const [current, setCurrent] = useState<Episode | null>(() => load<Episode | null>("sada.lastEpisode", null));
   const [queue, setQueue] = useState<Episode[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isVideo, setIsVideo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rate, setRateState] = useState(() => load("sada.rate", 1));
   const [sleep, setSleep] = useState<SleepTimer>(null);
   const [expanded, setExpanded] = useState(false);
   const [time, setTime] = useState<TimeValue>({ position: 0, duration: 0, buffered: 0 });
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [fx, setFxState] = useState<FxSettings>(() => load("sada.fx", { boost: false, trimSilence: false }));
+  const [fxActive, setFxActive] = useState(false);
+  const [timeSaved, setTimeSaved] = useState(() => load("sada.timeSaved", 0));
 
   const currentRef = useRef(current);
   currentRef.current = current;
@@ -77,18 +117,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   queueRef.current = queue;
   const sleepRef = useRef(sleep);
   sleepRef.current = sleep;
+  const fxRef = useRef(fx);
+  fxRef.current = fx;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
   const objectUrl = useRef<string | null>(null);
   const lastSave = useRef(0);
   const loadedId = useRef<string | null>(null);
+  const savedBase = useRef(load("sada.timeSaved", 0));
 
   const persistProgress = useCallback(() => {
     const ep = currentRef.current;
-    if (ep && audio.duration > 0) libRef.current.recordProgress(ep, audio.currentTime, audio.duration);
-  }, [audio]);
+    const m = media.current;
+    if (ep && m.duration > 0 && Number.isFinite(m.duration)) libRef.current.recordProgress(ep, m.currentTime, m.duration);
+  }, []);
 
-  /** Point the audio element at an episode (downloaded copy preferred) and restore its position. */
+  const switchElement = useCallback(
+    (next: HTMLMediaElement) => {
+      const prev = media.current;
+      if (prev === next) return;
+      prev.pause();
+      prev.removeAttribute("src");
+      prev.load();
+      media.current = next;
+    },
+    []
+  );
+
+  const fxWanted = () => fxRef.current.boost || fxRef.current.trimSilence;
+
+  /** Point the right element at an episode (downloaded copy preferred) and restore its position. */
   const loadEpisode = useCallback(
-    async (ep: Episode, autoplay: boolean) => {
+    async (ep: Episode, autoplay: boolean, startAt?: number) => {
       loadedId.current = ep.id;
       setError(null);
       setIsLoading(true);
@@ -103,27 +163,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       objectUrl.current = local;
       setIsOffline(!!local);
-      audio.src = local ?? ep.audioUrl;
-      audio.playbackRate = load("sada.rate", 1);
+      const src = local ?? ep.audioUrl;
+
+      const video = ep.mediaType === "video";
+      const withFx = !video && fxWanted() && canProcess(src);
+      const target = video ? els.video : withFx ? els.fxAudio : els.audio;
+      switchElement(target);
+      setIsVideo(video);
+      setFxActive(withFx);
+      if (withFx) {
+        fxEngine.current ??= new AudioFx(els.fxAudio);
+        fxEngine.current.onSaved = (s) => {
+          const total = Math.round(savedBase.current + s);
+          setTimeSaved((t) => (t === total ? t : total));
+        };
+        fxEngine.current.apply(fxRef.current);
+      }
+
+      target.src = src;
+      const r = load("sada.rate", 1);
+      if (withFx) fxEngine.current!.setBaseRate(r);
+      else target.playbackRate = r;
 
       const saved = libRef.current.progress[ep.id];
-      const resumeAt = saved && saved.position < saved.duration - 15 ? saved.position : 0;
+      const resumeAt = startAt ?? (saved && saved.position < saved.duration - 15 ? saved.position : 0);
       setTime({ position: resumeAt, duration: ep.durationMs / 1000, buffered: 0 });
       const restore = () => {
-        if (resumeAt) audio.currentTime = resumeAt;
-        audio.removeEventListener("loadedmetadata", restore);
+        if (resumeAt) target.currentTime = resumeAt;
+        target.removeEventListener("loadedmetadata", restore);
       };
-      audio.addEventListener("loadedmetadata", restore);
-      if (autoplay) audio.play().catch(() => setIsLoading(false));
-      else audio.load();
+      target.addEventListener("loadedmetadata", restore);
+      if (autoplay) {
+        if (withFx) fxEngine.current!.resume();
+        target.play().catch(() => setIsLoading(false));
+      } else target.load();
     },
-    [audio]
+    [els, switchElement]
   );
 
   const play = useCallback(
     (ep: Episode, list?: Episode[]) => {
       if (currentRef.current?.id === ep.id && loadedId.current === ep.id) {
-        audio.play().catch(() => {});
+        el().play().catch(() => {});
         return;
       }
       persistProgress();
@@ -134,7 +215,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (sleepRef.current?.kind === "end") setSleep(null);
       loadEpisode(ep, true);
     },
-    [audio, loadEpisode, persistProgress]
+    [loadEpisode, persistProgress]
   );
 
   const toggle = useCallback(() => {
@@ -144,26 +225,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       loadEpisode(ep, true);
       return;
     }
-    if (audio.paused) audio.play().catch(() => {});
-    else audio.pause();
-  }, [audio, loadEpisode]);
+    const m = el();
+    if (m.paused) {
+      if (m === els.fxAudio) fxEngine.current?.resume();
+      m.play().catch(() => {});
+    } else m.pause();
+  }, [els, loadEpisode]);
 
-  const seek = useCallback(
-    (sec: number) => {
-      const max = audio.duration || Infinity;
-      audio.currentTime = Math.max(0, Math.min(sec, max));
-      setTime((t) => ({ ...t, position: audio.currentTime }));
-    },
-    [audio]
-  );
+  const seek = useCallback((sec: number) => {
+    const m = el();
+    const max = m.duration || Infinity;
+    m.currentTime = Math.max(0, Math.min(sec, max));
+    setTime((t) => ({ ...t, position: m.currentTime }));
+  }, []);
 
-  const skip = useCallback((delta: number) => seek(audio.currentTime + delta), [audio, seek]);
+  const skip = useCallback((delta: number) => seek(el().currentTime + delta), [seek]);
 
   const step = useCallback(
     (dir: 1 | -1) => {
       const q = queueRef.current;
       const i = q.findIndex((e) => e.id === currentRef.current?.id);
-      // Queues are newest-first, so "next" walks towards the end of the list.
+      // Episode lists are newest-first and the Quran is in mushaf order: "next" walks down the list.
       const target = q[i + dir];
       if (target) play(target);
     },
@@ -171,77 +253,118 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
   const next = useCallback(() => step(1), [step]);
   const prev = useCallback(() => {
-    if (audio.currentTime > 5) seek(0);
+    if (el().currentTime > 5) seek(0);
     else step(-1);
-  }, [audio, seek, step]);
+  }, [seek, step]);
 
   const setRate = useCallback(
     (r: number) => {
-      audio.playbackRate = r;
+      if (media.current === els.fxAudio && fxEngine.current) fxEngine.current.setBaseRate(r);
+      else media.current.playbackRate = r;
       setRateState(r);
       save("sada.rate", r);
     },
-    [audio]
+    [els]
+  );
+
+  const setFx = useCallback(
+    (next: FxSettings) => {
+      setFxState(next);
+      fxRef.current = next;
+      save("sada.fx", next);
+      const ep = currentRef.current;
+      if (!ep || loadedId.current !== ep.id) return;
+      const m = media.current;
+      const wantFx = (next.boost || next.trimSilence) && m !== els.video && canProcess(m.currentSrc || m.src);
+      if (wantFx === (m === els.fxAudio)) {
+        if (wantFx) fxEngine.current?.apply(next);
+        return;
+      }
+      // Switch elements at the current position.
+      persistProgress();
+      loadEpisode(ep, !m.paused, m.currentTime);
+    },
+    [els, loadEpisode, persistProgress]
   );
 
   const addToQueue = useCallback((ep: Episode) => {
     setQueue((q) => (q.some((e) => e.id === ep.id) ? q : [...q, ep]));
   }, []);
 
-  // Audio element events.
+  // Media element events (only the active element counts).
   useEffect(() => {
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => {
-      setIsPlaying(false);
-      persistProgress();
+    const own = (f: () => void) => (e: Event) => {
+      if (e.target === media.current) f();
     };
-    const onWaiting = () => setIsLoading(true);
-    const onPlaying = () => setIsLoading(false);
-    const onCanPlay = () => setIsLoading(false);
     const onTime = () => {
-      const b = audio.buffered.length ? audio.buffered.end(audio.buffered.length - 1) : 0;
-      setTime({ position: audio.currentTime, duration: audio.duration || 0, buffered: b });
+      const m = media.current;
+      const b = m.buffered.length ? m.buffered.end(m.buffered.length - 1) : 0;
+      setTime({ position: m.currentTime, duration: Number.isFinite(m.duration) ? m.duration : 0, buffered: b });
       const now = Date.now();
       if (now - lastSave.current > SAVE_EVERY_MS) {
         lastSave.current = now;
         persistProgress();
+        if (fxEngine.current) {
+          const total = savedBase.current + fxEngine.current.saved;
+          save("sada.timeSaved", Math.round(total));
+        }
       }
       const s = sleepRef.current;
       if (s?.kind === "at" && now >= s.at) {
-        audio.pause();
+        m.pause();
         setSleep(null);
       }
     };
-    const onEnded = () => {
-      persistProgress();
-      if (sleepRef.current?.kind === "end") {
-        setSleep(null);
-        return;
-      }
-      step(1);
-    };
-    const onError = () => {
-      setIsLoading(false);
-      setIsPlaying(false);
-      if (audio.src) setError(navigator.onLine ? "تعذّر تشغيل هذه الحلقة" : "لا يوجد اتصال — حمّل الحلقات للاستماع دون إنترنت");
-    };
-    const events: [string, () => void][] = [
-      ["play", onPlay], ["pause", onPause], ["waiting", onWaiting], ["playing", onPlaying],
-      ["canplay", onCanPlay], ["timeupdate", onTime], ["durationchange", onTime], ["ended", onEnded], ["error", onError],
+    const handlers: [string, () => void][] = [
+      ["play", () => setIsPlaying(true)],
+      ["pause", () => { setIsPlaying(false); persistProgress(); }],
+      ["waiting", () => setIsLoading(true)],
+      ["playing", () => setIsLoading(false)],
+      ["canplay", () => setIsLoading(false)],
+      ["timeupdate", onTime],
+      ["durationchange", onTime],
+      ["ended", () => {
+        persistProgress();
+        if (sleepRef.current?.kind === "end") {
+          setSleep(null);
+          return;
+        }
+        step(1);
+      }],
+      ["error", () => {
+        const m = media.current;
+        if (!m.getAttribute("src")) return;
+        setIsLoading(false);
+        setIsPlaying(false);
+        setError(navigator.onLine ? "تعذّر تشغيل هذه الحلقة" : "لا يوجد اتصال — حمّل الحلقات للاستماع دون إنترنت");
+      }],
     ];
-    events.forEach(([n, f]) => audio.addEventListener(n, f));
-    return () => events.forEach(([n, f]) => audio.removeEventListener(n, f));
-  }, [audio, persistProgress, step]);
+    const bound = handlers.map(([n, f]) => [n, own(f)] as const);
+    const all = [els.audio, els.video, els.fxAudio];
+    all.forEach((m) => bound.forEach(([n, f]) => m.addEventListener(n, f)));
+    return () => all.forEach((m) => bound.forEach(([n, f]) => m.removeEventListener(n, f)));
+  }, [els, persistProgress, step]);
+
+  // Chapters for the current episode.
+  useEffect(() => {
+    setChapters(current?.chapters ?? []);
+    if (current?.chapters?.length || !current?.chaptersUrl) return;
+    let alive = true;
+    fetchChapters(current.chaptersUrl).then((c) => alive && setChapters(c), () => {});
+    return () => {
+      alive = false;
+    };
+  }, [current]);
 
   // Sleep timer that fires even when paused-buffering (timeupdate may not tick).
   useEffect(() => {
     if (sleep?.kind !== "at") return;
     const t = window.setTimeout(() => {
-      audio.pause();
+      media.current.pause();
       setSleep(null);
     }, Math.max(0, sleep.at - Date.now()));
     return () => clearTimeout(t);
-  }, [audio, sleep]);
+  }, [sleep]);
 
   // Lock-screen / headset controls (browser). The Android app uses a native service instead, below.
   useEffect(() => {
@@ -254,8 +377,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       artwork: [{ src: current.artwork, sizes: "600x600", type: "image/jpeg" }],
     });
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play", () => audio.play().catch(() => {})],
-      ["pause", () => audio.pause()],
+      ["play", () => toggle()],
+      ["pause", () => media.current.pause()],
       ["seekbackward", (d) => skip(-(d.seekOffset ?? 15))],
       ["seekforward", (d) => skip(d.seekOffset ?? 30)],
       ["seekto", (d) => d.seekTime != null && seek(d.seekTime)],
@@ -269,7 +392,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* unsupported action */
       }
     });
-  }, [audio, current, next, prev, seek, skip]);
+  }, [current, next, prev, seek, skip, toggle]);
 
   useEffect(() => {
     const ms = navigator.mediaSession;
@@ -291,22 +414,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const posBucket = Math.floor(time.position / 10);
   useEffect(() => {
     if (!isNative || !current) return;
+    const m = media.current;
     MediaPlayback.update({
       title: current.title,
       artist: current.podcastTitle,
       artwork: current.artwork,
       playing: isPlaying,
-      position: audio.currentTime || time.position,
-      duration: audio.duration || time.duration || current.durationMs / 1000,
+      position: m.currentTime || time.position,
+      duration: (Number.isFinite(m.duration) && m.duration) || time.duration || current.durationMs / 1000,
       rate,
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, isPlaying, rate, posBucket, time.duration]);
 
-  const actionsRef = useRef<Record<MediaAction, (pos?: number) => void>>(null!);
+  const actionsRef = useRef<Partial<Record<MediaAction, (pos?: number) => void>>>({});
   actionsRef.current = {
     play: () => toggle(),
-    pause: () => audio.pause(),
+    pause: () => media.current.pause(),
     nexttrack: next,
     previoustrack: prev,
     seekforward: () => skip(30),
@@ -316,20 +440,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isNative) return;
     const handle = MediaPlayback.addListener("action", (e) => {
-      if (e.action === "play" && !audio.paused) return;
+      if (e.action === "play" && !media.current.paused) return;
       actionsRef.current[e.action]?.(e.position);
     });
     handle.catch((err) => console.warn("MediaPlayback listener failed", err));
     return () => {
       handle.then((h) => h.remove()).catch(() => {});
     };
-  }, [audio]);
+  }, []);
 
   // Restored "last episode" shows its saved position before anything is loaded.
   useEffect(() => {
     if (current && !loadedId.current) {
       const saved = lib.progress[current.id];
       setTime({ position: saved?.position ?? 0, duration: saved?.duration || current.durationMs / 1000, buffered: 0 });
+      setIsVideo(current.mediaType === "video");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -341,10 +466,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PlayerValue>(
     () => ({
-      current, queue, isPlaying, isLoading, isOffline, error, rate, sleep, expanded, setExpanded,
-      play, toggle, seek, skip, next, prev, setRate, setSleep, addToQueue,
+      current, queue, isPlaying, isLoading, isOffline, isVideo, videoEl: els.video, error, rate, sleep, expanded,
+      chapters, fx, fxActive, timeSaved,
+      setExpanded, play, toggle, seek, skip, next, prev, setRate, setSleep, setFx, addToQueue,
     }),
-    [current, queue, isPlaying, isLoading, isOffline, error, rate, sleep, expanded, play, toggle, seek, skip, next, prev, setRate, addToQueue]
+    [current, queue, isPlaying, isLoading, isOffline, isVideo, els, error, rate, sleep, expanded, chapters, fx, fxActive,
+      timeSaved, play, toggle, seek, skip, next, prev, setRate, setFx, addToQueue]
   );
 
   return (

@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Share } from "@capacitor/share";
 import { isNative } from "../native";
 import { formatClock } from "../lib/format";
 import { useLibrary } from "../store/library";
-import { usePlayer, type SleepTimer } from "../store/player";
+import { usePlayer, usePlayerTime, type SleepTimer } from "../store/player";
+import type { Chapter } from "../lib/types";
 import { Artwork } from "./Artwork";
 import { DownloadButton } from "./DownloadButton";
 import {
   IconBack, IconChevronDown, IconForward, IconHeart, IconMoon, IconNext, IconPause, IconPlay, IconPrev,
-  IconQueue, IconShare, IconWifiOff,
+  IconQueue, IconShare, IconWifiOff, IconWave, IconList, IconExpand,
 } from "./Icons";
 import { SeekBar } from "./SeekBar";
 import { Spinner } from "./States";
@@ -24,7 +25,62 @@ const SLEEP_OPTIONS: { label: string; value: SleepTimer | "min"; min?: number }[
   { label: "نهاية الحلقة", value: { kind: "end" } },
 ];
 
-type Panel = "none" | "sleep" | "queue";
+type Panel = "none" | "sleep" | "queue" | "fx" | "chapters";
+
+const chapterAt = (chapters: Chapter[], t: number) => {
+  let idx = -1;
+  for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= t + 0.5) idx = i;
+  return idx;
+};
+
+/** Name of the chapter being played (re-renders with the clock, so kept small). */
+function CurrentChapter({ chapters }: { chapters: Chapter[] }) {
+  const { position } = usePlayerTime();
+  const i = chapterAt(chapters, position);
+  if (i < 0) return null;
+  return <div className="fp-chapter">§ {chapters[i].title}</div>;
+}
+
+function ChapterList({ chapters, onPick }: { chapters: Chapter[]; onPick: (c: Chapter) => void }) {
+  const { position } = usePlayerTime();
+  const active = chapterAt(chapters, position);
+  return (
+    <ul className="chapter-list">
+      {chapters.map((c, i) => (
+        <li key={i}>
+          <button className={i === active ? "active" : ""} onClick={() => onPick(c)}>
+            <span dir="ltr" className="chapter-time">{formatClock(c.start)}</span>
+            <span>{c.title}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Hosts the shared <video> element while a video episode is open. */
+function VideoStage({ video }: { video: HTMLVideoElement }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = box.current;
+    if (!host) return;
+    host.prepend(video);
+    return () => {
+      if (video.parentElement === host) host.removeChild(video);
+    };
+  }, [video]);
+  return (
+    <div className="fp-video-wrap" ref={box}>
+      <button
+        className="icon-btn fp-fullscreen"
+        aria-label="ملء الشاشة"
+        onClick={() => video.requestFullscreen?.().catch(() => {})}
+      >
+        <IconExpand size={20} />
+      </button>
+    </div>
+  );
+}
 
 export function FullPlayer() {
   const p = usePlayer();
@@ -61,7 +117,9 @@ export function FullPlayer() {
 
   const share = async () => {
     const text = `${ep.title} — ${ep.podcastTitle}`;
-    const url = `https://podcasts.apple.com/podcast/id${ep.podcastId}?i=${ep.id}`;
+    const url = /^\d+$/.test(ep.podcastId) && /^\d+$/.test(ep.id)
+      ? `https://podcasts.apple.com/podcast/id${ep.podcastId}?i=${ep.id}`
+      : ep.audioUrl;
     if (isNative) Share.share({ title: ep.title, text, url, dialogTitle: "مشاركة الحلقة" }).catch(() => {});
     else if (navigator.share) navigator.share({ title: ep.title, text, url }).catch(() => {});
     else {
@@ -91,9 +149,13 @@ export function FullPlayer() {
           </button>
         </header>
 
-        <div className={`fp-art-wrap ${p.isPlaying ? "playing" : ""}`}>
-          <Artwork src={ep.artwork} alt={ep.title} className="fp-art" />
-        </div>
+        {p.isVideo && p.expanded ? (
+          <VideoStage video={p.videoEl} />
+        ) : (
+          <div className={`fp-art-wrap ${p.isPlaying ? "playing" : ""}`}>
+            <Artwork src={ep.artwork} alt={ep.title} className="fp-art" />
+          </div>
+        )}
 
         <div className="fp-info">
           <div className="fp-text">
@@ -102,11 +164,12 @@ export function FullPlayer() {
               className="fp-podcast link"
               onClick={() => {
                 p.setExpanded(false);
-                navigate(`/podcast/${ep.podcastId}`);
+                navigate(ep.podcastId.startsWith("quran-") ? "/quran" : `/podcast/${ep.podcastId}`);
               }}
             >
               {ep.podcastTitle}
             </button>
+            {p.chapters.length > 0 && <CurrentChapter chapters={p.chapters} />}
           </div>
           <button className={`icon-btn ${fav ? "fav" : ""}`} aria-label="المفضلة" aria-pressed={fav} onClick={() => toggleFavEpisode(ep)}>
             <IconHeart size={26} filled={fav} />
@@ -144,7 +207,56 @@ export function FullPlayer() {
             <IconQueue size={20} />
             <span>التالي ({upNext.length})</span>
           </button>
+          <button
+            className={`tool ${p.fxActive ? "on" : ""}`}
+            onClick={() => setPanel(panel === "fx" ? "none" : "fx")}
+            aria-label="تحسين الصوت"
+          >
+            <IconWave size={20} />
+            <span>تحسين الصوت</span>
+          </button>
+          {p.chapters.length > 0 && (
+            <button className={`tool ${panel === "chapters" ? "on" : ""}`} onClick={() => setPanel(panel === "chapters" ? "none" : "chapters")}>
+              <IconList size={20} />
+              <span>الأقسام ({p.chapters.length})</span>
+            </button>
+          )}
         </div>
+
+        {panel === "fx" && (
+          <div className="fp-panel">
+            <h3>تحسين الصوت</h3>
+            <label className="subs-row toggle">
+              <span>
+                <strong>تقوية الصوت</strong>
+                <small>يرفع الأصوات الخافتة ويوازن الصوت</small>
+              </span>
+              <input type="checkbox" checked={p.fx.boost} onChange={(e) => p.setFx({ ...p.fx, boost: e.target.checked })} />
+            </label>
+            <label className="subs-row toggle">
+              <span>
+                <strong>تسريع فترات الصمت</strong>
+                <small>يتجاوز السكتات الطويلة ليوفّر وقتك</small>
+              </span>
+              <input type="checkbox" checked={p.fx.trimSilence} onChange={(e) => p.setFx({ ...p.fx, trimSilence: e.target.checked })} />
+            </label>
+            {(p.fx.boost || p.fx.trimSilence) && !p.fxActive && (
+              <p className="muted small-note">
+                {p.isVideo
+                  ? "غير متاح لحلقات الفيديو."
+                  : "يعمل على الحلقات المحمّلة وتلاوات القرآن. حمّل هذه الحلقة لتفعيله عليها."}
+              </p>
+            )}
+            {p.timeSaved >= 60 && <p className="muted small-note">وفّرت حتى الآن {Math.round(p.timeSaved / 60)} دقيقة ⏱️</p>}
+          </div>
+        )}
+
+        {panel === "chapters" && (
+          <div className="fp-panel">
+            <h3>أقسام الحلقة</h3>
+            <ChapterList chapters={p.chapters} onPick={(c) => p.seek(c.start)} />
+          </div>
+        )}
 
         {panel === "sleep" && (
           <div className="fp-panel">

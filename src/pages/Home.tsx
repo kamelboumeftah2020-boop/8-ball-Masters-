@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Artwork } from "../components/Artwork";
 import { EpisodeRow } from "../components/EpisodeRow";
-import { IconGlobe, IconPlay, IconRefresh } from "../components/Icons";
+import { IconGear, IconPlay, IconRefresh } from "../components/Icons";
 import { PodcastCard, Shelf } from "../components/PodcastCard";
 import { ErrorState } from "../components/States";
 import { topPodcasts } from "../lib/api";
@@ -84,7 +84,7 @@ function ContinueListening() {
 }
 
 export function Home() {
-  const { country, setCountry } = useLibrary();
+  const { country } = useLibrary();
   const top = useQuery(() => topPodcasts(country, undefined, 50), [country]);
   const { checking } = useSubscriptions();
   const refreshing = top.refreshing || checking;
@@ -106,14 +106,9 @@ export function Home() {
         >
           <IconRefresh size={20} />
         </button>
-        <label className="country-select" title="بلد المحتوى">
-          <IconGlobe size={18} />
-          <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="اختر البلد">
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
-            ))}
-          </select>
-        </label>
+        <Link to="/settings" className="icon-btn" aria-label="الإعدادات" title="الإعدادات">
+          <IconGear size={20} />
+        </Link>
         </div>
       </header>
 
@@ -129,6 +124,15 @@ export function Home() {
           </div>
         </Link>
       )}
+
+      <Link to="/quran" className="quran-card">
+        <img src="quran-cover.png" alt="" />
+        <span>
+          <strong>القرآن الكريم</strong>
+          <small>المصحف كاملاً بصوت القارئ عبدالله الخلف</small>
+        </span>
+        <span className="quran-card-go">استمع</span>
+      </Link>
 
       <div className="chips scroll">
         {GENRES.map((g) => (

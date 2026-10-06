@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
@@ -14,26 +13,43 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.net.Uri;
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.media.MediaBrowserServiceCompat;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-/** Foreground service holding the MediaSession and the playback notification. */
-public class MediaPlaybackService extends Service {
+/**
+ * Foreground service holding the MediaSession and the playback notification. It is also
+ * a MediaBrowserService, which is what Android Auto (and other media browsers) use to
+ * show the library and start playback.
+ */
+public class MediaPlaybackService extends MediaBrowserServiceCompat {
 
     public interface Listener {
-        void onAction(String action, double position);
+        /** {@code mediaId} is set for "playid" (an item picked in Android Auto). */
+        void onAction(String action, double position, @Nullable String mediaId);
     }
+
+    static final String AUTO_PREFS = "auto_library";
+    static final String AUTO_KEY = "sections";
+    static final String ROOT_ID = "root";
 
     static final String CHANNEL_ID = "playback";
     static final int NOTIFICATION_ID = 1001;
@@ -59,6 +75,8 @@ public class MediaPlaybackService extends Service {
     private float rate = 1f;
     @Nullable private Bitmap artwork;
     private boolean inForeground;
+    /** True once started with startService/startForegroundService (not merely bound by a browser). */
+    boolean started;
 
     @Override
     public void onCreate() {
@@ -76,9 +94,11 @@ public class MediaPlaybackService extends Service {
             @Override public void onFastForward() { emit("seekforward", -1); }
             @Override public void onRewind() { emit("seekbackward", -1); }
             @Override public void onSeekTo(long pos) { emit("seekto", pos / 1000.0); }
+            @Override public void onPlayFromMediaId(String mediaId, Bundle extras) { emitPlayId(mediaId); }
         });
         session.setSessionActivity(contentIntent());
         session.setActive(true);
+        setSessionToken(session.getSessionToken());
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Sada:playback");
@@ -92,6 +112,7 @@ public class MediaPlaybackService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        started = true;
         if (intent != null && ACTION_COMMAND.equals(intent.getAction())) {
             String cmd = intent.getStringExtra(EXTRA_COMMAND);
             if ("dismiss".equals(cmd)) {
@@ -125,6 +146,7 @@ public class MediaPlaybackService extends Service {
     }
 
     void shutdown() {
+        started = false;
         releaseLocks();
         stopForegroundCompat(true);
         inForeground = false;
@@ -144,10 +166,13 @@ public class MediaPlaybackService extends Service {
             .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
                 | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SEEK_TO
                 | PlaybackStateCompat.ACTION_FAST_FORWARD | PlaybackStateCompat.ACTION_REWIND
-                | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                | PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
             .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
                 (long) (position * 1000), playing ? rate : 0f)
             .build());
+
+        PlayerWidget.publish(this, title, artist, playing, artwork);
 
         Notification notification = buildNotification();
         if (playing) {
@@ -214,11 +239,18 @@ public class MediaPlaybackService extends Service {
         io.execute(() -> {
             Bitmap bmp = null;
             try {
+                String local = localAssetPath(url);
+                if (local != null) {
+                    try (InputStream in = getAssets().open(local)) {
+                        bmp = BitmapFactory.decodeStream(in);
+                    }
+                } else {
                 HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
                 c.setConnectTimeout(8000);
                 c.setReadTimeout(8000);
                 try (InputStream in = c.getInputStream()) {
                     bmp = BitmapFactory.decodeStream(in);
+                }
                 }
             } catch (Exception ignored) {
                 // Artwork is optional.
@@ -232,9 +264,95 @@ public class MediaPlaybackService extends Service {
         });
     }
 
+    /** Files bundled with the web app are served from https://localhost/ but live in assets/public/. */
+    @Nullable
+    static String localAssetPath(String url) {
+        String prefix = "https://localhost/";
+        if (!url.startsWith(prefix)) return null;
+        String path = url.substring(prefix.length()).split("[?#]")[0];
+        return path.isEmpty() ? null : "public/" + path;
+    }
+
     private void emit(String action, double pos) {
         Listener l = listener;
-        if (l != null) main.post(() -> l.onAction(action, pos));
+        if (l != null) main.post(() -> l.onAction(action, pos, null));
+    }
+
+    private void emitPlayId(String mediaId) {
+        Listener l = listener;
+        if (l != null) main.post(() -> l.onAction("playid", -1, mediaId));
+    }
+
+    /* ---------- MediaBrowserService: the library Android Auto shows ---------- */
+
+    @Nullable
+    @Override
+    public BrowserRoot onGetRoot(@NonNull String clientPackageName, int clientUid, @Nullable Bundle rootHints) {
+        Bundle extras = new Bundle();
+        // Grid for categories, list for episodes.
+        extras.putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2);
+        extras.putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1);
+        return new BrowserRoot(ROOT_ID, extras);
+    }
+
+    @Override
+    public void onLoadChildren(@NonNull String parentId, @NonNull Result<List<MediaBrowserCompat.MediaItem>> result) {
+        List<MediaBrowserCompat.MediaItem> items = new ArrayList<>();
+        try {
+            JSONArray sections = new JSONArray(getSharedPreferences(AUTO_PREFS, MODE_PRIVATE).getString(AUTO_KEY, "[]"));
+            for (int i = 0; i < sections.length(); i++) {
+                JSONObject sec = sections.getJSONObject(i);
+                String secId = "section:" + sec.getString("id");
+                JSONArray list = sec.optJSONArray("items");
+                if (list == null || list.length() == 0) continue;
+                if (ROOT_ID.equals(parentId)) {
+                    items.add(new MediaBrowserCompat.MediaItem(
+                        new MediaDescriptionCompat.Builder()
+                            .setMediaId(secId)
+                            .setTitle(sec.getString("title"))
+                            .setIconUri(iconUri(sec.optString("artwork")))
+                            .build(),
+                        MediaBrowserCompat.MediaItem.FLAG_BROWSABLE));
+                } else if (secId.equals(parentId)) {
+                    for (int j = 0; j < list.length(); j++) {
+                        JSONObject it = list.getJSONObject(j);
+                        items.add(new MediaBrowserCompat.MediaItem(
+                            new MediaDescriptionCompat.Builder()
+                                // Section prefix so playback can queue the rest of that list.
+                                .setMediaId(sec.getString("id") + "|" + it.getString("id"))
+                                .setTitle(it.optString("title"))
+                                .setSubtitle(it.optString("subtitle"))
+                                .setIconUri(iconUri(it.optString("artwork")))
+                                .build(),
+                            MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Malformed library: show nothing rather than crash the car UI.
+        }
+        result.sendResult(items);
+    }
+
+    @Nullable
+    private Uri iconUri(String url) {
+        if (url == null || url.isEmpty()) return null;
+        if (localAssetPath(url) != null) {
+            // Bundled art isn't reachable over http from the car; use the copy in res/drawable.
+            return Uri.parse("android.resource://" + getPackageName() + "/drawable/quran_cover");
+        }
+        return Uri.parse(url);
+    }
+
+    /** Called by the plugin when the web app sends a new library snapshot. */
+    void libraryChanged() {
+        notifyChildrenChanged(ROOT_ID);
+        try {
+            JSONArray sections = new JSONArray(getSharedPreferences(AUTO_PREFS, MODE_PRIVATE).getString(AUTO_KEY, "[]"));
+            for (int i = 0; i < sections.length(); i++) notifyChildrenChanged("section:" + sections.getJSONObject(i).getString("id"));
+        } catch (Exception ignored) {
+            // nothing to refresh
+        }
     }
 
     private void notifyManager(Notification n) {
@@ -291,9 +409,4 @@ public class MediaPlaybackService extends Service {
         super.onDestroy();
     }
 
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
 }

@@ -20,10 +20,16 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
+import org.xmlpull.v1.XmlPullParserFactory;
 
 /** Periodic background job: looks for new episodes of followed podcasts and notifies. */
 public class EpisodeCheckWorker extends Worker {
@@ -54,17 +60,15 @@ public class EpisodeCheckWorker extends Worker {
             String title = p.optString("title");
             String key = EpisodeCheckerPlugin.LATEST_PREFIX + id;
             try {
-                JSONArray results = fetch(id, country);
+                List<String[]> episodes = p.optString("feedUrl").isEmpty() ? fetchApple(id, country) : fetchRss(p.optString("feedUrl"));
                 String known = prefs.getString(key, "");
                 String newest = known;
                 List<String> fresh = new ArrayList<>();
-                for (int j = 0; j < results.length(); j++) {
-                    JSONObject r = results.optJSONObject(j);
-                    if (r == null || !"podcastEpisode".equals(r.optString("wrapperType"))) continue;
-                    String date = r.optString("releaseDate", "");
+                for (String[] ep : episodes) { // {releaseDate ISO, title, podcast title}
+                    String date = ep[0];
                     if (date.compareTo(newest) > 0) newest = date;
-                    if (!known.isEmpty() && date.compareTo(known) > 0) fresh.add(r.optString("trackName"));
-                    if (title.isEmpty()) title = r.optString("collectionName");
+                    if (!known.isEmpty() && date.compareTo(known) > 0) fresh.add(ep[1]);
+                    if (title.isEmpty()) title = ep[2];
                 }
                 if (!newest.equals(known)) prefs.edit().putString(key, newest).apply();
                 if (!fresh.isEmpty()) notifyNew(ctx, id, title, fresh);
@@ -75,18 +79,79 @@ public class EpisodeCheckWorker extends Worker {
         return Result.success();
     }
 
-    private JSONArray fetch(String id, String country) throws Exception {
-        String url = "https://itunes.apple.com/lookup?id=" + Uri.encode(id) + "&entity=podcastEpisode&limit=10&country=" + Uri.encode(country);
+    private static String get(String url) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(15000);
-        c.setReadTimeout(15000);
+        c.setReadTimeout(30000);
+        c.setInstanceFollowRedirects(true);
         try (InputStream in = c.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buf = new byte[8192];
             for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
-            return new JSONObject(out.toString(StandardCharsets.UTF_8.name())).optJSONArray("results");
+            return out.toString(StandardCharsets.UTF_8.name());
         } finally {
             c.disconnect();
         }
+    }
+
+    /** Latest episodes from Apple's directory: {date, title, podcast}. */
+    private static List<String[]> fetchApple(String id, String country) throws Exception {
+        String url = "https://itunes.apple.com/lookup?id=" + Uri.encode(id) + "&entity=podcastEpisode&limit=10&country=" + Uri.encode(country);
+        JSONArray results = new JSONObject(get(url)).optJSONArray("results");
+        List<String[]> out = new ArrayList<>();
+        if (results == null) return out;
+        for (int j = 0; j < results.length(); j++) {
+            JSONObject r = results.optJSONObject(j);
+            if (r == null || !"podcastEpisode".equals(r.optString("wrapperType"))) continue;
+            out.add(new String[] { r.optString("releaseDate", ""), r.optString("trackName"), r.optString("collectionName") });
+        }
+        return out;
+    }
+
+    /** Episodes from a podcast's own RSS feed (podcasts added by link). */
+    private static List<String[]> fetchRss(String feedUrl) throws Exception {
+        XmlPullParser xp = XmlPullParserFactory.newInstance().newPullParser();
+        xp.setInput(new java.io.StringReader(get(feedUrl)));
+        List<String[]> out = new ArrayList<>();
+        String channelTitle = "";
+        String itemTitle = null;
+        String itemDate = null;
+        boolean inItem = false;
+        for (int ev = xp.getEventType(); ev != XmlPullParser.END_DOCUMENT && out.size() < 20; ev = xp.next()) {
+            if (ev == XmlPullParser.START_TAG) {
+                String name = xp.getName();
+                if ("item".equals(name)) {
+                    inItem = true;
+                    itemTitle = null;
+                    itemDate = null;
+                } else if ("title".equals(name)) {
+                    String t = xp.nextText().trim();
+                    if (inItem) itemTitle = t;
+                    else if (channelTitle.isEmpty()) channelTitle = t;
+                } else if (inItem && "pubDate".equals(name)) {
+                    itemDate = toIso(xp.nextText().trim());
+                }
+            } else if (ev == XmlPullParser.END_TAG && "item".equals(xp.getName())) {
+                inItem = false;
+                if (itemDate != null && !itemDate.isEmpty()) out.add(new String[] { itemDate, itemTitle == null ? "" : itemTitle, channelTitle });
+            }
+        }
+        return out;
+    }
+
+    /** RFC 822 pubDate -> "yyyy-MM-ddTHH:mm:ssZ" (the format the app compares). */
+    static String toIso(String rfc822) {
+        String[] patterns = { "EEE, dd MMM yyyy HH:mm:ss Z", "EEE, d MMM yyyy HH:mm:ss Z", "EEE, dd MMM yyyy HH:mm:ss zzz", "dd MMM yyyy HH:mm:ss Z" };
+        SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        iso.setTimeZone(TimeZone.getTimeZone("UTC"));
+        for (String pattern : patterns) {
+            try {
+                Date d = new SimpleDateFormat(pattern, Locale.US).parse(rfc822);
+                if (d != null) return iso.format(d);
+            } catch (Exception ignored) {
+                // try the next pattern
+            }
+        }
+        return "";
     }
 
     private void notifyNew(Context ctx, String podcastId, String podcastTitle, List<String> episodes) {

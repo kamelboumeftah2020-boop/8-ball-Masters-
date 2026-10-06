@@ -47,7 +47,15 @@ export const nativeDelete = (path: string) => Filesystem.deleteFile({ path, dire
 
 /* ---------- Background playback service + media notification ---------- */
 
-export type MediaAction = "play" | "pause" | "nexttrack" | "previoustrack" | "seekforward" | "seekbackward" | "seekto";
+export type MediaAction = "play" | "pause" | "nexttrack" | "previoustrack" | "seekforward" | "seekbackward" | "seekto" | "playid";
+
+/** Library shown in Android Auto. */
+export interface AutoSection {
+  id: string;
+  title: string;
+  artwork?: string;
+  items: { id: string; title: string; subtitle: string; artwork: string }[];
+}
 
 interface MediaPlaybackPlugin {
   update(options: {
@@ -60,7 +68,11 @@ interface MediaPlaybackPlugin {
     rate: number;
   }): Promise<void>;
   stop(): Promise<void>;
-  addListener(event: "action", fn: (e: { action: MediaAction; position?: number }) => void): Promise<PluginListenerHandle>;
+  setLibrary(options: { sections: AutoSection[] }): Promise<void>;
+  addListener(
+    event: "action",
+    fn: (e: { action: MediaAction; position?: number; mediaId?: string }) => void
+  ): Promise<PluginListenerHandle>;
 }
 
 export const MediaPlayback = registerPlugin<MediaPlaybackPlugin>("MediaPlayback");
@@ -72,6 +84,8 @@ export interface WatchedPodcast {
   title: string;
   /** releaseDate (ISO) of the newest episode the app already knows about. */
   latest?: string;
+  /** Set for podcasts added by RSS link, so the background worker can read the feed. */
+  feedUrl?: string;
 }
 
 interface EpisodeCheckerPlugin {

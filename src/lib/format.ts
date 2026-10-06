@@ -1,6 +1,7 @@
 const dateFmt = new Intl.DateTimeFormat("ar-u-nu-latn", { day: "numeric", month: "short", year: "numeric" });
 
 export function formatDate(iso: string): string {
+  if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);

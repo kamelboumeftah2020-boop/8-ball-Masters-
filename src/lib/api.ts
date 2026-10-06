@@ -1,5 +1,7 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-import type { Episode, Podcast } from "./types";
+import { feedRegistry } from "./feeds";
+import { isRssId, isVideo, mergeEpisodes, parseChaptersJson, parseFeed, rssPodcastId } from "./rss";
+import type { Chapter, Episode, Podcast } from "./types";
 
 // Apple's public podcast directory: free, keyless and CORS-enabled.
 const ITUNES = "https://itunes.apple.com";
@@ -16,6 +18,27 @@ async function nativeGet(url: string): Promise<unknown> {
   if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
   return typeof res.data === "string" ? JSON.parse(res.data) : res.data;
 }
+
+async function nativeText(url: string): Promise<string> {
+  const res = await CapacitorHttp.get({ url, responseType: "text", connectTimeout: TIMEOUT_MS, readTimeout: 60_000 });
+  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
+  return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+}
+
+async function webText(url: string): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60_000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Plain-text GET (RSS feeds). Native HTTP in the app, so feeds without CORS still work there. */
+export const getText = (url: string) => (Capacitor.isNativePlatform() ? nativeText(url) : webText(url));
 
 async function webGet(url: string): Promise<unknown> {
   const ctrl = new AbortController();
@@ -117,6 +140,7 @@ interface ITunesEpisode {
   releaseDate: string;
   trackTimeMillis?: number;
   episodeFileExtension?: string;
+  episodeContentType?: string;
 }
 
 const toPodcast = (r: ITunesPodcast): Podcast => ({
@@ -141,6 +165,8 @@ const toEpisode = (r: ITunesEpisode, fallbackArt = ""): Episode => ({
   releaseDate: r.releaseDate,
   durationMs: r.trackTimeMillis ?? 0,
   fileExtension: r.episodeFileExtension,
+  mediaType:
+    r.episodeContentType === "video" || isVideo("", `x.${r.episodeFileExtension ?? ""}`) ? "video" : "audio",
 });
 
 export function searchPodcasts(term: string, country: string): Query<Podcast[]> {
@@ -173,10 +199,68 @@ export function searchEpisodes(term: string, country: string): Query<Episode[]> 
 
 export type PodcastData = { podcast: Podcast | null; episodes: Episode[] };
 
-export function podcastWithEpisodes(id: string, country: string, limit = 200): Query<PodcastData> {
+/**
+ * A podcast and its episodes. Directory podcasts use Apple's data (newest 200); with
+ * `withFeed` it is merged with the show's own RSS feed (complete history, chapters) —
+ * feeds of long-running shows weigh several MB, so that is only done on request.
+ * Podcasts added by RSS link (ids starting "rss-") always come from their feed.
+ */
+export function podcastWithEpisodes(id: string, country: string, limit = 200, withFeed = false): Query<PodcastData> {
+  const full = limit >= 200;
+  if (isRssId(id)) {
+    return {
+      key: `rss:${id}`,
+      persist: full,
+      run: async () => {
+        const feedUrl = feedRegistry.get(id);
+        if (!feedUrl) throw new Error("لم يُعثر على رابط هذا البودكاست");
+        const { podcast, episodes } = parseFeed(await getText(feedUrl), feedUrl, id);
+        return { podcast, episodes: full ? episodes : episodes.slice(0, limit) };
+      },
+    };
+  }
   const q = new URLSearchParams({ id, entity: "podcastEpisode", limit: String(limit), country });
   const url = `${ITUNES}/lookup?${q}`;
-  return { key: url, persist: limit >= 200, run: (fresh) => fetchPodcast(url, fresh) };
+  return {
+    key: withFeed ? `${url}&rss=1` : url,
+    persist: full,
+    run: async (fresh) => {
+      const data = await fetchPodcast(url, fresh);
+      if (!withFeed || !data.podcast?.feedUrl) return data;
+      try {
+        const feed = parseFeed(await getText(data.podcast.feedUrl), data.podcast.feedUrl, id);
+        return { podcast: data.podcast, episodes: mergeEpisodes(data.episodes, feed.episodes) };
+      } catch {
+        return data; // feed unreachable (or blocked by CORS on the web): Apple's 200 are fine
+      }
+    },
+  };
+}
+
+/** Podcast metadata only (used to find feed URLs for OPML export). */
+export async function lookupPodcast(id: string, country: string): Promise<Podcast | null> {
+  const q = new URLSearchParams({ id, country });
+  const data = await getJson<{ results: ITunesPodcast[] }>(`${ITUNES}/lookup?${q}`);
+  return data.results[0] ? toPodcast(data.results[0]) : null;
+}
+
+/** Load a feed added by link; registers it so its page and updates can find it. */
+export async function loadFeed(feedUrl: string): Promise<PodcastData & { podcast: Podcast }> {
+  const id = rssPodcastId(feedUrl);
+  const parsed = parseFeed(await getText(feedUrl), feedUrl, id);
+  feedRegistry.set(id, feedUrl);
+  return parsed;
+}
+
+const chapterCache = new Map<string, Promise<Chapter[]>>();
+export function fetchChapters(url: string): Promise<Chapter[]> {
+  let p = chapterCache.get(url);
+  if (!p) {
+    p = getJson<unknown>(url).then(parseChaptersJson);
+    p.catch(() => chapterCache.delete(url));
+    chapterCache.set(url, p);
+  }
+  return p;
 }
 
 async function fetchPodcast(url: string, fresh: boolean): Promise<PodcastData> {

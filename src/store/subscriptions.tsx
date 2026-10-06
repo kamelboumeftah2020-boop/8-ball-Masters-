@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { podcastWithEpisodes } from "../lib/api";
+import { feedRegistry } from "../lib/feeds";
+import { isRssId } from "../lib/rss";
 import { useRefreshTick } from "../lib/refresh";
 import { load, usePersistent } from "../lib/storage";
 import type { Episode } from "../lib/types";
@@ -128,7 +130,12 @@ export function SubscriptionsProvider({ children }: { children: ReactNode }) {
     if (!isNative) return;
     EpisodeChecker.sync({
       country,
-      podcasts: favPodcasts.map((p) => ({ id: p.id, title: p.title, latest: latest[p.id] })),
+      podcasts: favPodcasts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        latest: latest[p.id],
+        feedUrl: isRssId(p.id) ? p.feedUrl ?? feedRegistry.get(p.id) : undefined,
+      })),
     }).catch(() => {});
   }, [favPodcasts, latest, country]);
 
