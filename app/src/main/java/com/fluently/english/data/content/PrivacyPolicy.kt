@@ -1,7 +1,10 @@
 package com.fluently.english.data.content
 
-/** Contact address shown in the privacy policy. Set it before publishing. */
-const val PRIVACY_CONTACT = "[بريد التواصل]"
+/** Contact address shown in the privacy policy. */
+const val PRIVACY_CONTACT = "kamelboumeftah10@gmail.com"
+
+/** Public copy of the policy (the link given to Google Play). */
+const val PRIVACY_URL = "https://iloveyouihcen.blogspot.com/2026/10/blog-post_05.html"
 
 const val PRIVACY_UPDATED = "6 أكتوبر 2026"
 

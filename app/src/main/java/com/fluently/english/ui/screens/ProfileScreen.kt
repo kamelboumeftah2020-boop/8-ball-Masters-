@@ -104,6 +104,7 @@ import com.fluently.english.ui.components.SectionHeader
 import com.fluently.english.ui.components.StatItem
 import com.fluently.english.ui.components.VSpace
 import com.fluently.english.ui.components.ltr
+import com.fluently.english.ui.components.SecondaryButton
 import com.fluently.english.ui.components.isolateLatin
 import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Coral
@@ -703,6 +704,26 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 SectionHeader(title)
                 Text(isolateLatin(body), style = MaterialTheme.typography.bodyMedium)
             }
+            VSpace(20.dp)
+            val context = LocalContext.current
+            SecondaryButton("فتح النسخة المنشورة على الإنترنت", onClick = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.fluently.english.data.content.PRIVACY_URL)),
+                    )
+                }
+            })
+            VSpace(10.dp)
+            SecondaryButton("راسلنا بخصوص بياناتك", onClick = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_SENDTO,
+                            android.net.Uri.parse("mailto:${com.fluently.english.data.content.PRIVACY_CONTACT}"),
+                        ).putExtra(android.content.Intent.EXTRA_SUBJECT, "طلاقة — طلب بخصوص بياناتي"),
+                    )
+                }
+            })
             VSpace(28.dp)
         }
     }

@@ -21,8 +21,8 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.8.0"
+        versionCode = 14
+        versionName = "1.8.1"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
         buildConfigField("String", "FIREBASE_API_KEY", "\"${setting("FIREBASE_API_KEY")}\"")
