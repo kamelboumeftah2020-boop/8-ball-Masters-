@@ -1,10 +1,11 @@
-// تحميل التلاوات والمواعظ للاستماع دون اتصال.
+// تحميل التلاوات والمواعظ للاستماع دون اتصال، وكتب المكتبة (PDF) للقراءة دون اتصال.
 // في أندرويد: تُحفظ الملفات في مساحة التطبيق الخاصة (files/audio) وتُشغَّل عبر /_nur_audio_/
 // في المتصفح: تُحفظ في Cache Storage وتُشغَّل من رابط blob.
 import { store, toast, arNum } from './core.js';
 import { isNative, nativePlugin } from './native.js';
 
 const CACHE = 'nur-audio-v1';
+const MIME = { mp3: 'audio/mpeg', pdf: 'application/pdf' };
 export const events = new EventTarget();
 const emit = id => events.dispatchEvent(new CustomEvent('change', { detail: id }));
 
@@ -30,7 +31,7 @@ export const activeJobs = () => [...jobs.values()];
 /**
  * إضافة مادة إلى قائمة التحميل.
  * key: الرابط الأساسي (معرّف المادة)، urls: روابط التحميل بالترتيب (الأساسي ثم البدائل)
- * meta: { kind: 'surah' | 'lecture', title, sub, ref }
+ * meta: { kind: 'surah' | 'lecture' | 'book', title, sub, ref, ext? } (ext: امتداد الملف، mp3 افتراضًا)
  */
 export function enqueue(key, urls, meta) {
   const id = idOf(key);
@@ -101,7 +102,7 @@ async function downloadNative(j, url) {
     });
   }
   await FS.mkdir({ path: 'audio', directory: 'DATA', recursive: true }).catch(() => {});
-  const part = `audio/${j.id}.part`, final = `audio/${j.id}.mp3`;
+  const part = `audio/${j.id}.part`, final = `audio/${j.id}.${j.meta.ext || 'mp3'}`;
   const { uri } = await FS.getUri({ path: part, directory: 'DATA' });
   j.currentUrl = url;
   await FT.downloadFile({ url, path: uri, progress: true });
@@ -127,10 +128,11 @@ async function downloadWeb(j, url) {
     j.received += value.length;
     if (Date.now() - lastEmit > 250) { lastEmit = Date.now(); emit(j.id); }
   }
-  const blob = new Blob(chunks, { type: 'audio/mpeg' });
+  const ext = j.meta.ext || 'mp3';
+  const blob = new Blob(chunks, { type: MIME[ext] });
   if (blob.size < 10000) throw new Error('empty');
   const c = await caches.open(CACHE);
-  await c.put(`/__nur_audio__/${j.id}.mp3`, new Response(blob, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Length': String(blob.size) } }));
+  await c.put(`/__nur_audio__/${j.id}.${ext}`, new Response(blob, { headers: { 'Content-Type': MIME[ext], 'Content-Length': String(blob.size) } }));
   return blob.size;
 }
 
@@ -138,11 +140,13 @@ async function downloadWeb(j, url) {
 const blobUrls = new Map();
 export async function localSource(key) {
   const id = idOf(key);
-  if (!registry()[id]) return null;
-  if (isNative) return `${location.origin}/_nur_audio_/${id}.mp3`;
+  const entry = registry()[id];
+  if (!entry) return null;
+  const ext = entry.ext || 'mp3';
+  if (isNative) return `${location.origin}/_nur_audio_/${id}.${ext}`;
   if (blobUrls.has(id)) return blobUrls.get(id);
   try {
-    const r = await (await caches.open(CACHE)).match(`/__nur_audio__/${id}.mp3`);
+    const r = await (await caches.open(CACHE)).match(`/__nur_audio__/${id}.${ext}`);
     if (!r) throw new Error('missing');
     const u = URL.createObjectURL(await r.blob());
     blobUrls.set(id, u);
@@ -157,10 +161,9 @@ export async function localSource(key) {
 async function removeFile(id) {
   if (isNative) {
     const FS = nativePlugin('Filesystem');
-    await FS?.deleteFile({ path: `audio/${id}.mp3`, directory: 'DATA' }).catch(() => {});
-    await FS?.deleteFile({ path: `audio/${id}.part`, directory: 'DATA' }).catch(() => {});
+    for (const ext of ['mp3', 'pdf', 'part']) await FS?.deleteFile({ path: `audio/${id}.${ext}`, directory: 'DATA' }).catch(() => {});
   } else {
-    await caches.open(CACHE).then(c => c.delete(`/__nur_audio__/${id}.mp3`)).catch(() => {});
+    await caches.open(CACHE).then(c => Promise.all(['mp3', 'pdf'].map(ext => c.delete(`/__nur_audio__/${id}.${ext}`)))).catch(() => {});
     if (blobUrls.has(id)) { URL.revokeObjectURL(blobUrls.get(id)); blobUrls.delete(id); }
   }
 }

@@ -71,7 +71,10 @@ export function renderHome(view, args, ctx) {
         <a class="tile" href="#/reminders"><span class="tile-ic">${icons.bell}</span><strong>التذكيرات</strong></a>
         <a class="tile" href="#/calendar"><span class="tile-ic gold">${icons.calendar}</span><strong>التقويم</strong></a>
         <a class="tile" href="#/ruqya"><span class="tile-ic">${icons.heart}</span><strong>الرقية</strong></a>
-        <a class="tile" href="#/downloads"><span class="tile-ic gold">${icons.download}</span><strong>التنزيلات</strong></a>
+        <a class="tile" href="#/library"><span class="tile-ic gold">${icons.book}</span><strong>المكتبة</strong></a>
+        <a class="tile" href="#/stories"><span class="tile-ic">${icons.scroll}</span><strong>قصص الأنبياء</strong></a>
+        <a class="tile" href="#/mawaiz/written"><span class="tile-ic gold">${icons.list}</span><strong>مواعظ مكتوبة</strong></a>
+        <a class="tile" href="#/downloads"><span class="tile-ic">${icons.download}</span><strong>التنزيلات</strong></a>
       </div>
       <div id="wirdBox"></div>
       ${cont.length ? `<div class="section-head"><h2>تابع من حيث توقفت</h2></div><div class="mini-cards">${cont.join('')}</div>` : ''}

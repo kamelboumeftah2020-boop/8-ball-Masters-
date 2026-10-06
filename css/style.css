@@ -282,7 +282,7 @@ svg .fill { fill: currentColor; stroke: none; }
 .wa3z .text { font-family: var(--naskh); font-size: 21px; line-height: 2; margin: 12px 0 4px; }
 .wa3z.ayah .text { font-family: var(--quran); font-size: 23px; line-height: 2.2; color: var(--primary); }
 .wa3z.ayah .text::before { content: "﴿ "; } .wa3z.ayah .text::after { content: " ﴾"; }
-.wa3z.hadith .text::before { content: "« "; color: var(--muted); } .wa3z.hadith .text::after { content: " »"; color: var(--muted); }
+.wa3z.hadith .text:not(.quoted)::before { content: "« "; color: var(--muted); } .wa3z.hadith .text:not(.quoted)::after { content: " »"; color: var(--muted); }
 .wa3z .src { font-size: 13px; color: var(--muted); }
 .wa3z .note { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 14.5px; color: var(--muted); }
 .wa3z .actions { display: flex; gap: 4px; margin-top: 10px; justify-content: flex-end; }
@@ -867,3 +867,57 @@ body.reader-full .view { animation: none !important; transform: none !important;
 .avatar.ruqya { background: linear-gradient(135deg, #6b2a78, #3f1847); }
 .note-box.warn { background: color-mix(in srgb, #c9a24a 14%, var(--surface)); }
 .hd-select { margin-bottom: 12px; }
+
+/* ── المكتبة ── */
+.anbiya-promo { margin: 0 0 14px; }
+.btn.sm { height: 36px; padding: 0 14px; font-size: 13.5px; border-radius: 11px; flex: none; }
+.badge-dl { color: var(--primary); display: grid; }
+.badge-dl svg { width: 20px; height: 20px; }
+.num-badge { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--gold-soft); color: var(--gold); font-weight: 700; font-size: 14px; flex: none; }
+.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cat-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
+.cat-card b { font-size: 15px; line-height: 1.5; }
+.cat-card small { color: var(--muted); font-size: 12.5px; }
+.book-head { text-align: center; }
+.book-head h2 { margin: 12px 0 4px; font-size: 19px; line-height: 1.6; }
+.book-head p { margin: 0; }
+.book-cover { width: 70px; height: 92px; margin: 0 auto; border-radius: 6px 14px 14px 6px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 60%, #000)); box-shadow: var(--shadow); }
+.book-cover svg { width: 32px; height: 32px; }
+.book-tags { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.book-tags > * { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.book-tags a { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.book-desc { text-align: start; margin-top: 14px !important; padding-top: 14px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 14px; line-height: 1.9; }
+#bfiles .row { gap: 10px; }
+#bfiles .meta { min-width: 0; }
+
+/* قارئ PDF */
+.pdf-wrap { margin: -6px -16px 0; overflow-x: auto; padding: 0 0 90px; }
+.pdf-pages { width: calc(100% * var(--z, 1)); display: flex; flex-direction: column; gap: 8px; padding: 0 6px; }
+.pdf-page { position: relative; width: 100%; background: #fff; border-radius: 4px; box-shadow: var(--shadow); overflow: hidden; }
+.pdf-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pdf-num { position: absolute; inset: 0; display: grid; place-items: center; color: #b8b2a3; font-size: 22px; font-weight: 700; }
+.pdf-page.ready .pdf-num { display: none; }
+.pdf-wrap.night .pdf-page { background: #111; }
+.pdf-wrap.night canvas { filter: invert(.88) hue-rotate(180deg); }
+.pdf-bar { position: fixed; z-index: 30; inset-inline: 12px; bottom: calc(var(--tab-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 8px); display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-lg); max-width: 520px; margin: 0 auto; }
+.pdf-count { flex: 1; height: 40px; border-radius: 12px; font-size: 14px; color: var(--muted); }
+.pdf-count b { color: var(--text); }
+.pdf-bar .icon-btn.on { color: var(--gold); background: var(--gold-soft); }
+.pdf-dl { display: grid; padding: 0 6px; }
+
+/* قصص الأنبياء */
+.story { padding: 20px 18px; }
+.story-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.story-head h2 { margin: 0; font-size: 21px; }
+.story p { font-family: var(--naskh); font-size: var(--fs, 19px); line-height: 2.05; margin: 12px 0; }
+.story h3 { font-size: 16.5px; margin: 20px 0 4px; color: var(--primary); }
+.story .story-ayah { font-family: var(--quran); color: var(--primary); background: var(--primary-soft); padding: 10px 14px; border-radius: 14px; font-size: calc(var(--fs, 19px) + 2px); line-height: 2.2; }
+.story-lessons { margin-top: 18px; padding: 14px 16px; border-radius: 16px; background: var(--gold-soft); }
+.story-lessons h3 { margin: 0 0 6px; color: var(--gold); }
+.story-lessons li { font-size: calc(var(--fs, 19px) - 3px); line-height: 1.9; margin: 4px 0; }
+.story-refs { font-family: inherit !important; font-size: 13px !important; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; line-height: 1.8 !important; }
+.story-refs svg { width: 16px; height: 16px; flex: none; margin-top: 4px; }
+.story-tools { display: flex; justify-content: flex-end; gap: 4px; }
+.story-nav { margin-top: 14px; }
+.story-nav .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.has-player .pdf-bar { bottom: calc(var(--tab-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 84px); }

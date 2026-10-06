@@ -271,7 +271,7 @@ export function wa3zCard(w, i) {
   const saved = store.get('savedWa3z', []).includes(i);
   return `<article class="card wa3z ${w.type}" data-i="${i}">
     <div class="wa3z-top"><span class="tag">${TYPE_NAMES[w.type]}</span><h3>${esc(w.title)}</h3></div>
-    <p class="text">${esc(w.text)}</p>
+    <p class="text${w.text.startsWith('«') ? ' quoted' : ''}">${esc(w.text)}</p>
     <div class="src">${esc(w.source)}</div>
     <div class="note">${esc(w.note)}</div>
     <div class="actions">

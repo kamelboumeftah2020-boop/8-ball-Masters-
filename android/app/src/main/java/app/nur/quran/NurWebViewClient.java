@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * يقدّم الصوتيات المحمّلة (files/audio) للواجهة عبر https://localhost/_nur_audio_/
+ * يقدّم الملفات المحمّلة (files/audio: صوتيات mp3 وكتب pdf) للواجهة عبر https://localhost/_nur_audio_/
  * مع دعم صحيح لطلبات Range، ليعمل التقديم والاستكمال في المواعظ والسور المحمّلة.
  */
 public class NurWebViewClient extends BridgeWebViewClient {
@@ -61,7 +61,8 @@ public class NurWebViewClient extends BridgeWebViewClient {
             headers.put("Content-Length", String.valueOf(length));
             headers.put("Cache-Control", "no-cache");
             if (partial) headers.put("Content-Range", "bytes " + start + "-" + end + "/" + total);
-            return new WebResourceResponse("audio/mpeg", null, partial ? 206 : 200, partial ? "Partial Content" : "OK", headers, new Limited(in, length));
+            String mime = name.endsWith(".pdf") ? "application/pdf" : "audio/mpeg";
+            return new WebResourceResponse(mime, null, partial ? 206 : 200, partial ? "Partial Content" : "OK", headers, new Limited(in, length));
         } catch (IOException | NumberFormatException e) {
             return notFound();
         }

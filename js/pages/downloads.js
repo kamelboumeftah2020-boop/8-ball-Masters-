@@ -91,8 +91,9 @@ export function renderDownloads(view, args, ctx) {
     const active = dl.activeJobs();
     const surahs = items.filter(d => d.kind === 'surah');
     const lectures = items.filter(d => d.kind === 'lecture');
+    const books = items.filter(d => d.kind === 'book');
     const row = d => `<div class="row dl-row" data-key="${esc(d.key)}">
-        <button class="play-ic" data-act="play" aria-label="تشغيل">${icons.play}</button>
+        <button class="play-ic" data-act="play" aria-label="${d.kind === 'book' ? 'قراءة' : 'تشغيل'}">${d.kind === 'book' ? icons.book : icons.play}</button>
         <span class="meta"><strong>${esc(d.title)}</strong><small>${esc(d.sub)} · ${dl.fmtSize(d.size)}</small></span>
         <button class="icon-btn sm" data-act="del" aria-label="حذف">${icons.close}</button>
       </div>`;
@@ -110,7 +111,8 @@ export function renderDownloads(view, args, ctx) {
         </div>`).join('')}</div>` : ''}
       ${surahs.length ? `<div class="section-head"><h2>التلاوات</h2></div><div class="list-card">${surahs.map(row).join('')}</div>` : ''}
       ${lectures.length ? `<div class="section-head"><h2>المواعظ</h2></div><div class="list-card">${lectures.map(row).join('')}</div>` : ''}
-      ${!items.length && !active.length ? `<div class="empty">لا توجد تنزيلات بعد.<br>اضغط زر التحميل ${icons.download.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px"')} بجانب أي سورة أو موعظة لتستمع إليها دون إنترنت.</div>` : ''}`;
+      ${books.length ? `<div class="section-head"><h2>الكتب</h2></div><div class="list-card">${books.map(row).join('')}</div>` : ''}
+      ${!items.length && !active.length ? `<div class="empty">لا توجد تنزيلات بعد.<br>اضغط زر التحميل ${icons.download.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px"')} بجانب أي سورة أو موعظة أو كتاب لتستعمله دون إنترنت.</div>` : ''}`;
     $('#delAll')?.addEventListener('click', () => confirmSheet('حذف كل التنزيلات؟', `ستُحذف ${arNum(items.length)} مادة (${dl.fmtSize(dl.totalSize())}) من جهازك.`, 'حذف الكل', () => dl.removeAll().then(() => toast('حُذفت التنزيلات'))));
   };
   draw();
@@ -125,7 +127,9 @@ export function renderDownloads(view, args, ctx) {
       confirmSheet('حذف من التنزيلات؟', `«${esc(d.title)}» (${dl.fmtSize(d.size)})`, 'حذف', () => dl.remove(key).then(() => toast('حُذف الملف')));
       return;
     }
-    if (d.kind === 'surah') {
+    if (d.kind === 'book') {
+      location.hash = `#/library/read/${d.ref.id}/${d.ref.i}`;
+    } else if (d.kind === 'surah') {
       if (player.mode === 'surah' && player.surah === d.ref.surah && player.reciter === d.ref.reciter) toggle();
       else playSurah(d.ref.surah, d.ref.reciter);
     } else {

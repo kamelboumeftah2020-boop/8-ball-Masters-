@@ -13,6 +13,7 @@ import { renderKhatma, renderReminders } from './pages/khatma.js';
 import { renderHadith } from './pages/hadith.js';
 import { renderCalendar } from './pages/calendar.js';
 import { renderRuqya } from './pages/ruqya.js';
+import { renderLibrary, renderStories } from './pages/library.js';
 
 /* ── المظهر ── */
 const root = document.documentElement;
@@ -45,6 +46,8 @@ const ROUTES = {
   tasbih: { render: renderTasbih, title: 'السبحة', tab: 'adhkar' },
   qibla: { render: renderQibla, title: 'اتجاه القبلة', tab: 'adhan' },
   adhan: { render: renderAdhan, title: 'مواقيت الصلاة', tab: 'adhan' },
+  library: { render: renderLibrary, title: 'المكتبة', tab: 'mawaiz' },
+  stories: { render: renderStories, title: 'قصص الأنبياء', tab: 'mawaiz' },
   downloads: { render: renderDownloads, title: 'التنزيلات', tab: 'mawaiz' },
 };
 

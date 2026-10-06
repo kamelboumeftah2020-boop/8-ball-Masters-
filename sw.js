@@ -1,12 +1,12 @@
 // تخزين واجهة التطبيق وسور المصحف والتفسير لتعمل دون اتصال
-const SHELL = 'nur-shell-v10';
+const SHELL = 'nur-shell-v11';
 const DATA = 'nur-data-v3';
 const FILES = [
   './', 'index.html', 'css/style.css', 'css/fonts.css', 'manifest.webmanifest',
   'js/app.js', 'js/core.js', 'js/native.js', 'js/mushafFont.js', 'js/warshData.js', 'js/khatma.js', 'js/reminders.js', 'js/hijri.js', 'js/search.js', 'js/downloads.js', 'js/player.js', 'js/prayer.js',
   'js/data/surahs.js', 'js/data/mawaiz.js', 'js/data/adhkar.js',
-  'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js', 'js/pages/downloads.js', 'js/pages/warsh.js', 'js/pages/khatma.js', 'js/pages/hadith.js', 'js/pages/calendar.js', 'js/pages/ruqya.js',
-  'data/lectures.json', 'data/warsh-index.json', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
+  'js/pages/home.js', 'js/pages/quran.js', 'js/pages/mawaiz.js', 'js/pages/adhkar.js', 'js/pages/adhan.js', 'js/pages/downloads.js', 'js/pages/warsh.js', 'js/pages/khatma.js', 'js/pages/hadith.js', 'js/pages/calendar.js', 'js/pages/ruqya.js', 'js/pages/library.js', 'js/data/anbiya.js',
+  'data/lectures.json', 'data/warsh-index.json', 'data/library.json', 'js/vendor/pdf.min.js', 'js/vendor/pdf.worker.min.js', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
