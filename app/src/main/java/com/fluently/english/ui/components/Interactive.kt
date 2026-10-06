@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -425,31 +426,6 @@ private fun MatchTile(text: String, state: TileState, enabled: Boolean, onClick:
 
 // ---------- Speaking practice ----------
 
-class SpeechInput(val available: Boolean, val start: () -> Unit)
-
-/** Launches the system speech recogniser (English) and returns the candidates heard. */
-@Composable
-fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
-    val context = LocalContext.current
-    val onResultState by rememberUpdatedState(onResult)
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        onResultState(res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty())
-    }
-    val available = remember {
-        runCatching { SpeechRecognizer.isRecognitionAvailable(context) }.getOrDefault(false)
-    }
-    return remember(available) {
-        SpeechInput(available) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                .putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
-                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            runCatching { launcher.launch(intent) }.onFailure { onResultState(emptyList()) }
-        }
-    }
-}
-
 /**
  * Listen → speak → get a score. Used for speaking questions and for practising
  * new words. [onScored] receives the best match score (0..1) and what was heard.
@@ -473,29 +449,25 @@ fun SpeakPractice(target: String, compact: Boolean = false, onScored: (Float, St
     val animated by animateFloatAsState(score, tween(600), label = "speech")
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        if (!input.available) {
-            Text(
-                "التعرف على الصوت غير متاح على هذا الجهاز. استمع وكرر بصوت عالٍ بنفسك.",
-                style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            return@Column
-        }
         Box(
             Modifier
+                .micPulse(input)
                 .size(if (compact) 56.dp else 76.dp)
                 .clip(CircleShape)
                 .background(Coral)
                 .clickable { input.start() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Mic, "تحدث", tint = Color.White, modifier = Modifier.size(if (compact) 28.dp else 36.dp))
+            Icon(if (input.listening) Icons.Rounded.Stop else Icons.Rounded.Mic, "تحدث", tint = Color.White, modifier = Modifier.size(if (compact) 28.dp else 36.dp))
         }
         VSpace(8.dp)
-        Text(
-            if (heard == null) "اضغط على الميكروفون وانطق" else "حاول مرة أخرى إن أردت",
-            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (!input.listening) {
+            Text(
+                if (heard == null) "اضغط على الميكروفون وانطق" else "حاول مرة أخرى إن أردت",
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SpeechStatus(input)
         val said = heard
         if (said != null) {
             VSpace(12.dp)

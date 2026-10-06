@@ -85,6 +85,8 @@ import com.fluently.english.ui.components.VSpace
 import com.fluently.english.ui.components.isolateLatin
 import com.fluently.english.ui.components.ltr
 import com.fluently.english.ui.components.rememberSpeechInput
+import com.fluently.english.ui.components.SpeechStatus
+import com.fluently.english.ui.components.micPulse
 import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Coral
 import com.fluently.english.ui.theme.Danger
@@ -730,12 +732,12 @@ private fun SpeakingPartView(section: MockSection, index: Int, remaining: Int, o
             )
         }
 
-        if (speech.available) {
+        run {
             VSpace(16.dp)
             AppCard(padding = 14.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(44.dp).clip(CircleShape).background(Coral).clickable { speech.start() },
+                        Modifier.micPulse(speech).size(44.dp).clip(CircleShape).background(Coral).clickable { speech.start() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(Icons.Rounded.Mic, null, tint = Color.White)
@@ -746,6 +748,7 @@ private fun SpeakingPartView(section: MockSection, index: Int, remaining: Int, o
                         style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                     )
                 }
+                SpeechStatus(speech)
                 heard.lastOrNull()?.let { said ->
                     val n = said.split(" ").count { it.isNotBlank() }
                     VSpace(10.dp)

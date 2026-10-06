@@ -64,6 +64,8 @@ import com.fluently.english.ui.components.ScreenHeader
 import com.fluently.english.ui.components.VSpace
 import com.fluently.english.ui.components.isolateLatin
 import com.fluently.english.ui.components.rememberSpeechInput
+import com.fluently.english.ui.components.SpeechStatus
+import com.fluently.english.ui.components.micPulse
 import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Coral
 import com.fluently.english.ui.theme.Danger
@@ -232,19 +234,22 @@ private fun ConversationRun(
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("ردك:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                        if (speech.available) {
-                            Row(
-                                Modifier.clip(CircleShape).background(Coral.copy(alpha = 0.12f))
-                                    .clickable(enabled = !busy) { speech.start() }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(Icons.Rounded.Mic, null, tint = Coral, modifier = Modifier.size(18.dp))
-                                HSpace(4.dp)
-                                Text("قلها بصوتك", style = MaterialTheme.typography.labelMedium, color = Coral)
-                            }
+                        Row(
+                            Modifier.micPulse(speech).clip(CircleShape)
+                                .background(if (speech.listening) Coral else Coral.copy(alpha = 0.12f))
+                                .clickable(enabled = !busy) { notHeard = false; speech.start() }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Mic, null, tint = if (speech.listening) Color.White else Coral, modifier = Modifier.size(18.dp))
+                            HSpace(4.dp)
+                            Text(
+                                if (speech.listening) "أستمع…" else "قلها بصوتك",
+                                style = MaterialTheme.typography.labelMedium, color = if (speech.listening) Color.White else Coral,
+                            )
                         }
                     }
+                    SpeechStatus(speech)
                     if (notHeard) {
                         Text("لم أتعرف على ردك، حاول مرة أخرى أو اختر من القائمة.", style = MaterialTheme.typography.bodySmall, color = Danger)
                     }

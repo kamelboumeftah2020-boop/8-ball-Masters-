@@ -21,8 +21,8 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 11
-        versionName = "1.7.2"
+        versionCode = 12
+        versionName = "1.7.3"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
         buildConfigField("String", "FIREBASE_API_KEY", "\"${setting("FIREBASE_API_KEY")}\"")
@@ -46,6 +46,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Robolectric runs the microphone tests on the JVM.
+    testOptions { unitTests.isIncludeAndroidResources = true }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -67,5 +69,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("org.json:json:20240303")
 }
