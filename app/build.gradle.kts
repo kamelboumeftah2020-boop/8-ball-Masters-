@@ -21,12 +21,27 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.7.3"
+        versionCode = 13
+        versionName = "1.8.0"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
         buildConfigField("String", "FIREBASE_API_KEY", "\"${setting("FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${setting("FIREBASE_PROJECT_ID")}\"")
+    }
+
+    signingConfigs {
+        // The permanent release key (kept outside the repository): RELEASE_STORE_FILE,
+        // RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD in
+        // local.properties or the environment.
+        val storeFile = setting("RELEASE_STORE_FILE")
+        if (storeFile.isNotBlank() && rootProject.file(storeFile).exists()) {
+            create("release") {
+                this.storeFile = rootProject.file(storeFile)
+                storePassword = setting("RELEASE_STORE_PASSWORD")
+                keyAlias = setting("RELEASE_KEY_ALIAS")
+                keyPassword = setting("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -34,9 +49,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the release APK installs out of the box.
-            // Replace with your own signing config before publishing to Google Play.
-            signingConfig = signingConfigs.getByName("debug")
+            // The permanent release key when available; otherwise the debug key so the
+            // build still produces an installable APK (e.g. on CI without the secrets).
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

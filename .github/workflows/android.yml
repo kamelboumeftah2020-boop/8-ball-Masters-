@@ -18,8 +18,17 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
       - name: Build APKs
-        run: ./gradlew assembleDebug assembleRelease
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            mkdir -p signing && echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > signing/fluently-release.jks
+            export RELEASE_STORE_FILE=signing/fluently-release.jks
+          fi
+          ./gradlew assembleDebug assembleRelease
         env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
       - uses: actions/upload-artifact@v4

@@ -18,5 +18,14 @@ service cloud.firestore {
         && request.resource.data.streak is int && request.resource.data.streak >= 0;
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
+
+    // Crash reports: signed-in learners can send one about their own app;
+    // only you can read them (in the Firebase console).
+    match /crashes/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['time', 'version', 'device', 'android', 'trace', 'uid'])
+        && request.resource.data.trace is string && request.resource.data.trace.size() <= 10000;
+    }
   }
 }

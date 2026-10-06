@@ -93,6 +93,7 @@ fun HomeScreen(
             .padding(horizontal = 20.dp),
     ) {
         TopRow(progress)
+        com.fluently.english.ui.components.VoiceWarning(Modifier.padding(top = 14.dp))
         if (guest) {
             VSpace(14.dp)
             AppCard(onClick = onCreateAccount, color = com.fluently.english.ui.theme.Gold.copy(alpha = 0.12f), bordered = false, padding = 14.dp) {

@@ -62,6 +62,7 @@ import com.fluently.english.ui.screens.ReaderListScreen
 import com.fluently.english.ui.screens.ReaderScreen
 import com.fluently.english.ui.screens.ReportScreen
 import com.fluently.english.ui.screens.GoalScreen
+import com.fluently.english.ui.screens.PrivacyScreen
 import com.fluently.english.ui.screens.LeaderboardScreen
 import com.fluently.english.ui.screens.WritingLabScreen
 import com.fluently.english.ui.screens.WritingTaskScreen
@@ -271,6 +272,7 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                 val id = entry.arguments?.getString("id").orEmpty()
                 WritingTaskScreen(id, onChecked = { words, rating -> vm.completeWriting(id, words, rating) }, onBack = { nav.popBackStack() })
             }
+            composable("privacy") { PrivacyScreen(onBack = { nav.popBackStack() }) }
             composable("goal") {
                 GoalScreen(progress.learningGoal, onSelect = { vm.setGoal(it); nav.popBackStack() }, onBack = { nav.popBackStack() })
             }
@@ -377,10 +379,12 @@ private fun MainApp(vm: AppViewModel, session: Session) {
                         changeEmail = vm::changeEmail,
                         createAccount = vm::leaveGuest,
                         signInAgain = vm::signInAgain,
+                        deleteAccount = vm::deleteAccount,
                     ),
                     onSignOut = { scope.launch { vm.signOut() } },
                     onReport = { nav.navigate("report") },
                     onLeaderboard = { nav.navigate("leaderboard") },
+                    onPrivacy = { nav.navigate("privacy") },
                     onLearningGoal = vm::setGoal,
                     exportBackup = vm::exportBackup,
                     importBackup = vm::importBackup,

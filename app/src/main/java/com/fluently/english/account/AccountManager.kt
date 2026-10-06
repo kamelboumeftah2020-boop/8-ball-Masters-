@@ -2,6 +2,7 @@ package com.fluently.english.account
 
 import android.content.Context
 import com.fluently.english.BuildConfig
+import com.fluently.english.crash.CrashReporter
 import com.fluently.english.data.progress.Progress
 import com.fluently.english.data.progress.ProgressCodec
 import com.fluently.english.data.progress.ProgressRepository
@@ -23,7 +24,7 @@ enum class SyncState { IDLE, SYNCING, SYNCED, OFFLINE, EXPIRED }
  * otherwise in an account stored on this device.
  */
 class AccountManager(
-    context: Context,
+    private val context: Context,
     private val repo: ProgressRepository,
     private val scope: CoroutineScope,
     private val backend: AuthBackend = defaultBackend(context),
@@ -40,7 +41,12 @@ class AccountManager(
     init {
         repo.onChange = { schedulePush() }
         // Pick up changes made on another device since the last launch.
-        _session.value?.takeIf { !it.guest }?.let { s -> scope.launch { runCatching { merge(s) } } }
+        _session.value?.takeIf { !it.guest }?.let { s ->
+            scope.launch {
+                runCatching { merge(s) }
+                uploadCrash()
+            }
+        }
     }
 
     suspend fun signUp(name: String, email: String, password: String) {
@@ -83,6 +89,25 @@ class AccountManager(
         _session.value = updated
         saveSession(updated)
         return pending
+    }
+
+    /**
+     * Permanently deletes the account (after confirming the password), its saved
+     * progress and leaderboard row, then clears this device. Guests just clear the device.
+     */
+    suspend fun deleteAccount(password: String) {
+        val s = _session.value ?: return
+        if (!s.guest) {
+            val fresh = backend.signIn(s.email, password)
+            pushJob?.cancel()
+            backend.deleteAccount(fresh, weekIndex(repo.today()))
+        }
+        _session.value = null
+        saveSession(null)
+        repo.onChange = null
+        repo.replace(Progress())
+        repo.owner = ""
+        repo.onChange = { schedulePush() }
     }
 
     /** Uses the app without an account; progress stays on this device only. */
@@ -168,6 +193,14 @@ class AccountManager(
             _sync.value = SyncState.OFFLINE
         }
         return fresh
+    }
+
+    /** Sends last session's crash report, if any (signed-in cloud accounts only). */
+    private suspend fun uploadCrash() {
+        val s = _session.value?.takeIf { it.cloud && !it.guest } ?: return
+        val report = CrashReporter.pending(context) ?: return
+        val sent = runCatching { backend.reportCrash(s, report) }.getOrDefault(false)
+        if (sent) CrashReporter.clear(context)
     }
 
     private fun schedulePush() {
@@ -265,9 +298,30 @@ class AccountManager(
     }
 
     companion object {
+        /** The headers Google uses to match an Android-restricted API key. */
+        fun androidAppHeaders(context: Context): Map<String, String> {
+            val sha1 = runCatching {
+                val pm = context.packageManager
+                @Suppress("DEPRECATION")
+                val cert = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                        .signingInfo?.apkContentsSigners?.firstOrNull()
+                } else {
+                    pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures?.firstOrNull()
+                }
+                cert?.toByteArray()?.let { bytes ->
+                    java.security.MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02X".format(it) }
+                }
+            }.getOrNull()
+            return buildMap {
+                put("X-Android-Package", context.packageName)
+                sha1?.let { put("X-Android-Cert", it) }
+            }
+        }
+
         fun defaultBackend(context: Context): AuthBackend =
             if (BuildConfig.FIREBASE_API_KEY.isNotBlank() && BuildConfig.FIREBASE_PROJECT_ID.isNotBlank()) {
-                FirebaseBackend(BuildConfig.FIREBASE_API_KEY, BuildConfig.FIREBASE_PROJECT_ID)
+                FirebaseBackend(BuildConfig.FIREBASE_API_KEY, BuildConfig.FIREBASE_PROJECT_ID, androidAppHeaders(context))
             } else {
                 LocalBackend(context)
             }

@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import com.fluently.english.crash.CrashReporter
 import com.fluently.english.tts.LocalSpeaker
 import com.fluently.english.tts.Speaker
 import com.fluently.english.ui.FluentlyApp
@@ -17,6 +18,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashReporter.install(this)
         enableEdgeToEdge()
         speaker = Speaker(this)
         setContent {
@@ -31,6 +33,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Picks up an English voice installed while the learner was away.
+        if (::speaker.isInitialized) speaker.recheck()
     }
 
     override fun onDestroy() {

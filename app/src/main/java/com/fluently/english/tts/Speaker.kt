@@ -5,23 +5,33 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import java.util.Locale
 
+/** Whether the phone can actually speak English. */
+enum class VoiceStatus { LOADING, READY, NO_ENGLISH, NO_ENGINE }
+
 /** Thin wrapper around Android's offline text-to-speech, used for all audio. */
 class Speaker(context: Context) : TextToSpeech.OnInitListener {
-    private val tts = TextToSpeech(context.applicationContext, this)
+    /** Observed by the UI to warn when no English voice is installed. */
+    var status by mutableStateOf(VoiceStatus.LOADING)
+        private set
+    private val appContext = context.applicationContext
+    private var tts = TextToSpeech(appContext, this)
     private var ready = false
     private var pending: Pair<String, Float>? = null
     var baseRate: Float = 0.9f
 
     override fun onInit(status: Int) {
-        if (status != TextToSpeech.SUCCESS) return
-        val result = tts.setLanguage(Locale.US)
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            tts.setLanguage(Locale.UK)
+        if (status != TextToSpeech.SUCCESS) {
+            this.status = VoiceStatus.NO_ENGINE
+            return
         }
         ready = true
+        recheck()
         pending?.let { (text, factor) -> speak(text, factor) }
         pending = null
     }
@@ -35,6 +45,25 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
         sequence = null
         tts.setSpeechRate(baseRate * factor)
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, text.hashCode().toString())
+    }
+
+    /** Selects an English voice (US, else UK) and updates [status]; call again after installing one. */
+    fun recheck() {
+        if (!ready) {
+            // An engine may have just been installed: start a new one.
+            if (status == VoiceStatus.NO_ENGINE) {
+                runCatching { tts.shutdown() }
+                status = VoiceStatus.LOADING
+                tts = TextToSpeech(appContext, this)
+            }
+            return
+        }
+        fun ok(r: Int) = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED
+        status = when {
+            ok(runCatching { tts.setLanguage(Locale.US) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)) -> VoiceStatus.READY
+            ok(runCatching { tts.setLanguage(Locale.UK) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)) -> VoiceStatus.READY
+            else -> VoiceStatus.NO_ENGLISH
+        }
     }
 
     fun stop() {

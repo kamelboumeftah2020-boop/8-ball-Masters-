@@ -2,10 +2,12 @@ package com.fluently.english.ui.screens
 
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.rounded.AlternateEmail
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Login
 import androidx.compose.material.icons.rounded.MarkEmailRead
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
@@ -102,6 +104,7 @@ import com.fluently.english.ui.components.SectionHeader
 import com.fluently.english.ui.components.StatItem
 import com.fluently.english.ui.components.VSpace
 import com.fluently.english.ui.components.ltr
+import com.fluently.english.ui.components.isolateLatin
 import com.fluently.english.ui.theme.AppTheme
 import com.fluently.english.ui.theme.Coral
 import com.fluently.english.ui.theme.Danger
@@ -141,6 +144,7 @@ fun ProfileScreen(
     onSignOut: () -> Unit = {},
     onReport: () -> Unit = {},
     onLeaderboard: () -> Unit = {},
+    onPrivacy: () -> Unit = {},
     onLearningGoal: (LearningGoal) -> Unit = {},
     exportBackup: () -> String = { "" },
     importBackup: (String) -> Boolean = { false },
@@ -148,6 +152,7 @@ fun ProfileScreen(
     var editingName by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var changingEmail by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     var accountMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(account?.verified) {
@@ -273,6 +278,14 @@ fun ProfileScreen(
                         SettingRow(Icons.AutoMirrored.Rounded.Logout, Danger, "تسجيل الخروج", { confirmSignOut = true }, textColor = Danger)
                     }
                 }
+                if (!account.expired) {
+                    HorizontalDivider(color = border)
+                    SettingRow(
+                        Icons.Rounded.DeleteForever, Danger,
+                        if (account.guest) "حذف بياناتي من هذا الهاتف" else "حذف الحساب نهائياً",
+                        { deleting = true }, textColor = Danger,
+                    )
+                }
             }
         }
 
@@ -373,6 +386,8 @@ fun ProfileScreen(
             HorizontalDivider(color = border)
             SettingRow(Icons.AutoMirrored.Rounded.MenuBook, Gold, "المنهجية والمصادر العالمية", onMethods)
             HorizontalDivider(color = border)
+            SettingRow(Icons.Rounded.PrivacyTip, MaterialTheme.colorScheme.primary, "سياسة الخصوصية", onPrivacy)
+            HorizontalDivider(color = border)
             SettingRow(Icons.Rounded.DeleteOutline, Danger, "إعادة ضبط التقدم", { confirmReset = true }, textColor = Danger)
         }
         VSpace(28.dp)
@@ -400,6 +415,50 @@ fun ProfileScreen(
             },
             confirmButton = { TextButton(onClick = { confirmSignOut = false; onSignOut() }) { Text("خروج", color = Danger) } },
             dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("إلغاء") } },
+        )
+    }
+    if (deleting && account != null) {
+        var password by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+        var busy by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!busy) deleting = false },
+            title = { Text(if (account.guest) "حذف بياناتك؟" else "حذف الحساب نهائياً؟") },
+            text = {
+                Column {
+                    Text(
+                        if (account.guest) "سيُحذف كل تقدّمك من هذا الهاتف. لا يمكن التراجع."
+                        else "سيُحذف حسابك وكل تقدّمك ونقاطك وشهاداتك من الخادم ومن هذا الهاتف، ويُزال اسمك من الترتيب. لا يمكن التراجع عن هذا.",
+                    )
+                    if (!account.guest) {
+                        VSpace(10.dp)
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            OutlinedTextField(password, { password = it; error = null }, label = { Text("Password") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                        }
+                        Text("اكتب كلمة السر للتأكيد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Danger) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy, onClick = {
+                    if (!account.guest && password.isEmpty()) { error = "اكتب كلمة السر"; return@TextButton }
+                    busy = true
+                    scope.launch {
+                        try {
+                            accountActions.deleteAccount(password)
+                            deleting = false
+                        } catch (e: AuthException) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }) { Text(if (busy) "…" else "حذف نهائياً", color = Danger) }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { deleting = false }) { Text("إلغاء") } },
         )
     }
     if (changingEmail && account != null) {
@@ -629,4 +688,22 @@ class AccountActions(
     val changeEmail: suspend (newEmail: String, password: String) -> Boolean = { _, _ -> false },
     val createAccount: () -> Unit = {},
     val signInAgain: () -> Unit = {},
+    /** Deletes the account (password required; ignored for guests). */
+    val deleteAccount: suspend (password: String) -> Unit = {},
 )
+
+@Composable
+fun PrivacyScreen(onBack: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()),
+    ) {
+        ScreenHeader("سياسة الخصوصية", onBack = onBack, subtitle = "آخر تحديث: ${com.fluently.english.data.content.PRIVACY_UPDATED}")
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            com.fluently.english.data.content.PrivacySections.forEach { (title, body) ->
+                SectionHeader(title)
+                Text(isolateLatin(body), style = MaterialTheme.typography.bodyMedium)
+            }
+            VSpace(28.dp)
+        }
+    }
+}

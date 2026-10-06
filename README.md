@@ -97,3 +97,22 @@ app/src/main/java/com/fluently/english/
    FIREBASE_PROJECT_ID=...
    ```
    (أو كمتغيرات بيئة / GitHub Secrets بنفس الأسماء)، ثم أعد بناء التطبيق.
+
+## توقيع التطبيق
+
+نسخ الإصدار (Release) تُوقَّع بمفتاح دائم لا يُرفع إلى المستودع. ضع الملف في `signing/fluently-release.jks` وأضف إلى `local.properties`:
+
+```
+RELEASE_STORE_FILE=signing/fluently-release.jks
+RELEASE_STORE_PASSWORD=...
+RELEASE_KEY_ALIAS=fluently
+RELEASE_KEY_PASSWORD=...
+```
+
+وعلى GitHub Actions: الأسرار `RELEASE_KEYSTORE_BASE64` و`RELEASE_STORE_PASSWORD` و`RELEASE_KEY_ALIAS` و`RELEASE_KEY_PASSWORD`. بدون المفتاح تُوقَّع النسخة بمفتاح التطوير.
+
+## الخصوصية والبيانات
+
+- سياسة الخصوصية: [`docs/PRIVACY_POLICY.md`](docs/PRIVACY_POLICY.md)، وتظهر أيضاً داخل التطبيق (حسابي ← سياسة الخصوصية).
+- حذف الحساب وكل بياناته من داخل التطبيق: حسابي ← حذف الحساب نهائياً.
+- تقارير الأعطال تُرسل إلى مجموعة `crashes` في Firestore (قواعدها في `docs/firestore.rules`).

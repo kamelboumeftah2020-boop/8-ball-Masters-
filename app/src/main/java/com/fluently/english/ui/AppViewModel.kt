@@ -29,6 +29,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun checkVerified() = accounts.checkVerified()
     suspend fun changeEmail(newEmail: String, password: String) = accounts.changeEmail(newEmail, password)
     fun continueAsGuest() = accounts.continueAsGuest()
+    suspend fun deleteAccount(password: String) = accounts.deleteAccount(password)
     fun leaveGuest() = accounts.leaveGuest()
     fun signInAgain() = accounts.signInAgain()
     suspend fun leaderboard() = accounts.leaderboard()

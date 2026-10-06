@@ -58,6 +58,12 @@ interface AuthBackend {
      */
     suspend fun changeEmail(session: Session, newEmail: String): Pair<Session, Boolean>
 
+    /** Uploads a crash report (fields as strings); device accounts and guests keep it locally. */
+    suspend fun reportCrash(session: Session, report: Map<String, String>): Boolean = false
+
+    /** Permanently deletes the account and everything stored for it. */
+    suspend fun deleteAccount(session: Session, week: Long)
+
     suspend fun pull(session: Session): Pair<Session, RemoteProgress?>
     suspend fun push(session: Session, progress: RemoteProgress): Session
 
@@ -129,7 +135,15 @@ object AuthValidation {
 // Firebase (Authentication + Firestore) over REST — no SDK or google-services.json.
 // ======================================================================
 
-class FirebaseBackend(private val apiKey: String, private val projectId: String) : AuthBackend {
+/**
+ * [appHeaders] identify this Android app (package + signing certificate SHA-1)
+ * so the API key can be restricted to it in Google Cloud.
+ */
+class FirebaseBackend(
+    private val apiKey: String,
+    private val projectId: String,
+    private val appHeaders: Map<String, String> = emptyMap(),
+) : AuthBackend {
     override val cloud = true
 
     override suspend fun signUp(name: String, email: String, password: String): Session {
@@ -164,6 +178,25 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
         return s.copy(
             emailVerified = user?.optBoolean("emailVerified") == true,
             email = user?.optString("email")?.takeIf { it.isNotBlank() } ?: s.email,
+        )
+    }
+
+    override suspend fun reportCrash(session: Session, report: Map<String, String>): Boolean {
+        val s = fresh(session)
+        val fields = JSONObject()
+        (report + ("uid" to s.uid)).forEach { (k, v) -> fields.put(k, JSONObject().put("stringValue", v)) }
+        val (code, _) = request("POST", "$base/crashes", JSONObject().put("fields", fields).toString(), s.idToken)
+        return code in 200..299
+    }
+
+    override suspend fun deleteAccount(session: Session, week: Long) {
+        val s = fresh(session)
+        // Data first (it needs the account's token), then the account itself.
+        request("DELETE", docUrl(s), null, s.idToken)
+        request("DELETE", "$base/leaderboards/w$week/entries/${s.uid}", null, s.idToken)
+        post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$apiKey",
+            JSONObject().put("idToken", s.idToken),
         )
     }
 
@@ -318,6 +351,7 @@ class FirebaseBackend(private val apiKey: String, private val projectId: String)
             } else {
                 conn.requestMethod = method
             }
+            appHeaders.forEach { (k, v) -> conn.setRequestProperty(k, v) }
             conn.connectTimeout = 15_000
             conn.readTimeout = 20_000
             token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
@@ -390,6 +424,10 @@ class LocalBackend(context: Context) : AuthBackend {
 
     override suspend fun sendPasswordReset(email: String) {
         throw AuthException("استعادة كلمة السر تحتاج إلى حساب سحابي")
+    }
+
+    override suspend fun deleteAccount(session: Session, week: Long) {
+        prefs.edit().remove(key(session.email)).apply()
     }
 
     override suspend fun changeEmail(session: Session, newEmail: String): Pair<Session, Boolean> {
