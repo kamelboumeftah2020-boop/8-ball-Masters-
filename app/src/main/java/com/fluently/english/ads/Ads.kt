@@ -6,24 +6,34 @@ import android.content.ContextWrapper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.fluently.english.BuildConfig
-import com.unity3d.ads.IUnityAdsInitializationListener
-import com.unity3d.ads.IUnityAdsLoadListener
-import com.unity3d.ads.IUnityAdsShowListener
-import com.unity3d.ads.UnityAds
-import com.unity3d.ads.UnityAdsShowOptions
 import com.unity3d.ads.metadata.MetaData
+import com.unity3d.mediation.LevelPlay
+import com.unity3d.mediation.LevelPlayAdError
+import com.unity3d.mediation.LevelPlayAdInfo
+import com.unity3d.mediation.LevelPlayConfiguration
+import com.unity3d.mediation.LevelPlayInitError
+import com.unity3d.mediation.LevelPlayInitListener
+import com.unity3d.mediation.LevelPlayInitRequest
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAd
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAdListener
+import com.unity3d.mediation.rewarded.LevelPlayReward
+import com.unity3d.mediation.rewarded.LevelPlayRewardedAd
+import com.unity3d.mediation.rewarded.LevelPlayRewardedAdListener
 
 /**
- * Unity Ads, used gently: an optional rewarded ad (double XP, restore a streak),
- * at most one interstitial every few finished activities (never during a lesson,
- * test or speaking), and a banner on the list screens only.
+ * Ads through Unity LevelPlay (mediation; Unity Ads plus any networks enabled in
+ * the LevelPlay dashboard), used gently: an optional rewarded ad (double XP,
+ * restore a streak), at most one interstitial every few finished activities
+ * (never during a lesson, test or speaking), a banner and a native card on list
+ * screens only.
  */
 object Ads {
-    const val GAME_ID = "6200501"
-    const val INTERSTITIAL = "Interstitial_Android"
-    const val REWARDED = "Rewarded_Android"
-    const val BANNER = "Banner_Android"
+    const val APP_KEY = "2887a0485"
+    const val BANNER_ID = "67exfd6q45taf7bv"
+    const val INTERSTITIAL_ID = "xq7jit8fgvn1zfev"
+    const val REWARDED_ID = "972gjvqimt42e37i"
+    /** Native ad unit. LevelPlay 9.6's native API still loads by placement (the default one). */
+    const val NATIVE_ID = "8xja9skp813jdqco"
 
     /** Show an interstitial at most after every N finished activities… */
     private const val EVERY = 3
@@ -35,7 +45,10 @@ object Ads {
     /** A rewarded ad is loaded and can be offered. */
     var rewardedReady by mutableStateOf(false)
         private set
-    private var interstitialReady = false
+
+    private var interstitial: LevelPlayInterstitialAd? = null
+    private var rewarded: LevelPlayRewardedAd? = null
+    private var pendingReward: (() -> Unit)? = null
     private var finishedSinceAd = 0
     private var lastAdAt = 0L
 
@@ -45,7 +58,7 @@ object Ads {
     fun consentAsked(context: Context) = prefs(context).contains(KEY_CONSENT)
     fun personalized(context: Context) = prefs(context).getString(KEY_CONSENT, "no") == "yes"
 
-    /** Stores the learner's choice and passes it to Unity (GDPR / CCPA consent flags). */
+    /** Stores the learner's choice and passes it to LevelPlay and Unity (GDPR / CCPA). */
     fun setPersonalized(context: Context, yes: Boolean) {
         prefs(context).edit().putString(KEY_CONSENT, if (yes) "yes" else "no").apply()
         applyConsent(context.applicationContext)
@@ -55,38 +68,65 @@ object Ads {
 
     private fun applyConsent(context: Context) {
         val yes = personalized(context)
+        runCatching { LevelPlay.setConsent(yes) }
+        runCatching { LevelPlay.setMetaData("do_not_sell", if (yes) "false" else "true") }
+        runCatching { LevelPlay.setMetaData("is_child_directed", "false") }
         runCatching { MetaData(context).apply { set("gdpr.consent", yes); commit() } }
         runCatching { MetaData(context).apply { set("privacy.consent", yes); commit() } }
     }
 
     fun init(context: Context) {
-        if (initialized || !UnityAds.isSupported) return
+        if (initialized) return
         val app = context.applicationContext
-        applyConsent(app)
-        // Debug builds get Unity's test ads; release builds get real ones.
-        UnityAds.initialize(app, GAME_ID, BuildConfig.DEBUG, object : IUnityAdsInitializationListener {
-            override fun onInitializationComplete() {
+        applyConsent(app) // consent must be set before initialising
+        LevelPlay.init(app, LevelPlayInitRequest.Builder(APP_KEY).build(), object : LevelPlayInitListener {
+            override fun onInitSuccess(configuration: LevelPlayConfiguration) {
                 initialized = true
-                loadInterstitial()
-                loadRewarded()
+                createInterstitial()
+                createRewarded()
             }
-            override fun onInitializationFailed(error: UnityAds.UnityAdsInitializationError?, message: String?) {}
+            override fun onInitFailed(error: LevelPlayInitError) {}
         })
     }
 
-    private fun loadInterstitial() = UnityAds.load(INTERSTITIAL, object : IUnityAdsLoadListener {
-        override fun onUnityAdsAdLoaded(placementId: String?) { interstitialReady = true }
-        override fun onUnityAdsFailedToLoad(placementId: String?, error: UnityAds.UnityAdsLoadError?, message: String?) {
-            interstitialReady = false
+    private fun createInterstitial() {
+        interstitial = LevelPlayInterstitialAd(INTERSTITIAL_ID).apply {
+            setListener(object : LevelPlayInterstitialAdListener {
+                override fun onAdLoaded(adInfo: LevelPlayAdInfo) {}
+                override fun onAdLoadFailed(error: LevelPlayAdError) {}
+                override fun onAdDisplayed(adInfo: LevelPlayAdInfo) {}
+                override fun onAdDisplayFailed(error: LevelPlayAdError, adInfo: LevelPlayAdInfo) { loadAd() }
+                override fun onAdClosed(adInfo: LevelPlayAdInfo) { loadAd() }
+            })
+            loadAd()
         }
-    })
+    }
 
-    private fun loadRewarded() = UnityAds.load(REWARDED, object : IUnityAdsLoadListener {
-        override fun onUnityAdsAdLoaded(placementId: String?) { rewardedReady = true }
-        override fun onUnityAdsFailedToLoad(placementId: String?, error: UnityAds.UnityAdsLoadError?, message: String?) {
-            rewardedReady = false
+    private fun createRewarded() {
+        rewarded = LevelPlayRewardedAd(REWARDED_ID).apply {
+            setListener(object : LevelPlayRewardedAdListener {
+                override fun onAdLoaded(adInfo: LevelPlayAdInfo) { rewardedReady = true }
+                override fun onAdLoadFailed(error: LevelPlayAdError) { rewardedReady = false }
+                override fun onAdDisplayed(adInfo: LevelPlayAdInfo) {}
+                override fun onAdRewarded(reward: LevelPlayReward, adInfo: LevelPlayAdInfo) {
+                    pendingReward?.invoke()
+                    pendingReward = null
+                }
+                override fun onAdDisplayFailed(error: LevelPlayAdError, adInfo: LevelPlayAdInfo) {
+                    pendingReward = null
+                    rewardedReady = false
+                    loadAd()
+                }
+                override fun onAdClosed(adInfo: LevelPlayAdInfo) {
+                    pendingReward = null
+                    lastAdAt = System.currentTimeMillis() // no interstitial right after
+                    rewardedReady = false
+                    loadAd()
+                }
+            })
+            loadAd()
         }
-    })
+    }
 
     /**
      * Call when the learner leaves a finished lesson, story, conversation or game.
@@ -94,38 +134,23 @@ object Ads {
      */
     fun activityFinished(context: Context) {
         finishedSinceAd++
+        val ad = interstitial ?: return
         val now = System.currentTimeMillis()
-        if (finishedSinceAd < EVERY || now - lastAdAt < MIN_GAP_MS || !interstitialReady) return
+        if (finishedSinceAd < EVERY || now - lastAdAt < MIN_GAP_MS || !ad.isAdReady()) return
         val activity = context.findActivity() ?: return
-        interstitialReady = false
         finishedSinceAd = 0
         lastAdAt = now
-        UnityAds.show(activity, INTERSTITIAL, UnityAdsShowOptions(), object : IUnityAdsShowListener {
-            override fun onUnityAdsShowFailure(placementId: String?, error: UnityAds.UnityAdsShowError?, message: String?) = loadInterstitial()
-            override fun onUnityAdsShowStart(placementId: String?) {}
-            override fun onUnityAdsShowClick(placementId: String?) {}
-            override fun onUnityAdsShowComplete(placementId: String?, state: UnityAds.UnityAdsShowCompletionState?) = loadInterstitial()
-        })
+        ad.showAd(activity)
     }
 
-    /** Plays a rewarded ad; [onReward] runs only if it was watched to the end. */
+    /** Plays a rewarded ad; [onReward] runs only when LevelPlay grants the reward. */
     fun showRewarded(context: Context, onReward: () -> Unit, onFailed: () -> Unit = {}) {
+        val ad = rewarded
         val activity = context.findActivity()
-        if (activity == null || !rewardedReady) { onFailed(); return }
+        if (ad == null || activity == null || !ad.isAdReady()) { onFailed(); return }
+        pendingReward = onReward
         rewardedReady = false
-        UnityAds.show(activity, REWARDED, UnityAdsShowOptions(), object : IUnityAdsShowListener {
-            override fun onUnityAdsShowFailure(placementId: String?, error: UnityAds.UnityAdsShowError?, message: String?) {
-                loadRewarded()
-                onFailed()
-            }
-            override fun onUnityAdsShowStart(placementId: String?) {}
-            override fun onUnityAdsShowClick(placementId: String?) {}
-            override fun onUnityAdsShowComplete(placementId: String?, state: UnityAds.UnityAdsShowCompletionState?) {
-                if (state == UnityAds.UnityAdsShowCompletionState.COMPLETED) onReward()
-                lastAdAt = System.currentTimeMillis() // no interstitial right after
-                loadRewarded()
-            }
-        })
+        ad.showAd(activity)
     }
 }
 

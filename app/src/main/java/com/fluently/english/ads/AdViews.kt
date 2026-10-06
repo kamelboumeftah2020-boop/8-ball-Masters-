@@ -31,9 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fluently.english.ui.components.HSpace
 import com.fluently.english.ui.theme.Gold
-import com.unity3d.services.banners.BannerErrorInfo
-import com.unity3d.services.banners.BannerView
-import com.unity3d.services.banners.UnityBannerSize
+import com.unity3d.mediation.LevelPlayAdError
+import com.unity3d.mediation.LevelPlayAdInfo
+import com.unity3d.mediation.LevelPlayAdSize
+import com.unity3d.mediation.banner.LevelPlayBannerAdView
+import com.unity3d.mediation.banner.LevelPlayBannerAdViewListener
 
 /** Adds bonus XP to the learner's progress (provided by the app; no-op in previews/tests). */
 val LocalAddBonusXp = androidx.compose.runtime.staticCompositionLocalOf<(Int) -> Unit> { {} }
@@ -46,7 +48,7 @@ fun DoubleXpOffer(xp: Int, modifier: Modifier = Modifier) {
     RewardedOffer("ضاعف نقاطك: +$xp نقطة إضافية", onReward = { add(xp) }, modifier = modifier)
 }
 
-/** A 320×50 banner; takes no space until an ad has loaded. */
+/** A 320×50 LevelPlay banner; takes no space until an ad has loaded. */
 @Composable
 fun AdBanner(modifier: Modifier = Modifier) {
     if (!Ads.initialized) return
@@ -54,15 +56,13 @@ fun AdBanner(modifier: Modifier = Modifier) {
     val activity = context.findActivity() ?: return
     var loaded by remember { mutableStateOf(false) }
     val banner = remember {
-        BannerView(activity, Ads.BANNER, UnityBannerSize(320, 50)).apply {
-            setListener(object : BannerView.IListener {
-                override fun onBannerLoaded(bannerAdView: BannerView?) { loaded = true }
-                override fun onBannerShown(bannerAdView: BannerView?) {}
-                override fun onBannerClick(bannerAdView: BannerView?) {}
-                override fun onBannerFailedToLoad(bannerAdView: BannerView?, errorInfo: BannerErrorInfo?) { loaded = false }
-                override fun onBannerLeftApplication(bannerView: BannerView?) {}
+        val config = LevelPlayBannerAdView.Config.Builder().setAdSize(LevelPlayAdSize.BANNER).build()
+        LevelPlayBannerAdView(activity, Ads.BANNER_ID, config).apply {
+            setBannerListener(object : LevelPlayBannerAdViewListener {
+                override fun onAdLoaded(adInfo: LevelPlayAdInfo) { loaded = true }
+                override fun onAdLoadFailed(error: LevelPlayAdError) { loaded = false }
             })
-            load()
+            loadAd()
         }
     }
     DisposableEffect(banner) { onDispose { runCatching { banner.destroy() } } }

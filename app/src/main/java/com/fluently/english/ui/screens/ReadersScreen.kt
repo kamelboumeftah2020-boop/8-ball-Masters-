@@ -98,6 +98,7 @@ fun ReaderListScreen(progress: Progress, onBack: () -> Unit, onOpen: (String) ->
                 VSpace(10.dp)
                 Pill("أنهيت $finished من ${Readers.size} قصة", Gold, solid = true)
             }
+            com.fluently.english.ads.NativeAdCard(Modifier.padding(top = 14.dp))
             VSpace(14.dp)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip("الكل", filter == null) { filter = null }

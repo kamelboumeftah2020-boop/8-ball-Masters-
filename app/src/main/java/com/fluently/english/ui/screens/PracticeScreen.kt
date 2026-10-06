@@ -138,6 +138,8 @@ fun PracticeScreen(
                 FeatureTile(Icons.AutoMirrored.Rounded.MenuBook, Emerald, "مرجع القواعد", "كل الشروحات في مكان واحد", Modifier.weight(1f), onGrammar)
             }
 
+            com.fluently.english.ads.NativeAdCard(Modifier.padding(top = 16.dp))
+
             SectionHeader("ألعاب")
             GameRow(Icons.Rounded.Shuffle, Emerald, "رتّب الحروف", "كوّن الكلمة من حروفها المبعثرة", onScramble)
             VSpace(10.dp)
