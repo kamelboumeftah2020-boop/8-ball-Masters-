@@ -1,5 +1,5 @@
 // عامل الخدمة: يجعل اللعبة قابلة للتثبيت وتعمل بدون إنترنت (وضع البوتات)
-const CACHE = 'fl5-v2';
+const CACHE = 'fl5-v3';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/index.html', '/css/style.css', '/icon.svg', '/manifest.webmanifest'])).then(() => self.skipWaiting()));
 });

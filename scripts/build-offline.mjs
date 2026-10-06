@@ -21,11 +21,13 @@ const js = res.outputFiles[0].text.replace(/<\/script/g, '<\\/script');
 const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8')
   .replace(/url\(\.\.\/fonts\/([\w-]+\.woff2)\)/g, (_, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(ROOT, 'public/fonts', f)).toString('base64')})`);
 const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
+// نموذج اللاعبين الواقعي مضمّن داخل الملف
+const glb = fs.readFileSync(path.join(ROOT, 'public/models/players.glb')).toString('base64');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script type="module"'));
 const out = `<title>أساطير الكرة 5×5</title>
 <style>${css}\n:root{color-scheme:dark}body{background:var(--bg)}</style>
 <div dir="rtl" lang="ar">${body}</div>
-<script>window.OFFLINE_ONLY=true;</script>
+<script>window.OFFLINE_ONLY=true;window.PLAYERS_GLB_B64="${glb}";</script>
 <script>${js}</script>
 `;
 fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });

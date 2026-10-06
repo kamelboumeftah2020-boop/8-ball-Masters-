@@ -40,8 +40,8 @@ export function portrait(charId, team = 0, slot = 3) {
     p.root.rotation.y = -0.35;
     scene.add(p.root);
     const h = p.h;
-    cam.position.set(2.1, 1.66 * h, 0.55);
-    cam.lookAt(0, 1.56 * h, 0);
+    if (p.mixer) { cam.position.set(1.75, 1.64 * h, 0.5); cam.lookAt(0, 1.53 * h, 0); }
+    else { cam.position.set(2.1, 1.66 * h, 0.55); cam.lookAt(0, 1.56 * h, 0); }
     renderer.render(scene, cam);
     url = renderer.domElement.toDataURL('image/png');
     scene.remove(p.root);

@@ -1,74 +1,167 @@
-// نموذج اللاعب ثلاثي الأبعاد (مبني من أشكال بسيطة) مع رسوم متحركة إجرائية
+// اللاعب ثلاثي الأبعاد: نموذج بشري واقعي + حركات Motion Capture حقيقية
+//   الجسم والحركات: Quaternius (CC0) — الركلات: قاعدة CMU لتصوير الحركة (Vicon)
+//   الطقم يُرسم مباشرة على الجسم داخل الشيدر (ألوان + أنماط + رقم واسم على الظهر) → يدعم السكينات
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { STATE, TEAMS } from '/shared/constants.js';
 import { charOf } from '/shared/characters.js';
-import { kitFor, jerseyTexture, bandTexture } from './skins.js';
+import { kitFor } from './skins.js';
+import { Player3D as LegacyPlayer3D, makeLabel } from './player3d-legacy.js';
 
+export { makeLabel };
 const PI = Math.PI;
-const matCache = new Map();
-function mat(color, rough = 0.75, extra = {}) {
-  const key = color + rough + JSON.stringify(extra);
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, ...extra }));
-  return matCache.get(key);
-}
-const geoCache = new Map();
-function geo(key, make) {
-  if (!geoCache.has(key)) geoCache.set(key, make());
-  return geoCache.get(key);
-}
-const capsule = (r, l) => geo(`cap${r}_${l}`, () => new THREE.CapsuleGeometry(r, l, 6, 14));
-const sphere = (r, w = 16, h = 12) => geo(`sph${r}_${w}`, () => new THREE.SphereGeometry(r, w, h));
-const box = (x, y, z) => geo(`box${x}_${y}_${z}`, () => new THREE.BoxGeometry(x, y, z));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
-function sm(a, b, v) { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); }
-function shade(m) { m.castShadow = true; m.receiveShadow = false; return m; }
-const lathe = (key, pts, seg = 18) => geo(`lathe_${key}_${seg}_${pts.join()}`, () => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg));
-function clothMat(map) {
-  return new THREE.MeshPhysicalMaterial({ map, roughness: 0.72, sheen: 0.8, sheenRoughness: 0.55, sheenColor: new THREE.Color('#ffffff').multiplyScalar(0.35) });
-}
-function skinMat(color) {
-  const k = 'skin' + color;
-  if (!matCache.has(k)) matCache.set(k, new THREE.MeshPhysicalMaterial({ color, roughness: 0.52, sheen: 0.35, sheenRoughness: 0.5, sheenColor: new THREE.Color('#ff8a70') }));
-  return matCache.get(k);
-}
-// حذاء كرة قدم: مقطع جانبي مبثوق بحواف ناعمة
-function bootGeo() {
-  return geo('boot', () => {
-    const sh = new THREE.Shape();
-    sh.moveTo(-0.05, 0); sh.lineTo(0.17, 0);
-    sh.quadraticCurveTo(0.215, 0.002, 0.212, 0.03);
-    sh.quadraticCurveTo(0.2, 0.058, 0.13, 0.066);
-    sh.lineTo(0.04, 0.095); sh.lineTo(-0.045, 0.1);
-    sh.quadraticCurveTo(-0.066, 0.05, -0.05, 0);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.066, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.01, bevelSegments: 3, curveSegments: 10 });
-    g.translate(0, 0, -0.033);
-    return g;
-  });
+// ---------- تحميل النموذج (مرة واحدة) ----------
+const PA = { gltf: null, clips: {}, failed: false };
+export function playerAssetsReady() { return !!PA.gltf; }
+export async function loadPlayerAssets() {
+  if (PA.gltf || PA.failed) return;
+  try {
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    let gltf;
+    if (window.PLAYERS_GLB_B64) {
+      const bin = Uint8Array.from(atob(window.PLAYERS_GLB_B64), (c) => c.charCodeAt(0));
+      gltf = await loader.parseAsync(bin.buffer, '');
+    } else {
+      gltf = await loader.loadAsync(window.PLAYERS_GLB_URL || '/models/players.glb');
+    }
+    PA.gltf = gltf;
+    for (const c of gltf.animations) PA.clips[c.name] = c;
+    // حذف قنوات الانتقال للحوض من حلقات الجري (تبقى في مكانها) ما عدا التذبذب الرأسي
+    gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  } catch (e) {
+    console.warn('players.glb failed, using legacy players', e);
+    PA.failed = true;
+  }
 }
 
-export function makeLabel(text, color = '#ffffff', bg = 'rgba(0,0,0,0.45)', big = false) {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 64;
+// ---------- شيدر الطقم ----------
+const PATTERNS = { plain: 0, pinstripes: 1, stripes: 2, hoops: 3, sash: 4, halves: 5, gradient: 6, camo: 7, chevron: 8 };
+const KIT_GLSL = /* glsl */`
+uniform vec3 uShirt, uShirt2, uTrim, uShorts, uShortsTrim, uSocks, uSockBand, uBoots, uGlove, uSkinTint, uNumCol;
+uniform float uPat, uSleeve, uGloves;
+uniform sampler2D uNum;
+varying vec3 vRest; varying vec3 vRestN;
+float bnd(float x, float a, float b) { return smoothstep(a - 0.006, a + 0.006, x) * (1.0 - smoothstep(b - 0.006, b + 0.006, x)); }
+// المناطق في وضعية الربط (T-pose): y للارتفاع و |x| للذراعين
+void kitZones(vec3 p, out float shirt, out float sleeve, out float shorts, out float socks, out float boots, out float glove) {
+  float ax = abs(p.x), y = p.y;
+  float armZone = step(1.26, y) * smoothstep(0.19, 0.205, ax);
+  sleeve = armZone * bnd(ax, 0.0, uSleeve);
+  shirt = (1.0 - armZone) * bnd(y, 0.965, 1.525) * step(ax, 0.3);
+  shorts = bnd(y, 0.665, 0.985) * step(ax, 0.3) * (1.0 - shirt);
+  socks = bnd(y, 0.115, 0.52) * step(y, 1.0);
+  boots = 1.0 - smoothstep(0.105, 0.12, y);
+  glove = armZone * smoothstep(0.665, 0.68, ax) * uGloves;
+}
+`;
+
+function kitMaterial(base, kit, opts) {
+  const m = base.clone();
+  const C = (c) => new THREE.Color(c);
+  const U = {
+    uShirt: { value: C(kit.base) }, uShirt2: { value: C(kit.second || kit.base) }, uTrim: { value: C(kit.trim || '#ffffff') },
+    uShorts: { value: C(kit.shorts) }, uShortsTrim: { value: C(kit.shortsTrim || kit.trim || '#ffffff') },
+    uSocks: { value: C(kit.socks) }, uSockBand: { value: C(kit.sockBand || kit.trim || '#ffffff') },
+    uBoots: { value: C(opts.boots || '#202020') }, uGlove: { value: C(opts.glove || '#f2f2f2') }, uSkinTint: { value: opts.skinTint },
+    uNumCol: { value: C(kit.text || '#ffffff') },
+    uPat: { value: PATTERNS[kit.pattern] ?? 0 }, uSleeve: { value: kit.longSleeves ? 0.72 : 0.36 }, uGloves: { value: opts.gloves ? 1 : 0 },
+    uNum: { value: opts.numTex },
+  };
+  m.userData.kitUniforms = U;
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\n${KIT_GLSL}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vRest = position; vRestN = normal;
+        { float s1, s2, s3, s4, s5, s6; kitZones(position, s1, s2, s3, s4, s5, s6);
+          // سماكة القماش: القميص والشورت أوسع قليلاً من الجلد
+          transformed += normal * (max(s1, s2) * 0.011 + s3 * 0.014 + s4 * 0.004); }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${KIT_GLSL}\nfloat kCloth;`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          float shirt, sleeve, shorts, socks, boots, glove;
+          kitZones(vRest, shirt, sleeve, shorts, socks, boots, glove);
+          vec3 p = vRest; float ax = abs(p.x);
+          // نمط القميص
+          float pat = 0.0;
+          if (uPat < 0.5) pat = 0.0;
+          else if (uPat < 1.5) pat = step(fract(p.x * 42.0), 0.14);
+          else if (uPat < 2.5) pat = step(fract(p.x * 7.5 + 0.5), 0.5);
+          else if (uPat < 3.5) pat = step(fract(p.y * 9.0), 0.42);
+          else if (uPat < 4.5) pat = step(abs(p.x - (p.y - 1.24) * 0.9), 0.055);
+          else if (uPat < 5.5) pat = step(0.0, p.x);
+          else if (uPat < 6.5) pat = smoothstep(1.45, 0.98, p.y) * 0.85;
+          else if (uPat < 7.5) pat = step(0.55, fract(sin(dot(floor(p.xy * vec2(18.0, 14.0)), vec2(12.9898, 78.233))) * 43758.5453));
+          else pat = step(fract(p.y * 8.0 + ax * 4.0), 0.35);
+          vec3 shirtC = mix(uShirt, uShirt2, pat);
+          // ياقة + أطراف الأكمام
+          shirtC = mix(shirtC, uTrim, bnd(p.y, 1.488, 1.525) * step(ax, 0.13));
+          vec3 sleeveC = mix(uShirt, uTrim, bnd(ax, uSleeve - 0.028, uSleeve));
+          // الرقم والاسم على الظهر
+          float back = smoothstep(-0.15, -0.35, vRestN.z) * shirt;
+          vec2 nuv = vec2((0.165 - p.x) / 0.33, (p.y - 1.06) / 0.38);
+          float num = 0.0;
+          if (nuv.x > 0.0 && nuv.x < 1.0 && nuv.y > 0.0 && nuv.y < 1.0) num = texture2D(uNum, nuv).a * back;
+          shirtC = mix(shirtC, uNumCol, num);
+          vec3 shortsC = mix(uShorts, uShortsTrim, bnd(ax, 0.172, 0.196) * shorts);
+          vec3 socksC = mix(uSocks, uSockBand, bnd(p.y, 0.455, 0.5));
+          vec3 bootC = mix(uBoots, vec3(0.08), 1.0 - smoothstep(0.018, 0.026, p.y));
+          diffuseColor.rgb *= uSkinTint;
+          vec3 kitC = diffuseColor.rgb;
+          kitC = mix(kitC, socksC, socks);
+          kitC = mix(kitC, shortsC, shorts);
+          kitC = mix(kitC, sleeveC, sleeve);
+          kitC = mix(kitC, shirtC, shirt);
+          kitC = mix(kitC, bootC, boots);
+          kitC = mix(kitC, uGlove, glove);
+          kCloth = clamp(shirt + sleeve + shorts + socks + boots + glove, 0.0, 1.0);
+          diffuseColor.rgb = kitC;
+        }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.86, kCloth);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        normal = normalize(mix(normal, nonPerturbedNormal, kCloth * 0.88));`);
+  };
+  m.customProgramCacheKey = () => 'kit-v1';
+  return m;
+}
+
+// رقم واسم اللاعب (قناع ألفا يُلوَّن في الشيدر)
+const numCache = new Map();
+function numberTexture(num, name) {
+  const key = `${num}|${name}`;
+  if (numCache.has(key)) return numCache.get(key);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
   const g = c.getContext('2d');
-  g.font = `bold ${big ? 30 : 26}px Tahoma, sans-serif`;
-  const w = Math.min(250, g.measureText(text).width + 24);
-  g.fillStyle = bg;
-  const x = (256 - w) / 2;
-  g.beginPath(); g.roundRect(x, 12, w, 40, 20); g.fill();
-  g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.direction = 'rtl';
-  g.fillText(text, 128, 33);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const nm = String(name || '').replace(/[^\p{L}\p{N} ]/gu, '').trim().slice(0, 10);
+  if (nm) { g.font = 'bold 34px Changa, Cairo, sans-serif'; g.fillText(nm, 128, 222); }
+  g.font = 'bold 150px Changa, Oswald, Impact, sans-serif';
+  g.fillText(String(num), 128, 110);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
-  s.scale.set(2.4, 0.6, 1);
-  s.renderOrder = 10;
-  return s;
+  numCache.set(key, t);
+  return t;
 }
+
+const HAIR = { spiky: 'simpleparted', mohawk: 'buzzed', bald: null, long: 'long', hood: 'buzzed', afro: 'buns', bun: 'buns', short: 'buzzed', curly: 'buns' };
+const SKIN_REF = new THREE.Color('#e9b997');
+const geoCache = new Map();
+const geo = (k, f) => { if (!geoCache.has(k)) geoCache.set(k, f()); return geoCache.get(k); };
+const LOCO = [['idle', 0], ['walk', 1.25], ['jog', 3.3], ['sprint', 7.0]];
+const KICKS = ['kick', 'kick_b', 'kick_c'];
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
 export class Player3D {
   constructor(info, opts = {}) {
+    if (!PA.gltf) return new LegacyPlayer3D(info, opts);
     this.info = info;
     this.c = charOf(info.char);
     const look = this.c.look;
@@ -77,202 +170,79 @@ export class Player3D {
     const h = look.height, b = look.build;
     this.h = h;
     this.root = new THREE.Group();
-    this.body = new THREE.Bone();
-    this._bake = [];
-    this.root.add(this.body);
-    this.hipY = 0.92 * h;
-    this.body.position.y = this.hipY;
+    // lean: ميلان في المنعطفات (حول محور الاتجاه) — body: يدير النموذج ليواجه +X مثل بقية اللعبة
+    this.lean = new THREE.Group();
+    this.root.add(this.lean);
+    this.body = new THREE.Group();
+    this.body.rotation.order = 'YXZ';
+    this.body.rotation.y = PI / 2;
+    this.lean.add(this.body);
+    const model = SkeletonUtils.clone(PA.gltf.scene);
+    model.scale.set(h * b ** 0.6, h, h * b ** 0.5);
+    this.body.add(model);
+    this.model = model;
+    this.bones = {};
+    model.traverse((o) => { if (o.isBone) this.bones[o.name] = o; });
 
+    // الخامات: الجلد + الطقم في خامة واحدة، والشعر بلون الشخصية
     const kit = kitFor(info.team, gk ? 0 : 1, opts.skin);
     const number = info.slot === 0 ? 1 : [0, 4, 5, 10, 9][info.slot] || 7;
-    const skinM = skinMat(look.skin);
-    const jerseyM = clothMat(jerseyTexture(kit, number, info.name || ''));
-    const sleeveM = clothMat(bandTexture(kit.base, kit.trim, 'bottom', kit.pattern === 'pinstripes'));
-    const shortsM = clothMat(bandTexture(kit.shorts, kit.shortsTrim, 'none', true));
-    const socksM = clothMat(bandTexture(kit.socks, kit.sockBand, 'top'));
-    const bootsM = mat(look.boots, 0.3, { metalness: 0.1 });
-    const soleM = mat('#1a1a1a', 0.6);
-    const hairM = mat(look.hairColor, 0.85);
-    const B = b;
-
-    // الحوض (الشورت) — مثبت على الورك
-    const shortsTop = shade(new THREE.Mesh(lathe('shorts', [[0.168, -0.2], [0.176, -0.12], [0.172, -0.02], [0.162, 0.07]], 22), shortsM));
-    shortsTop.scale.set(0.68 * B, 1, B);
-    this.body.add(shortsTop);
-    this._bake.push([shortsTop, (x, y) => [[this.torso, sm(-0.02, 0.07, y) * 0.45]]]);
-
-    // الجذع (القميص بخامة كاملة)
-    this.torso = new THREE.Bone();
-    this.body.add(this.torso);
-    const chest = shade(new THREE.Mesh(lathe('torso', [[0.158, -0.03], [0.152, 0.08], [0.148, 0.17], [0.165, 0.27], [0.188, 0.36], [0.2, 0.43], [0.205, 0.49], [0.185, 0.545], [0.12, 0.585], [0.055, 0.605]], 28), jerseyM));
-    chest.scale.set(0.66 * B, 1, B);
-    this.torso.add(chest);
-    this._bake.push([chest, (x, y, z) => [[this.body, sm(0.1, -0.03, y) * 0.5], [z > 0 ? () => this.arms[1].sh : () => this.arms[0].sh, sm(0.11, 0.2, Math.abs(z)) * sm(0.38, 0.5, y) * 0.5]]]);
-
-    // الرقبة والرأس
-    this.neck = new THREE.Bone();
-    this.neck.position.y = 0.57;
-    this.torso.add(this.neck);
-    const neckM = shade(new THREE.Mesh(lathe('neck', [[0.055, -0.04], [0.046, 0.06], [0.05, 0.13]], 14), skinM));
-    this.neck.add(neckM);
-    this._bake.push([neckM, (x, y) => [[this.torso, sm(0.03, -0.04, y) * 0.6], [this.head, sm(0.07, 0.13, y) * 0.5]]]);
-    this.head = new THREE.Bone();
-    this.head.position.y = 0.2;
-    this.neck.add(this.head);
-    const skull = shade(new THREE.Mesh(sphere(0.105, 28, 20), skinM));
-    skull.scale.set(1.1, 1.2, 0.97); skull.position.set(-0.005, 0.015, 0);
-    this.head.add(skull);
-    const jaw = shade(new THREE.Mesh(sphere(0.082, 20, 14), skinM));
-    jaw.scale.set(1.05, 0.85, 0.96); jaw.position.set(0.022, -0.05, 0);
-    this.head.add(jaw);
-    const chin = new THREE.Mesh(sphere(0.03, 12, 10), skinM);
-    chin.position.set(0.085, -0.095, 0); chin.scale.set(0.9, 0.8, 1.2);
-    this.head.add(chin);
-    const nose = new THREE.Mesh(sphere(0.02, 12, 10), skinM);
-    nose.scale.set(0.9, 1.6, 0.8); nose.position.set(0.114, -0.005, 0);
-    this.head.add(nose);
-    const eyeW = mat('#f4f1ea', 0.25), iris = mat('#2b1a10', 0.2), brow = mat(look.hairColor === '#f5f5f5' || look.hairColor === '#dff6ff' ? '#8a8a8a' : look.hairColor, 0.9), lip = mat('#8a4a3c', 0.5);
-    for (const sd of [-1, 1]) {
-      const ew = new THREE.Mesh(sphere(0.017, 12, 10), eyeW);
-      ew.scale.set(0.55, 0.75, 1); ew.position.set(0.1, 0.018, sd * 0.04);
-      this.head.add(ew);
-      const ir = new THREE.Mesh(sphere(0.0085, 10, 8), iris);
-      ir.position.set(0.108, 0.018, sd * 0.04);
-      this.head.add(ir);
-      const bw = new THREE.Mesh(box(0.012, 0.009, 0.038), brow);
-      bw.position.set(0.106, 0.045, sd * 0.041); bw.rotation.x = sd * -0.12;
-      this.head.add(bw);
-      const ear = shade(new THREE.Mesh(sphere(0.028, 10, 8), skinM));
-      ear.scale.set(0.55, 1, 0.45); ear.position.set(-0.005, 0.0, sd * 0.104);
-      this.head.add(ear);
-      const cheek = new THREE.Mesh(sphere(0.03, 10, 8), skinM);
-      cheek.position.set(0.07, -0.02, sd * 0.05);
-      this.head.add(cheek);
-    }
-    const mouth = new THREE.Mesh(box(0.008, 0.009, 0.042), lip);
-    mouth.position.set(0.103, -0.058, 0);
-    this.head.add(mouth);
-    this.addHair(look, hairM, skinM);
-
-    // الذراعان
-    this.arms = [];
-    const gloveM = gk || look.acc === 'gloves' ? mat(gk ? '#f2f2f2' : look.accColor, 0.55) : null;
-    for (const sd of [-1, 1]) {
-      const sh = new THREE.Bone();
-      sh.position.set(0, 0.49, sd * 0.215 * B);
-      this.torso.add(sh);
-      const delt = shade(new THREE.Mesh(sphere(0.07 * B, 16, 12), sleeveM));
-      delt.scale.set(1, 0.9, 1); delt.position.y = -0.01;
-      sh.add(delt);
-      this._bake.push([delt, (x, y) => [[this.torso, sm(0.0, 0.06, y) * 0.35]]]);
-      const sleeve = shade(new THREE.Mesh(lathe('sleeve', [[0.058, -0.17], [0.063, -0.08], [0.066, 0.0]], 16), sleeveM));
-      sleeve.scale.set(B, 1, B);
-      sh.add(sleeve);
-      this._bake.push([sleeve, () => []]);
-      const upper = shade(new THREE.Mesh(lathe('uarm', [[0.038, -0.28], [0.046, -0.21], [0.052, -0.13], [0.05, -0.04]], 14), kit.longSleeves ? sleeveM : skinM));
-      upper.scale.set(B, 1, B);
-      sh.add(upper);
-      this._bake.push([upper, (x, y) => [[el, sm(-0.2, -0.28, y) * 0.5]]]);
-      const el = new THREE.Bone();
-      el.position.y = -0.27;
-      sh.add(el);
-      const fore = shade(new THREE.Mesh(lathe('farm', [[0.029, -0.235], [0.036, -0.16], [0.043, -0.06], [0.04, 0.02]], 14), kit.longSleeves ? sleeveM : skinM));
-      fore.scale.set(B, 1, B);
-      el.add(fore);
-      this._bake.push([fore, (x, y) => [[sh, sm(-0.04, 0.02, y) * 0.5]]]);
-      const hand = shade(new THREE.Mesh(sphere(0.045, 14, 10), gloveM || skinM));
-      hand.scale.set(gloveM ? 0.75 : 0.55, 1.15, gloveM ? 1.25 : 1);
-      hand.position.y = -0.285;
-      el.add(hand);
-      const thumb = new THREE.Mesh(capsule(0.012, 0.03), gloveM || skinM);
-      thumb.position.set(0.02, -0.265, sd * -0.02); thumb.rotation.z = 0.5;
-      el.add(thumb);
-      if (look.acc === 'wristbands') {
-        const wb = new THREE.Mesh(geo('wb', () => new THREE.CylinderGeometry(0.036, 0.036, 0.045, 14)), mat(look.accColor, 0.7));
-        wb.position.y = -0.21;
-        el.add(wb);
+    const skin = new THREE.Color(look.skin);
+    const tint = new THREE.Color(clamp(skin.r / SKIN_REF.r, 0.15, 1.15), clamp(skin.g / SKIN_REF.g, 0.12, 1.15), clamp(skin.b / SKIN_REF.b, 0.1, 1.15));
+    this.mats = [];
+    const hairKey = HAIR[look.hair] === undefined ? 'buzzed' : HAIR[look.hair];
+    model.traverse((o) => {
+      if (o.name.startsWith('hair_')) {
+        const want = o.name === `hair_${hairKey}` || (o.name === 'hair_beard' && look.acc === 'beard');
+        o.visible = want;
       }
-      this.arms.push({ sh, el, s: sd });
-    }
+      if (!o.isMesh) return;
+      const mname = o.material.name || '';
+      if (/Superhero/i.test(mname)) {
+        o.material = kitMaterial(o.material, kit, { skinTint: tint, boots: look.boots, gloves: gk || look.acc === 'gloves', glove: gk ? '#f2f2f2' : look.accColor, numTex: numberTexture(number, opts.preview ? '' : info.name) });
+      } else if (/Hair/i.test(mname)) {
+        o.material = o.material.clone();
+        o.material.color = new THREE.Color(look.hairColor).multiplyScalar(1.25);
+      } else return;
+      this.mats.push(o.material);
+    });
 
-    // الساقان
-    this.legs = [];
-    for (const sd of [-1, 1]) {
-      const hip = new THREE.Bone();
-      hip.position.set(0, 0, sd * 0.095 * B);
-      this.body.add(hip);
-      const shortLeg = shade(new THREE.Mesh(lathe('sleg', [[0.088, -0.22], [0.094, -0.12], [0.092, 0.02]], 18), shortsM));
-      shortLeg.scale.set(B, 1, B);
-      hip.add(shortLeg);
-      this._bake.push([shortLeg, (x, y) => [[this.body, sm(-0.06, 0.02, y) * 0.5]]]);
-      const thigh = shade(new THREE.Mesh(lathe('thigh', [[0.052, -0.44 * h], [0.064, -0.36], [0.078, -0.24], [0.084, -0.12]], 16), skinM));
-      thigh.scale.set(B, 1, B);
-      hip.add(thigh);
-      this._bake.push([thigh, (x, y) => [[knee, sm(-0.34 * h, -0.44 * h, y) * 0.5]]]);
-      const knee = new THREE.Bone();
-      knee.position.y = -0.44 * h;
-      hip.add(knee);
-      const kc = new THREE.Mesh(sphere(0.05, 12, 10), skinM);
-      kc.scale.set(1.05, 1, 1);
-      knee.add(kc);
-      this._bake.push([kc, (x, y) => [[hip, sm(-0.02, 0.05, y) * 0.5]]]);
-      const shin = shade(new THREE.Mesh(lathe('shin', [[0.046, -0.1], [0.05, -0.04], [0.049, 0.01]], 14), skinM));
-      shin.scale.set(B, 1, B);
-      knee.add(shin);
-      this._bake.push([shin, (x, y) => [[hip, sm(-0.03, 0.01, y) * 0.5]]]);
-      const sock = shade(new THREE.Mesh(lathe('sock', [[0.034, -0.43 * h], [0.037, -0.36], [0.05, -0.26], [0.058, -0.17], [0.054, -0.09], [0.052, -0.06]], 16), socksM));
-      sock.scale.set(B, 1, B);
-      knee.add(sock);
-      this._bake.push([sock, () => []]);
-      const boot = shade(new THREE.Mesh(bootGeo(), bootsM));
-      boot.position.set(0, -0.475 * h, 0);
-      knee.add(boot);
-      const sole = new THREE.Mesh(box(0.25, 0.018, 0.085), soleM);
-      sole.position.set(0.075, -0.475 * h + 0.004, 0);
-      knee.add(sole);
-      this.legs.push({ hip, knee, s: sd });
+    // الحركات
+    this.mixer = new THREE.AnimationMixer(model);
+    this.act = {};
+    for (const [n, clip] of Object.entries(PA.clips)) {
+      const a = this.mixer.clipAction(clip);
+      a.enabled = true; a.setEffectiveWeight(0);
+      this.act[n] = a;
     }
-
-    this.bakeSkin();
-    this.scale = 1;
-    this.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    for (const [n] of LOCO) { const a = this.act[n]; a.setEffectiveTimeScale(0); a.play(); }
+    this.layer = { state: null, stateW: 0, stateTarget: 0, stateFade: 0.2, os: null, osW: 0 };
+    this.locoPhase = Math.random();
+    this.idleT = Math.random() * 3;
 
     // مؤشرات
     if (!opts.preview) {
-      const ring = new THREE.Mesh(
-        geo('selring', () => new THREE.RingGeometry(0.58, 0.86, 40)),
-        new THREE.MeshBasicMaterial({ color: '#ffe600', transparent: true, opacity: 1, depthWrite: false, toneMapped: false }),
-      );
-      // حافة داكنة لتباين أوضح فوق العشب
+      const ring = new THREE.Mesh(geo('selring', () => new THREE.RingGeometry(0.58, 0.86, 40)),
+        new THREE.MeshBasicMaterial({ color: '#ffe600', transparent: true, opacity: 1, depthWrite: false, toneMapped: false }));
       const edge = new THREE.Mesh(geo('seledge', () => new THREE.RingGeometry(0.86, 0.95, 40)), new THREE.MeshBasicMaterial({ color: '#1a1a00', transparent: true, opacity: 0.55, depthWrite: false }));
       ring.add(edge);
-      ring.rotation.x = -PI / 2;
-      ring.position.y = 0.03;
-      this.root.add(ring);
-      this.ring = ring;
+      ring.rotation.x = -PI / 2; ring.position.y = 0.03;
+      this.root.add(ring); this.ring = ring;
       const arrow = new THREE.Mesh(geo('arrow', () => new THREE.ConeGeometry(0.22, 0.42, 4)), new THREE.MeshBasicMaterial({ color: '#ffe600', toneMapped: false }));
-      arrow.rotation.x = PI;
-      arrow.position.y = 2.35 * h;
-      this.root.add(arrow);
-      this.arrow = arrow;
-      const tring = new THREE.Mesh(
-        geo('teamring', () => new THREE.RingGeometry(0.5, 0.58, 32)),
-        new THREE.MeshBasicMaterial({ color: team.color, transparent: true, opacity: 0.55, depthWrite: false }),
-      );
-      tring.rotation.x = -PI / 2;
-      tring.position.y = 0.025;
-      this.root.add(tring);
-      this.teamRing = tring;
+      arrow.rotation.x = PI; arrow.position.y = 2.35 * h;
+      this.root.add(arrow); this.arrow = arrow;
+      const tring = new THREE.Mesh(geo('teamring', () => new THREE.RingGeometry(0.5, 0.58, 32)),
+        new THREE.MeshBasicMaterial({ color: team.color, transparent: true, opacity: 0.55, depthWrite: false }));
+      tring.rotation.x = -PI / 2; tring.position.y = 0.025;
+      this.root.add(tring); this.teamRing = tring;
       this.setSelected(!!opts.local);
     }
     if (!opts.preview && (info.human || opts.local)) {
       const label = makeLabel(opts.local ? `⭐ ${info.name}` : info.name, opts.local ? '#fff27a' : info.human ? '#ffffff' : '#dfe6ee', info.human ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.3)');
       label.position.y = 2.1 * h;
       if (!info.human && !opts.local) label.scale.multiplyScalar(0.8);
-      this.root.add(label);
-      this.label = label;
+      this.root.add(label); this.label = label;
     }
-    // نجوم الدوخة
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
       const st = new THREE.Mesh(geo('star', () => new THREE.OctahedronGeometry(0.07)), new THREE.MeshBasicMaterial({ color: '#ffe14d' }));
@@ -282,452 +252,308 @@ export class Player3D {
     this.stars.visible = false;
     this.root.add(this.stars);
 
-    // حالة الحركة
-    this.phase = Math.random() * 10;
     this.prevState = -1;
     this.stateTime = 0;
     this.kickT = 99;
-    this.kickHeader = false;
-    this.celebOffset = new THREE.Vector3();
     this.lastFace = 0;
     this.turnRate = 0;
+    this.headYaw = 0;
+    this.leanRoll = 0;
   }
 
-  // دمج أجزاء الجسم في جسد واحد مكسو بعظام (Skinned Mesh) لتنحني المفاصل بنعومة
-  bakeSkin() {
-    const root = this.root;
-    root.updateMatrixWorld(true);
-    const bones = [this.body, this.torso, this.neck, this.head, ...this.arms.flatMap((a) => [a.sh, a.el]), ...this.legs.flatMap((l) => [l.hip, l.knee])];
-    const idx = new Map(bones.map((b, i) => [b, i]));
-    const byMat = new Map();
-    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-    for (const [mesh, rule] of this._bake) {
-      const parent = mesh.parent;
-      const g = mesh.geometry.clone();
-      const pos = g.attributes.position;
-      const n = pos.count;
-      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-      for (let i = 0; i < n; i++) {
-        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-        const sec = rule(x, y, z).map(([b, w]) => [typeof b === 'function' ? b() : b, w]).filter(([b, w]) => w > 0.001 && idx.has(b));
-        let total = 0;
-        sec.slice(0, 3).forEach(([b, w], k) => { si[i * 4 + k + 1] = idx.get(b); sw[i * 4 + k + 1] = w; total += w; });
-        si[i * 4] = idx.get(parent); sw[i * 4] = Math.max(0, 1 - total);
-      }
-      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
-      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
-      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
-      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
-      if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2), 2));
-      if (g.index) { /* keep */ }
-      const m = mesh.material;
-      if (!byMat.has(m)) byMat.set(m, []);
-      byMat.get(m).push(g);
-      parent.remove(mesh);
-    }
-    const mats = [...byMat.keys()];
-    const geos = mats.map((m) => mergeGeometries(byMat.get(m).map((x) => (x.index ? x.toNonIndexed() : x))));
-    const merged = mergeGeometries(geos, true);
-    const skinned = new THREE.SkinnedMesh(merged, mats);
-    skinned.castShadow = true;
-    skinned.frustumCulled = false;
-    root.add(skinned);
-    const skeleton = new THREE.Skeleton(bones);
-    skinned.bind(skeleton, new THREE.Matrix4());
-    this.skinned = skinned;
-    this._bake = null;
+  // ---------- طبقات الحركة ----------
+  // حركة حالة مستمرة (انزلاق، سقوط، احتفال…)
+  setState(name, { fade = 0.18, loop = true, from = 0, speed = 1 } = {}) {
+    const L = this.layer;
+    if (L.state && L.state.name === name) return;
+    if (L.state) L.prevState = L.state; // يتلاشى تدريجياً
+    if (!name || !this.act[name]) { L.state = null; L.stateTarget = 0; L.stateFade = fade; return; }
+    const a = this.act[name];
+    a.reset();
+    a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    a.clampWhenFinished = true;
+    a.time = from;
+    a.setEffectiveTimeScale(speed);
+    a.play();
+    L.state = { name, a };
+    L.stateTarget = 1; L.stateFade = fade;
+    if (L.prevState && L.prevState.name !== name) L.prevW = L.stateW; else L.prevW = 0;
+    L.stateW = 0;
+  }
+  // حركة لمرة واحدة فوق كل شيء (ركلة، رمية، اصطدام)
+  oneShot(name, { from = 0, to = null, speed = 1, fadeIn = 0.06, fadeOut = 0.22, hold = null } = {}) {
+    const a = this.act[name];
+    if (!a) return;
+    const L = this.layer;
+    const same = L.os && L.os.a === a;
+    if (L.os && !same) { L.osOld = { a: L.os.a, w: L.osW }; }
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.time = from;
+    a.setEffectiveTimeScale(speed);
+    a.play();
+    L.os = { name, a, to: to ?? a.getClip().duration, fadeIn, fadeOut, hold, ending: false };
+    if (!same && !L.osOld) L.osW = Math.min(L.osW, 0.5);
   }
 
-  addHair(look, hairM, skinM) {
-    const hd = this.head;
-    const cap = (s = 1.08, theta = PI / 2.1) => {
-      const m = shade(new THREE.Mesh(geo(`hcap${theta}`, () => new THREE.SphereGeometry(0.13, 16, 10, 0, PI * 2, 0, theta)), hairM));
-      m.scale.set(s, s * 1.08, s * 0.98);
-      m.position.y = 0.01;
-      m.rotation.z = 0.25;
-      hd.add(m);
-      return m;
-    };
-    switch (look.hair) {
-      case 'short': cap(1.04, PI / 2.3); break;
-      case 'spiky': {
-        cap(1.02, PI / 2.4);
-        for (let i = 0; i < 7; i++) {
-          const sp = shade(new THREE.Mesh(geo('spike', () => new THREE.ConeGeometry(0.035, 0.14, 5)), hairM));
-          const a = (i / 7) * PI * 2;
-          sp.position.set(Math.cos(a) * 0.06 - 0.02, 0.12, Math.sin(a) * 0.06);
-          sp.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5 - 0.2);
-          hd.add(sp);
-        }
-        break;
-      }
-      case 'mohawk': {
-        for (let i = 0; i < 6; i++) {
-          const m = shade(new THREE.Mesh(box(0.05, 0.1 + (i === 2 || i === 3 ? 0.04 : 0), 0.035), hairM));
-          m.position.set(0.09 - i * 0.04, 0.12 - Math.abs(i - 2.5) * 0.012, 0);
-          hd.add(m);
-        }
-        break;
-      }
-      case 'long': {
-        cap(1.07, PI / 2);
-        const bk = shade(new THREE.Mesh(box(0.08, 0.3, 0.24), hairM));
-        bk.position.set(-0.1, -0.1, 0);
-        hd.add(bk);
-        break;
-      }
-      case 'afro': {
-        const m = shade(new THREE.Mesh(sphere(0.17, 14, 10), hairM));
-        m.position.set(-0.02, 0.07, 0);
-        m.scale.set(1, 0.9, 1);
-        hd.add(m);
-        break;
-      }
-      case 'bun': {
-        cap(1.04, PI / 2.2);
-        const bn = shade(new THREE.Mesh(sphere(0.06, 10, 8), hairM));
-        bn.position.set(-0.08, 0.13, 0);
-        hd.add(bn);
-        break;
-      }
-      case 'hood': {
-        const m = shade(new THREE.Mesh(geo('hood', () => new THREE.SphereGeometry(0.15, 16, 10, PI * 0.25, PI * 1.5, 0, PI / 1.6)), mat(look.hairColor, 0.9, { side: THREE.DoubleSide })));
-        m.rotation.y = PI;
-        m.position.y = 0.0;
-        hd.add(m);
-        break;
-      }
-      case 'bald': break;
+  updateLayers(dt, speed) {
+    const L = this.layer;
+    // الطبقة العليا
+    if (L.os) {
+      const os = L.os;
+      if (os.hold != null && os.a.time >= os.hold) { os.a.time = os.hold; os.a.setEffectiveTimeScale(0); }
+      if (!os.ending && os.a.time >= os.to - 1e-3) os.ending = true;
+      L.osW = os.ending ? Math.max(0, L.osW - dt / os.fadeOut) : Math.min(1, L.osW + dt / os.fadeIn);
+      if (os.ending && L.osW <= 0) { os.a.stop(); L.os = null; }
+      else os.a.setEffectiveWeight(L.osW);
     }
-    switch (look.acc) {
-      case 'headband': {
-        const t = new THREE.Mesh(geo('band', () => new THREE.TorusGeometry(0.128, 0.018, 6, 20)), mat(look.accColor, 0.6));
-        t.rotation.x = PI / 2;
-        t.rotation.y = 0.25;
-        t.position.y = 0.05;
-        hd.add(t);
-        break;
-      }
-      case 'beard': {
-        const bd = new THREE.Mesh(box(0.06, 0.07, 0.17), mat(look.accColor, 0.9));
-        bd.position.set(0.09, -0.09, 0);
-        hd.add(bd);
-        break;
-      }
-      case 'mask': {
-        const mk = new THREE.Mesh(box(0.03, 0.05, 0.25), mat(look.accColor, 0.4));
-        mk.position.set(0.108, 0.025, 0);
-        hd.add(mk);
-        break;
-      }
-      case 'goggles': {
-        for (const s of [-1, 1]) {
-          const g = new THREE.Mesh(geo('gog', () => new THREE.TorusGeometry(0.032, 0.012, 6, 14)), mat(look.accColor, 0.2, { emissive: look.accColor, emissiveIntensity: 0.4 }));
-          g.position.set(0.1, 0.08, s * 0.05);
-          g.rotation.y = PI / 2;
-          hd.add(g);
-        }
-        break;
-      }
+    if (L.osOld) {
+      L.osOld.w -= dt / 0.08;
+      if (L.osOld.w <= 0) { if (!L.os || L.os.a !== L.osOld.a) L.osOld.a.stop(); L.osOld = null; } else L.osOld.a.setEffectiveWeight(L.osOld.w * (1 - L.osW));
     }
+    const top = L.os ? L.osW : 0;
+    // طبقة الحالة
+    L.stateW += (L.stateTarget > L.stateW ? 1 : -1) * dt / L.stateFade;
+    L.stateW = clamp(L.stateW, 0, 1);
+    if (L.state) L.state.a.setEffectiveWeight(L.stateW * (1 - top));
+    if (L.prevState) {
+      L.prevW -= dt / L.stateFade;
+      if (L.prevW <= 0 || (L.state && L.prevState.a === L.state.a)) { if (!L.state || L.prevState.a !== L.state.a) L.prevState.a.stop(); L.prevState = null; }
+      else L.prevState.a.setEffectiveWeight(L.prevW * (1 - top));
+    }
+    if (!L.state && L.stateW <= 0 && L.stateTarget === 0) { /* لا شيء */ }
+    // الجري: مزج حسب السرعة مع مزامنة الخطوات
+    const base = (1 - Math.max(L.state ? L.stateW : 0, L.prevState ? L.prevW : 0)) * (1 - top);
+    let w = [0, 0, 0, 0];
+    if (speed <= LOCO[1][1]) { const k = sm(0.15, LOCO[1][1], speed); w = [1 - k, k, 0, 0]; }
+    else if (speed <= LOCO[2][1]) { const k = (speed - LOCO[1][1]) / (LOCO[2][1] - LOCO[1][1]); w = [0, 1 - k, k, 0]; }
+    else { const k = clamp((speed - LOCO[2][1]) / (LOCO[3][1] - LOCO[2][1]), 0, 1); w = [0, 0, 1 - k, k]; }
+    // تردد الخطوة المطلوب
+    let freq = 0;
+    for (let i = 1; i < 4; i++) { const [n, sp] = LOCO[i]; const d = this.act[n].getClip().duration; freq += w[i] * (1 / d) * clamp(speed / sp, 0.6, 1.45); }
+    const mw = w[1] + w[2] + w[3];
+    if (mw > 0) this.locoPhase = (this.locoPhase + dt * freq / mw) % 1;
+    this.idleT += dt;
+    LOCO.forEach(([n], i) => {
+      const a = this.act[n];
+      const d = a.getClip().duration;
+      a.time = i === 0 ? this.idleT % d : this.locoPhase * d;
+      a.setEffectiveWeight(w[i] * base);
+    });
+    this.mixer.update(dt);
   }
 
-  // تحديث الرسوم المتحركة
-  // s: { x, y, vx, vy, face, state, emote, hold, owner(bool), gkHold(bool), throwIn(bool), ballZ }
+  // توجيه عظمة نحو اتجاه في العالم (بعد الحركة) — للحارس والاحتفالات
+  aimBone(name, child, dirWorld, weight = 1) {
+    const b = this.bones[name], c = this.bones[child];
+    if (!b || !c || weight <= 0) return;
+    b.updateWorldMatrix(true, false);
+    const from = c.getWorldPosition(_v).sub(b.getWorldPosition(_v2)).normalize();
+    _q.setFromUnitVectors(from, dirWorld.clone().normalize());
+    const parentQ = b.parent.getWorldQuaternion(_q2);
+    const worldQ = b.getWorldQuaternion(new THREE.Quaternion());
+    const target = _q.multiply(worldQ);
+    const local = parentQ.invert().multiply(target);
+    b.quaternion.slerp(local, weight);
+    b.updateMatrixWorld(true);
+  }
+  // دوران إضافي لعظمة حول محور في العالم
+  twistBone(name, axisWorld, angle) {
+    const b = this.bones[name];
+    if (!b || !angle) return;
+    const parentQ = b.parent.getWorldQuaternion(_q2);
+    _q.setFromAxisAngle(axisWorld, angle);
+    const pInv = parentQ.clone().invert();
+    b.quaternion.premultiply(pInv.multiply(_q).multiply(parentQ));
+  }
+
+  // ---------- التحديث كل إطار ----------
   update(dt, s, time) {
-    const root = this.root;
+    dt = Math.min(dt, 0.1);
     const speed = Math.hypot(s.vx, s.vy);
-    if (s.state !== this.prevState || (s.state === STATE.CELEBRATE && s.emote !== this.prevEmote)) {
+    const stateChanged = s.state !== this.prevState || (s.state === STATE.CELEBRATE && s.emote !== this.prevEmote);
+    if (stateChanged) {
+      const was = this.prevState;
       this.prevState = s.state; this.prevEmote = s.emote; this.stateTime = 0;
-      if (s.state === STATE.CELEBRATE && s.emote === 1) this.celebOffset.set(0, 0, 0);
+      this.enterState(s, was);
     }
     this.stateTime += dt;
     this.kickT += dt;
     const st = this.stateTime;
 
-    // الاتجاه وسرعة الدوران (للميلان)
     const dFace = Math.atan2(Math.sin(s.face - this.lastFace), Math.cos(s.face - this.lastFace));
     this.turnRate += ((dFace / Math.max(dt, 1e-3)) - this.turnRate) * Math.min(1, dt * 8);
     this.lastFace = s.face;
-
-    root.position.set(s.x, 0, -s.y);
-    root.rotation.set(0, s.face, 0);
-    const B = this.body, T = this.torso;
-    const [la, ra] = this.arms;
-    const [ll, rl] = this.legs;
-    // إعادة الضبط
-    B.position.set(0, this.hipY, 0); B.rotation.set(0, 0, 0);
-    T.rotation.set(0, 0, 0);
-    this.neck.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
-    for (const a of this.arms) { a.sh.rotation.set(0, 0, 0); a.el.rotation.set(0, 0, 0); }
-    for (const l of this.legs) { l.hip.rotation.set(0, 0, 0); l.knee.rotation.set(0, 0, 0); }
+    this.root.position.set(s.x, 0, -s.y);
+    this.root.rotation.set(0, s.face, 0);
+    this.body.position.set(0, 0, 0);
+    this.body.rotation.set(0, PI / 2, 0, 'YXZ');
     this.stars.visible = false;
 
-    const amp = Math.min(1, speed / 7.5);
-    const sprint = speed > 6.2;
-    this.phase += dt * (2 * PI) * (speed > 0.3 ? 0.85 + speed * 0.16 : 0);
-    const ph = this.phase;
-
-    const armsIdle = () => {
-      la.sh.rotation.x = 0.12; ra.sh.rotation.x = -0.12;
-      la.el.rotation.z = 0.25; ra.el.rotation.z = 0.25;
-    };
-
-    switch (s.state) {
-      case STATE.NORMAL:
-      case STATE.STUMBLE: {
-        if (speed > 0.25) {
-          const a = 0.35 + amp * 0.75;
-          const sn = Math.sin(ph);
-          ll.hip.rotation.z = sn * a;
-          rl.hip.rotation.z = -sn * a;
-          ll.knee.rotation.z = -Math.max(0, -Math.cos(ph)) * (0.4 + amp * 1.3) - 0.1;
-          rl.knee.rotation.z = -Math.max(0, Math.cos(ph)) * (0.4 + amp * 1.3) - 0.1;
-          la.sh.rotation.z = -sn * a * 0.9; ra.sh.rotation.z = sn * a * 0.9;
-          la.sh.rotation.x = 0.1; ra.sh.rotation.x = -0.1;
-          la.el.rotation.z = 0.5 + amp * 0.9; ra.el.rotation.z = 0.5 + amp * 0.9;
-          B.position.y = this.hipY - 0.03 * amp + Math.abs(Math.cos(ph)) * 0.07 * amp;
-          T.rotation.z = -(0.08 + amp * (sprint ? 0.28 : 0.16));
-          // ميلان في المنعطفات
-          B.rotation.x = Math.max(-0.35, Math.min(0.35, -this.turnRate * speed * 0.012));
-          T.rotation.y = -sn * 0.18 * amp;
-          B.rotation.y = sn * 0.1 * amp;
-        } else {
-          // وقفة تنفس
-          const br = Math.sin(time * 2 + this.phase) * 0.02;
-          T.rotation.z = -0.03 + br;
-          armsIdle();
-          ll.hip.rotation.x = -0.05; rl.hip.rotation.x = 0.05;
-          ll.knee.rotation.z = -0.08; rl.knee.rotation.z = -0.08;
-          B.position.y = this.hipY - 0.02 + br * 0.3;
-        }
-        if (s.state === STATE.STUMBLE) { T.rotation.z = -0.5; B.position.y -= 0.12; ll.knee.rotation.z = -0.7; rl.knee.rotation.z = -0.7; }
-        // شحن التسديدة
-        if (s.hold > 0 && this.kickT > 0.4) {
-          const k = Math.min(1, s.hold);
-          rl.hip.rotation.z = -0.3 - k * 0.6;
-          rl.knee.rotation.z = -0.4 - k * 0.9;
-          T.rotation.z = 0.05 + k * 0.1;
-          la.sh.rotation.x = 0.6 * k; ra.sh.rotation.x = -0.6 * k;
-        }
-        if (s.gkHold) {
-          la.sh.rotation.z = 1.2; ra.sh.rotation.z = 1.2; la.el.rotation.z = 0.5; ra.el.rotation.z = 0.5;
-          la.sh.rotation.x = -0.25; ra.sh.rotation.x = 0.25;
-        }
-        if (s.throwIn) {
-          la.sh.rotation.z = PI - 0.2; ra.sh.rotation.z = PI - 0.2; la.el.rotation.z = -0.9; ra.el.rotation.z = -0.9;
-          la.sh.rotation.x = -0.15; ra.sh.rotation.x = 0.15;
-        }
-        break;
-      }
-      case STATE.SLIDE: {
-        B.position.y = 0.32;
-        B.rotation.z = 1.05;
-        rl.hip.rotation.z = 0.35; rl.knee.rotation.z = 0;
-        ll.hip.rotation.z = -0.2; ll.knee.rotation.z = -1.4;
-        la.sh.rotation.z = -0.6; ra.sh.rotation.z = -0.9; la.sh.rotation.x = 0.5; ra.sh.rotation.x = -0.5;
-        this.neck.rotation.z = -0.6;
-        break;
-      }
-      case STATE.DOWN: {
-        const fall = Math.min(1, st / 0.25);
-        B.position.y = this.hipY - (this.hipY - 0.18) * fall;
-        B.rotation.z = 1.5 * fall;
-        la.sh.rotation.x = 0.9; ra.sh.rotation.x = -0.9; la.sh.rotation.z = 1.2; ra.sh.rotation.z = 0.8;
-        ll.hip.rotation.z = 0.3; rl.hip.rotation.z = 0.1; ll.knee.rotation.z = -0.7;
-        this.stars.visible = st > 0.3;
-        this.stars.position.set(-0.8, 0.45, 0);
-        this.stars.rotation.y = time * 5;
-        break;
-      }
-      case STATE.DIVE: {
-        // الارتماء جانبياً
-        const lat = -Math.sin(s.face) * s.vx + Math.cos(s.face) * s.vy; // موجب = يسار
-        const side = lat >= 0 ? -1 : 1;
-        const k = Math.min(1, st / 0.18);
-        const up = Math.sin(Math.min(PI, (st / 0.7) * PI));
-        B.position.y = this.hipY * (1 - k * 0.55) + up * 0.45;
-        B.rotation.x = side * 1.35 * k;
-        la.sh.rotation.z = PI * 0.95; ra.sh.rotation.z = PI * 0.95;
-        ll.hip.rotation.x = 0.2 * side; rl.hip.rotation.x = 0.2 * side; ll.knee.rotation.z = -0.4;
-        break;
-      }
-      case STATE.CELEBRATE: this.celebrate(s, st, dt, time); break;
-      case STATE.SAD: {
-        T.rotation.z = -0.2 - Math.sin(time * 0.8) * 0.05;
-        this.neck.rotation.z = -0.4;
-        la.sh.rotation.z = 2.6; ra.sh.rotation.z = 2.6; la.sh.rotation.x = -0.9; ra.sh.rotation.x = 0.9;
-        la.el.rotation.z = 2.2; ra.el.rotation.z = 2.2;
-        if (this.info.slot % 2 === 0 && st > 1.2) {
-          // يجثو على ركبتيه
-          const k = Math.min(1, (st - 1.2) / 0.4);
-          B.position.y = this.hipY - 0.42 * k;
-          ll.hip.rotation.z = 0.1; rl.hip.rotation.z = 0.1; ll.knee.rotation.z = -1.5 * k; rl.knee.rotation.z = -1.5 * k;
-        }
-        break;
+    // وضعيات مؤقتة أثناء الحالة العادية
+    if (s.state === STATE.NORMAL || s.state === STATE.STUMBLE) {
+      const L = this.layer;
+      // شحن التسديدة: نوقف الحركة عند لحظة الرجوع للخلف
+      if (s.hold > 0 && this.kickT > 0.4 && !s.throwIn) {
+        if (!L.os || L.os.name !== 'charge') { this.oneShot('kick', { from: 0.18, hold: 0.42, speed: 1.4, fadeIn: 0.12 }); L.os.name = 'charge'; }
+      } else if (L.os && L.os.name === 'charge' && this.kickT > 0.4) {
+        L.os.ending = true;
       }
     }
+    if (s.state === STATE.CELEBRATE) this.celebrateMotion(s, st, time);
+
+    this.updateLayers(dt, s.state === STATE.NORMAL || s.state === STATE.STUMBLE ? speed : 0);
+    this.model.updateMatrixWorld(true);
+
+    // ميلان في المنعطفات + تقدم الجذع عند الركض
+    const wantRoll = s.state === STATE.NORMAL ? clamp(-this.turnRate * speed * 0.011, -0.32, 0.32) : 0;
+    this.leanRoll += (wantRoll - this.leanRoll) * Math.min(1, dt * 7);
+    this.lean.rotation.set(this.leanRoll, 0, 0);
 
     // النظر نحو الكرة
-    if (s.ballX != null && (s.state === STATE.NORMAL || s.state === STATE.STUMBLE)) {
+    if (s.ballX != null && (s.state === STATE.NORMAL) && !this.layer.os) {
       let rel = Math.atan2(s.ballY - s.y, s.ballX - s.x) - s.face;
       rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-      const target = Math.max(-1.1, Math.min(1.1, rel)) * 0.75;
-      this.headYaw = (this.headYaw || 0) + (target - (this.headYaw || 0)) * Math.min(1, dt * 6);
-      this.head.rotation.y = this.headYaw;
+      const target = clamp(rel, -1.2, 1.2) * 0.7;
+      this.headYaw += (target - this.headYaw) * Math.min(1, dt * 6);
+    } else this.headYaw *= Math.max(0, 1 - dt * 6);
+    if (Math.abs(this.headYaw) > 0.01) {
+      _v.set(0, 1, 0);
+      this.twistBone('neck_01', _v, this.headYaw * 0.4);
+      this.twistBone('Head', _v, this.headYaw * 0.6);
     }
 
-    // الركلة
-    if (this.kickT < 0.45 && (s.state === STATE.NORMAL)) {
-      const k = this.kickT;
-      if (this.kickHeader) {
-        const n = Math.sin(Math.min(1, k / 0.3) * PI);
-        this.neck.rotation.z = -0.9 * n; T.rotation.z = -0.3 * n;
-        B.position.y += n * 0.25;
-      } else if (s.throwIn || this.kickThrow) {
-        const n = Math.min(1, k / 0.25);
-        la.sh.rotation.z = PI - 0.2 - n * 2.2; ra.sh.rotation.z = PI - 0.2 - n * 2.2;
-      } else {
-        let hz, kz;
-        if (k < 0.1) { const n = k / 0.1; hz = -0.7 * n; kz = -1.4 * n; }
-        else if (k < 0.2) { const n = (k - 0.1) / 0.1; hz = -0.7 + 2.2 * n; kz = -1.4 + 1.4 * n; }
-        else { const n = Math.min(1, (k - 0.2) / 0.25); hz = 1.5 * (1 - n); kz = -0.3 * (1 - n); }
-        rl.hip.rotation.z = hz; rl.knee.rotation.z = kz;
-        ll.knee.rotation.z = -0.25;
-        la.sh.rotation.x = 0.9; ra.sh.rotation.x = -0.5; la.sh.rotation.z = 0.5;
-        T.rotation.z = 0.12 + (k > 0.1 ? -0.25 : 0);
+    // وضعيات إجرائية مكملة
+    const up = _v.set(0, 1, 0);
+    if (s.gkHold && s.state === STATE.NORMAL) {
+      // الحارس يحتضن الكرة
+      const fwd = new THREE.Vector3(Math.cos(s.face), -0.25, -Math.sin(s.face));
+      for (const sd of ['l', 'r']) { this.aimBone(`upperarm_${sd}`, `lowerarm_${sd}`, fwd.clone().add(new THREE.Vector3(0, -0.9, 0)), 0.8); this.aimBone(`lowerarm_${sd}`, `hand_${sd}`, new THREE.Vector3(Math.cos(s.face + (sd === 'l' ? -1.3 : 1.3)), 0.15, -Math.sin(s.face + (sd === 'l' ? -1.3 : 1.3))), 0.85); }
+    }
+    // رمية التماس: الكرة بكلتا اليدين خلف الرأس ثم دفعها للأمام
+    this.throwT = (this.throwT ?? 9) + dt;
+    if ((s.throwIn || this.throwT < 0.4) && s.state === STATE.NORMAL) {
+      const rel = s.throwIn && this.throwT >= 0.4 ? 0 : Math.min(1, this.throwT / 0.25);
+      const f = new THREE.Vector3(Math.cos(s.face), 0, -Math.sin(s.face));
+      const upArm = new THREE.Vector3(0, 1, 0).addScaledVector(f, -0.25 + rel * 1.2);
+      const fore = new THREE.Vector3(0, 0.35 - rel * 0.2, 0).addScaledVector(f, -1 + rel * 2.2);
+      const w = s.throwIn ? 1 : 1 - Math.max(0, (this.throwT - 0.25) / 0.15);
+      for (const sd of ['l', 'r']) {
+        const lat = new THREE.Vector3(-f.z, 0, f.x).multiplyScalar(sd === 'l' ? 0.18 : -0.18);
+        this.aimBone(`upperarm_${sd}`, `lowerarm_${sd}`, upArm.clone().add(lat), w);
+        this.aimBone(`lowerarm_${sd}`, `hand_${sd}`, fore.clone().sub(lat), w);
       }
     }
-    // مزج ناعم بين الوضعيات (لا قفزات مفاجئة في الحركة)
-    this.smoothPose(dt, s.state);
+    if (s.state === STATE.DIVE) {
+      // الارتماء: الجسم يميل جانبياً والذراعان ممدودتان فوق الرأس
+      const lat = -Math.sin(s.face) * s.vx + Math.cos(s.face) * s.vy;
+      const side = lat >= 0 ? 1 : -1;
+      const k = sm(0, 0.16, st);
+      const lift = Math.sin(clamp(st / 0.7, 0, 1) * PI);
+      this.lean.rotation.x = -side * 1.3 * k;
+      this.lean.position.y = lift * 0.45;
+      this.lean.position.z = -side * 0.35 * k;
+      this.model.updateMatrixWorld(true);
+      const headDir = this.bones.Head.getWorldPosition(new THREE.Vector3()).sub(this.bones.spine_02.getWorldPosition(new THREE.Vector3())).normalize();
+      for (const sd of ['l', 'r']) { this.aimBone(`upperarm_${sd}`, `lowerarm_${sd}`, headDir, k); this.aimBone(`lowerarm_${sd}`, `hand_${sd}`, headDir, k); }
+    } else { this.lean.position.set(0, 0, 0); }
+    if (s.state === STATE.DOWN) {
+      this.stars.visible = st > 0.5;
+      this.stars.position.set(-0.6, 0.35, 0);
+      this.stars.rotation.y = time * 5;
+    }
+    if (s.state === STATE.CELEBRATE) this.celebratePost(s, st, time, up);
 
-    // المؤشرات
     if (this.arrow && this.selected) { this.arrow.position.y = 2.35 * this.h + Math.sin(time * 5) * 0.08; this.arrow.rotation.y = time * 2; }
     if (this.ring && this.selected) this.ring.material.opacity = 0.85 + Math.sin(time * 6) * 0.15;
   }
 
-  celebrate(s, st, dt, time) {
-    const B = this.body, T = this.torso;
-    const [la, ra] = this.arms;
-    const [ll, rl] = this.legs;
-    const armsUp = (k = 1) => { la.sh.rotation.z = PI * 0.9 * k; ra.sh.rotation.z = PI * 0.9 * k; la.sh.rotation.x = -0.35 * k; ra.sh.rotation.x = 0.35 * k; };
-    const armsWide = (up = 0.4) => { la.sh.rotation.x = 1.45; ra.sh.rotation.x = -1.45; la.sh.rotation.z = up; ra.sh.rotation.z = up; };
-    switch (s.emote) {
-      case 1: { // زحلقة على الركبتين
-        const slide = Math.max(0, 1 - st / 1.0);
-        B.position.x = 2.6 * (1 - slide * slide);
-        B.position.y = this.hipY - 0.4;
-        ll.hip.rotation.z = 0.0; rl.hip.rotation.z = 0.0; ll.knee.rotation.z = -1.55; rl.knee.rotation.z = -1.55;
-        T.rotation.z = 0.45 + Math.sin(time * 3) * 0.05;
-        armsWide(0.6 + Math.sin(time * 4) * 0.1);
-        this.neck.rotation.z = 0.4;
+  enterState(s, was) {
+    switch (s.state) {
+      case STATE.SLIDE: this.oneShot('slide_start', { from: 0.15, to: 0.8, speed: 1.6, fadeIn: 0.05, fadeOut: 0.1 }); this.setState('slide_loop', { fade: 0.25 }); break;
+      case STATE.DOWN: this.setState('knockback', { loop: false, fade: 0.08, from: 0.05, speed: 1.2 }); break;
+      case STATE.DIVE: this.setState('jump_loop', { fade: 0.1 }); break;
+      case STATE.STUMBLE: this.oneShot('hit', { from: 0.05, speed: 1.4, fadeOut: 0.25 }); this.setState(null); break;
+      case STATE.SAD: this.setState(this.info.slot % 2 ? 'no' : 'crouch', { fade: 0.4 }); break;
+      case STATE.CELEBRATE: {
+        const e = s.emote;
+        const map = { 1: 'slide_loop', 2: 'jump_start', 3: 'dance', 4: 'jog', 5: 'jump_start', 6: 'jump_loop' };
+        const name = map[e] === undefined ? 'yes' : map[e];
+        this.setState(name, { fade: 0.25, loop: e !== 2 && e !== 5, from: e === 5 || e === 2 ? 0.25 : 0 });
+        this.siuDone = false;
         break;
       }
-      case 2: { // شقلبة خلفية
-        const k = Math.min(1, st / 0.9);
-        if (st < 0.9) {
-          B.rotation.z = k * PI * 2;
-          B.position.y = this.hipY + Math.sin(k * PI) * 1.2;
-          ll.hip.rotation.z = 1.2 * Math.sin(k * PI); rl.hip.rotation.z = 1.2 * Math.sin(k * PI);
-          ll.knee.rotation.z = -1.8 * Math.sin(k * PI); rl.knee.rotation.z = -1.8 * Math.sin(k * PI);
-          armsUp(1 - Math.sin(k * PI));
-        } else {
-          const pump = Math.abs(Math.sin(time * 5));
-          armsUp(0.8 + pump * 0.15);
-          la.el.rotation.z = 0.3 * pump; ra.el.rotation.z = 0.3 * pump;
-          B.position.y = this.hipY + pump * 0.08;
-        }
+      default:
+        if (was === STATE.SLIDE) this.oneShot('slide_exit', { from: 0.1, speed: 1.6, fadeIn: 0.05 });
+        if (was === STATE.DOWN) this.oneShot('getup', { from: 0.6, speed: 2.2, fadeIn: 0.1 });
+        this.setState(null, { fade: 0.22 });
+    }
+  }
+
+  // احتفالات: الجزء الذي يغيّر الحركة قبل المزج
+  celebrateMotion(s, st, time) {
+    const e = s.emote;
+    if ((e === 2 || e === 5) && st > 0.9 && this.layer.state && this.layer.state.name === 'jump_start') this.setState(e === 5 ? 'jump_land' : 'yes', { fade: 0.15, loop: e !== 5, from: 0 });
+  }
+  // احتفالات: لمسات بعد المزج (حركة الجسم كاملاً + الذراعان)
+  celebratePost(s, st, time, up) {
+    const e = s.emote;
+    const B = this.body;
+    const armsTo = (dirFn, w = 1) => { for (const sd of ['l', 'r']) { const d = dirFn(sd); this.aimBone(`upperarm_${sd}`, `lowerarm_${sd}`, d, w); this.aimBone(`lowerarm_${sd}`, `hand_${sd}`, d, w * 0.8); } };
+    const side = (sd) => { const a = this.root.rotation.y + (sd === 'l' ? PI / 2 : -PI / 2); return new THREE.Vector3(Math.cos(a), 0.15, -Math.sin(a)); };
+    switch (e) {
+      case 1: { // انزلاق على الركبتين والذراعان مفتوحتان
+        const k = Math.min(1, st / 1.0);
+        B.position.x = 2.6 * (1 - (1 - k) * (1 - k));
+        this.model.updateMatrixWorld(true);
+        armsTo((sd) => side(sd).add(new THREE.Vector3(0, 0.5, 0)), 0.9);
         break;
       }
-      case 3: { // رقصة
-        const t = time * 7;
-        B.position.z = Math.sin(t * 0.5) * 0.15;
-        B.rotation.x = Math.sin(t * 0.5) * 0.15;
-        T.rotation.y = Math.sin(t * 0.5) * 0.4;
-        la.sh.rotation.z = 1.5 + Math.sin(t) * 1.2; ra.sh.rotation.z = 1.5 - Math.sin(t) * 1.2;
-        la.el.rotation.z = 1.0; ra.el.rotation.z = 1.0;
-        ll.hip.rotation.z = Math.max(0, Math.sin(t * 0.5)) * 0.8; ll.knee.rotation.z = -Math.max(0, Math.sin(t * 0.5)) * 1.4;
-        rl.hip.rotation.z = Math.max(0, -Math.sin(t * 0.5)) * 0.8; rl.knee.rotation.z = -Math.max(0, -Math.sin(t * 0.5)) * 1.4;
-        B.position.y = this.hipY + Math.abs(Math.sin(t)) * 0.06;
+      case 2: { // شقلبة
+        if (st < 0.9) { const k = st / 0.9; B.rotation.x = -k * PI * 2; B.position.y = Math.sin(k * PI) * 1.0; }
+        else armsTo(() => up.clone(), 0.85);
         break;
       }
-      case 4: { // الطائرة
+      case 4: { // الطائرة: جري دائري والذراعان كالأجنحة
         const a = st * 2.4;
         B.position.x = Math.sin(a) * 1.6;
-        B.position.z = (1 - Math.cos(a)) * 1.6;
-        B.rotation.y = -a;
-        B.rotation.x = -0.35;
-        armsWide(0.1);
-        const ph = time * 12;
-        ll.hip.rotation.z = Math.sin(ph) * 0.8; rl.hip.rotation.z = -Math.sin(ph) * 0.8;
-        ll.knee.rotation.z = -Math.max(0, -Math.cos(ph)) * 1.3; rl.knee.rotation.z = -Math.max(0, Math.cos(ph)) * 1.3;
-        T.rotation.z = -0.2;
+        B.position.z = -(1 - Math.cos(a)) * 1.6;
+        B.rotation.y = PI / 2 + a;
+        this.model.updateMatrixWorld(true);
+        armsTo(side, 1);
         break;
       }
-      case 5: { // سيييو
-        if (st < 0.35) {
-          const k = st / 0.35;
-          B.position.y = this.hipY - 0.2 * k; ll.knee.rotation.z = -0.8 * k; rl.knee.rotation.z = -0.8 * k; ll.hip.rotation.z = 0.4 * k; rl.hip.rotation.z = 0.4 * k;
-          armsUp(k * 0.5);
-        } else if (st < 1.0) {
-          const k = (st - 0.35) / 0.65;
-          B.position.y = this.hipY + Math.sin(k * PI) * 1.0;
-          B.rotation.y = k * PI;
-          armsUp(0.8);
-          ll.hip.rotation.z = 0.5 * Math.sin(k * PI); rl.hip.rotation.z = 0.5 * Math.sin(k * PI); ll.knee.rotation.z = -0.8 * Math.sin(k * PI); rl.knee.rotation.z = -0.8 * Math.sin(k * PI);
-        } else {
-          B.rotation.y = PI;
-          B.position.y = this.hipY - 0.12;
-          ll.hip.rotation.x = -0.35; rl.hip.rotation.x = 0.35;
-          ll.knee.rotation.z = -0.25; rl.knee.rotation.z = -0.25;
-          la.sh.rotation.x = 0.7; ra.sh.rotation.x = -0.7; la.sh.rotation.z = 0.3; ra.sh.rotation.z = 0.3;
-          T.rotation.z = 0.15;
-          this.neck.rotation.z = 0.2;
-          if (!this.siuDone) { this.siuDone = true; this.onSiu && this.onSiu(); }
+      case 5: { // سيييو: قفزة مع دوران ثم الهبوط بذراعين للأسفل
+        if (st < 0.9) { B.rotation.y = PI / 2 + Math.min(1, st / 0.8) * PI; }
+        else {
+          B.rotation.y = PI / 2 + PI;
+          this.model.updateMatrixWorld(true);
+          armsTo((sd) => side(sd).multiplyScalar(0.7).add(new THREE.Vector3(0, -1, 0)), 0.8);
+          if (!this.siuDone && st > 1.0) { this.siuDone = true; this.onSiu && this.onSiu(); }
         }
-        if (st < 0.3) this.siuDone = false;
         break;
       }
-      case 6: { // قفز مع الزملاء
-        const j = Math.abs(Math.sin(time * 5 + this.info.slot));
-        B.position.y = this.hipY + j * 0.4;
-        armsUp(0.9);
-        la.el.rotation.z = 0.2; ra.el.rotation.z = 0.2;
-        ll.knee.rotation.z = -(1 - j) * 0.6; rl.knee.rotation.z = -(1 - j) * 0.6;
+      case 6: { // قفز جماعي
+        B.position.y = Math.abs(Math.sin(time * 5 + this.info.slot)) * 0.25;
+        this.model.updateMatrixWorld(true);
+        armsTo(() => up.clone(), 0.9);
         break;
-      }
-      default: { // تصفيق
-        const c = Math.abs(Math.sin(time * 8));
-        la.sh.rotation.z = 1.1; ra.sh.rotation.z = 1.1;
-        la.sh.rotation.x = -0.3 * c - 0.05; ra.sh.rotation.x = 0.3 * c + 0.05;
-        la.el.rotation.z = 1.2; ra.el.rotation.z = 1.2;
       }
     }
   }
 
-  smoothPose(dt, state) {
-    const list = this._poseList || (this._poseList = [this.body, this.torso, this.neck, ...this.arms.flatMap((a) => [a.sh, a.el]), ...this.legs.flatMap((l) => [l.hip, l.knee])]);
-    const prev = this._prev || (this._prev = list.map((o) => ({ r: o.rotation.clone(), p: o.position.clone() })));
-    const k = 1 - Math.exp(-dt * (state === STATE.DOWN || state === STATE.DIVE ? 12 : 16));
-    const celebrate = state === STATE.CELEBRATE;
-    list.forEach((o, i) => {
-      const pr = prev[i];
-      if (celebrate && o === this.body) { pr.r.copy(o.rotation); pr.p.copy(o.position); return; }
-      for (const ax of ['x', 'y', 'z']) {
-        let d = o.rotation[ax] - pr.r[ax];
-        if (Math.abs(d) > Math.PI) { pr.r[ax] = o.rotation[ax]; continue; }
-        pr.r[ax] += d * k;
-        o.rotation[ax] = pr.r[ax];
-      }
-      pr.p.lerp(o.position, k);
-      o.position.copy(pr.p);
-    });
+  // ركلة/تمريرة/رأسية/رمية تماس — تُستدعى عند حدث الركل
+  triggerKick(header, isThrow, kind, pw = 0.6) {
+    this.kickT = 0;
+    if (isThrow) { this.throwT = 0; return; }
+    if (header) { this.oneShot('jump_start', { from: 0.3, to: 0.95, speed: 1.6, fadeIn: 0.05, fadeOut: 0.25 }); return; }
+    // نبدأ قبيل لحظة لمس الكرة (0.567ث في المقطع) لتظهر الضربة فوراً
+    const clip = kind === 'pass' ? 'kick_c' : KICKS[Math.floor(Math.random() * KICKS.length)];
+    const fast = kind === 'pass' ? 1.5 : 1.2 + (1 - pw) * 0.3;
+    this.oneShot(clip, { from: 0.4, to: 0.95, speed: fast, fadeIn: 0.05, fadeOut: 0.22 });
   }
 
-  triggerKick(header, isThrow) { this.kickT = 0; this.kickHeader = header; this.kickThrow = isThrow; }
-
-  // موضع اليد/القدم في العالم (للكرة في الاحتفال)
-  // مؤشر اللاعب المتحكَّم فيه (يتنقل مع التبديل)
   setSelected(on) {
     this.selected = on;
     if (this.ring) this.ring.visible = on;
@@ -736,8 +562,9 @@ export class Player3D {
   }
 
   dispose() {
-    this.root.traverse((o) => {
-      if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); }
-    });
+    this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.model);
+    for (const m of this.mats) m.dispose();
+    this.root.traverse((o) => { if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); } });
   }
 }

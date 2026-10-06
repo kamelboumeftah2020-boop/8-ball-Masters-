@@ -83,3 +83,18 @@ cd android && ./gradlew assembleRelease
 بدونهما يُوقَّع التطبيق بمفتاح التصحيح. احتفظ بالمفتاح نفسه دائماً: التحديثات لا تُثبَّت فوق النسخة القديمة إلا إذا وُقّعت بنفس المفتاح، وهو ضروري أيضاً للنشر على Google Play.
 
 لتغيير رقم الإصدار: `versionCode` و `versionName` في `android/app/build.gradle`.
+
+## 🏃 اللاعبون والحركات (Motion Capture حقيقي)
+
+- **الجسم والشعر:** [Quaternius — Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) (CC0)
+- **الجري والمشي والانزلاق والسقوط والاحتفالات:** [Quaternius — Universal Animation Library 1 و 2](https://quaternius.com/packs/universalanimationlibrary.html) (CC0)
+- **الركلات:** تصوير حركة حقيقي لركلات كرة قدم من [CMU Graphics Lab Motion Capture Database](http://mocap.cs.cmu.edu) (الملفات 10_02، 10_05، 11_01) — حُوّلت إلى هيكل اللاعبين بـ `scripts/retarget-cmu.mjs`.
+  The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.
+
+الطقم (الألوان، الأنماط، الرقم والاسم) يُرسم على الجسم مباشرة داخل الشيدر في `public/js/player3d.js` — أي سكين جديد = بيانات في `skins.js` فقط.
+
+لإعادة بناء `public/models/players.glb` بعد تنزيل الحزم المجانية:
+```bash
+CMU=/path/to/cmu ASSETS=/path/to/quaternius node scripts/retarget-cmu.mjs
+ASSETS=/path/to/quaternius node scripts/build-players.mjs
+```

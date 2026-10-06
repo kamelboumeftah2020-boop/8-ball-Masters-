@@ -1,7 +1,7 @@
 // التطبيق الرئيسي: القوائم، اختيار الشخصية، الغرف، حلقة الرسم
 import * as THREE from 'three';
 import { World } from './scene.js';
-import { Player3D } from './player3d.js';
+import { Player3D, loadPlayerAssets } from './player3d.js';
 import { Match } from './match.js';
 import { Input } from './input.js';
 import { audio } from './audio.js';
@@ -485,18 +485,23 @@ class App {
     this.menuT += dt;
     const t = this.menuT;
     const p = this.previewP;
-    // تنطيط الكرة ثم احتفال
+    // تنطيط الكرة ثم احتفال (النموذج الواقعي: وقوف طبيعي بالكرة ثم احتفال)
     const cycle = t % 9;
     const celebrating = cycle > 6.2;
-    const juggleH = Math.abs(Math.sin(t * 2.6));
-    if (!celebrating) {
-      if (juggleH < 0.08 && !this.kicked) { p.triggerKick(false); this.kicked = true; }
-      if (juggleH > 0.3) this.kicked = false;
-      p.update(dt, { x: 0, y: 0, vx: 0, vy: 0, face: -Math.PI / 2 + 0.5, state: STATE.NORMAL, emote: 0, hold: 0 }, w.time);
-      this.previewBall.position.set(0.35 * Math.cos(-0.5), 0.25 + juggleH * 1.3, 0.35 * Math.sin(0.5) + 0.15);
+    if (p.mixer) {
+      p.update(dt, { x: 0, y: 0, vx: 0, vy: 0, face: -Math.PI / 2 + 0.45, state: celebrating ? STATE.CELEBRATE : STATE.NORMAL, emote: celebrating ? 3 : 0, hold: 0 }, w.time);
+      this.previewBall.position.set(0.45, BALL_R, 0.55);
     } else {
-      p.update(dt, { x: 0, y: 0, vx: 0, vy: 0, face: -Math.PI / 2 + 0.3, state: STATE.CELEBRATE, emote: charOf(this.settings.char).celebration, hold: 0 }, w.time);
-      this.previewBall.position.set(0.6, BALL_R, 0.8);
+      const juggleH = Math.abs(Math.sin(t * 2.6));
+      if (!celebrating) {
+        if (juggleH < 0.08 && !this.kicked) { p.triggerKick(false); this.kicked = true; }
+        if (juggleH > 0.3) this.kicked = false;
+        p.update(dt, { x: 0, y: 0, vx: 0, vy: 0, face: -Math.PI / 2 + 0.5, state: STATE.NORMAL, emote: 0, hold: 0 }, w.time);
+        this.previewBall.position.set(0.35 * Math.cos(-0.5), 0.25 + juggleH * 1.3, 0.35 * Math.sin(0.5) + 0.15);
+      } else {
+        p.update(dt, { x: 0, y: 0, vx: 0, vy: 0, face: -Math.PI / 2 + 0.3, state: STATE.CELEBRATE, emote: charOf(this.settings.char).celebration, hold: 0 }, w.time);
+        this.previewBall.position.set(0.6, BALL_R, 0.8);
+      }
     }
     const a = t * 0.12;
     const wide = this.width > this.height;
@@ -841,7 +846,9 @@ class App {
   }
 }
 
-const boot = () => {
+const boot = async () => {
+  // تحميل نموذج اللاعبين الواقعي (أثناء شاشة البداية)
+  await loadPlayerAssets();
   try {
     window.app = new App();
   } catch (e) {

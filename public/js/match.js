@@ -615,7 +615,7 @@ export class Match {
     switch (e.e) {
       case 'kick': {
         const throwIn = st && st.spk === 'throw' && st.sp === e.p;
-        P[e.p] && P[e.p].triggerKick(!!e.h, throwIn);
+        P[e.p] && P[e.p].triggerKick(!!e.h, throwIn, e.k, e.pw);
         audio.kick(e.pw, !!e.h);
         if (e.k !== 'pass' && e.pw > 0.45) audio.whoosh(e.pw);
         if (!replay && e.p === this.you) this.vibrate(e.k === 'shot' ? 25 : 12);
