@@ -58,6 +58,7 @@ export const RECITERS = [
   { id: 'salama', name: 'ياسر سلامة', server: 'https://cdn.mp3quran.net/audio/yasser-salama/r1/', ayah: 'Yaser_Salamah_128kbps' },
   { id: 'zamil', name: 'ماجد الزامل', server: 'https://cdn.mp3quran.net/audio/majed-zamil/r1/' },
   { id: 'asfour', name: 'ناصر العصفور', server: 'https://cdn.mp3quran.net/audio/nasser-asfour/r1/' },
+  { id: 'khalaf', name: 'عبد الله الخلف', server: 'https://cdn.mp3quran.net/audio/abdullah-khalaf/r1/' },
   { id: 'shirzad', name: 'شيرزاد عبد الرحمن طاهر', server: 'https://cdn.mp3quran.net/audio/shirzad-taher/r1/' },
   // برواية ورش عن نافع: السور كاملة (لا تتوفر لها تلاوة آية بآية بترقيم ورش)
   { id: 'w_yassin', name: 'ياسين الجزائري', server: 'https://cdn.mp3quran.net/audio/yassen-jazairi/r1/', warsh: true },
