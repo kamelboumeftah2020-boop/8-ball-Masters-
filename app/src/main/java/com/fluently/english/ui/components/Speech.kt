@@ -31,6 +31,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -63,10 +67,23 @@ class SpeechInput internal constructor() {
     /** Voice loudness 0..1 while listening (for the pulsing button). */
     var level by mutableFloatStateOf(0f)
         internal set
+    /** The phone has no speech service: offer the offline English pack. */
+    var offlineNeeded by mutableStateOf(false)
+        internal set
+    /** Download progress 0..1 of the offline pack, or null when not downloading. */
+    var downloading by mutableStateOf<Float?>(null)
+        internal set
+    /** A short positive note (e.g. the offline pack is ready). */
+    var notice by mutableStateOf<String?>(null)
+        internal set
     internal var onStart: () -> Unit = {}
+    internal var onDownload: () -> Unit = {}
 
     /** Starts listening, or stops if already listening. */
     fun start() = onStart()
+
+    /** Downloads the offline English speech pack (about 40 MB, once). */
+    fun downloadOffline() = onDownload()
 }
 
 private fun recognizerIntent(context: Context) = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -78,8 +95,8 @@ private fun recognizerIntent(context: Context) = Intent(RecognizerIntent.ACTION_
     .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
     .putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
 
-private const val NO_SERVICE =
-    "لا توجد خدمة للتعرّف على الصوت في هاتفك. ثبّت أو حدّث تطبيق «Google» من متجر Play ثم حاول مجدداً."
+private fun isNetworkError(code: Int) =
+    code == SpeechRecognizer.ERROR_NETWORK || code == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || code == 11
 
 private fun errorMessage(code: Int): String? = when (code) {
     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> null // handled as "didn't hear you"
@@ -101,28 +118,74 @@ fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
     val onResultState by rememberUpdatedState(onResult)
     val input = remember { SpeechInput() }
 
+    val scope = rememberCoroutineScope()
+    val speaker = LocalSpeaker.current
+    var offlineSession by remember { mutableStateOf<OfflineSpeech.Session?>(null) }
+    DisposableEffect(Unit) { onDispose { offlineSession?.stop() } }
+
+    // Last resort, no Google needed: the built-in offline engine (after a one-time download).
+    fun listenOffline() {
+        if (!OfflineSpeech.isReady(context)) {
+            input.offlineNeeded = true
+            return
+        }
+        speaker.stop()
+        input.error = null
+        input.notice = null
+        input.partial = ""
+        input.listening = true
+        scope.launch {
+            try {
+                offlineSession = OfflineSpeech.listen(
+                    context,
+                    onPartial = { input.partial = it },
+                    onDone = { heard -> input.listening = false; offlineSession = null; onResultState(heard) },
+                    onError = { msg -> input.listening = false; offlineSession = null; input.error = msg },
+                )
+            } catch (e: Throwable) {
+                input.listening = false
+                input.error = "تعذّر تشغيل التعرّف على الصوت بدون إنترنت على هذا الهاتف."
+            }
+        }
+    }
+
+    input.onDownload = {
+        if (input.downloading == null) {
+            input.downloading = 0f
+            input.error = null
+            scope.launch {
+                try {
+                    OfflineSpeech.download(context) { p -> scope.launch { input.downloading = p } }
+                    input.offlineNeeded = false
+                    input.notice = "جاهز ✓ الآن اضغط على الميكروفون وتكلّم — يعمل حتى بدون إنترنت."
+                } catch (e: Exception) {
+                    input.error = "تعذّر تنزيل الحزمة. تحقق من الإنترنت ثم حاول مرة أخرى."
+                } finally {
+                    input.downloading = null
+                }
+            }
+        }
+    }
+
     // Fallback: the system voice-typing screen (needs no permission from us).
     val systemScreen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         input.listening = false
         onResultState(res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty())
     }
-    fun openSystemScreen() {
+    fun openSystemScreen(): Boolean {
         input.error = null
         val intent = recognizerIntent(context)
-        if (intent.resolveActivity(context.packageManager) == null) {
-            input.error = NO_SERVICE
-            return
-        }
-        try {
+        if (intent.resolveActivity(context.packageManager) == null) return false
+        return try {
             input.listening = true
             systemScreen.launch(intent)
+            true
         } catch (e: ActivityNotFoundException) {
             input.listening = false
-            input.error = NO_SERVICE
+            false
         }
     }
 
-    val speaker = LocalSpeaker.current
     val recognizer = remember {
         runCatching {
             if (!SpeechRecognizer.isRecognitionAvailable(context)) return@runCatching null
@@ -139,8 +202,12 @@ fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
     }
     DisposableEffect(recognizer) { onDispose { runCatching { recognizer?.destroy() } } }
 
+    /** Whatever works on this phone: Google's recogniser, the voice-typing screen, or offline. */
     fun listen() {
-        val r = recognizer ?: return openSystemScreen()
+        val r = recognizer ?: run {
+            if (!openSystemScreen()) listenOffline()
+            return
+        }
         speaker.stop() // the microphone would otherwise hear the app's own voice
         input.error = null
         input.partial = ""
@@ -163,9 +230,17 @@ fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
                 input.listening = false
                 input.level = 0f
                 // Client errors and a missing English model: let the system voice-typing screen try instead.
-                if (error == SpeechRecognizer.ERROR_CLIENT || error == 12 || error == 13) return openSystemScreen()
+                if (error == SpeechRecognizer.ERROR_CLIENT || error == 12 || error == 13) {
+                    if (!openSystemScreen()) listenOffline()
+                    return
+                }
                 val message = errorMessage(error)
-                if (message == null) onResultState(emptyList()) else input.error = message
+                when {
+                    message == null -> onResultState(emptyList())
+                    // No internet but the offline pack is installed: just use it.
+                    isNetworkError(error) && OfflineSpeech.isReady(context) -> listenOffline()
+                    else -> input.error = message
+                }
             }
         })
         try {
@@ -173,7 +248,7 @@ fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
             r.startListening(recognizerIntent(context))
         } catch (e: Exception) {
             input.listening = false
-            openSystemScreen()
+            if (!openSystemScreen()) listenOffline()
         }
     }
 
@@ -185,10 +260,13 @@ fun rememberSpeechInput(onResult: (List<String>) -> Unit): SpeechInput {
     input.onStart = {
         when {
             input.listening -> {
+                offlineSession?.stop()
                 runCatching { recognizer?.stopListening() }
-                input.listening = false
+                if (offlineSession == null) input.listening = false
             }
-            recognizer == null -> openSystemScreen()
+            input.downloading != null -> Unit
+            // No Google recogniser: the voice-typing screen if present, else the offline engine (needs the permission).
+            recognizer == null && openSystemScreen() -> Unit
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> listen()
             else -> permission.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -206,6 +284,35 @@ fun SpeechStatus(input: SpeechInput, modifier: Modifier = Modifier) {
                 Ltr { Text("“${input.partial}”", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) }
             }
         }
+        input.downloading != null -> Column(modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Text(
+                "جارٍ تنزيل حزمة التعرّف على الصوت… ${((input.downloading ?: 0f) * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+            )
+            VSpace(6.dp)
+            LinearMeter(input.downloading ?: 0f, height = 6.dp)
+        }
+        input.offlineNeeded -> Column(
+            modifier.fillMaxWidth().padding(top = 10.dp).clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.primaryContainer).padding(14.dp),
+        ) {
+            Text("شغّل الميكروفون بدون Google", style = MaterialTheme.typography.titleSmall)
+            VSpace(4.dp)
+            Text(
+                "هاتفك لا يحتوي على خدمة Google للتعرّف على الصوت. يمكن للتطبيق أن يتعرّف على كلامك بنفسه — حتى بدون إنترنت — بعد تنزيل حزمة الإنجليزية مرة واحدة (حوالي ${OfflineSpeech.SIZE_MB} ميغابايت، يُفضّل عبر Wi-Fi).",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            input.error?.let {
+                VSpace(4.dp)
+                Text(it, style = MaterialTheme.typography.bodySmall, color = Danger)
+            }
+            VSpace(10.dp)
+            PrimaryButton("تنزيل الحزمة (${OfflineSpeech.SIZE_MB} ميغابايت)", onClick = { input.downloadOffline() })
+        }
+        input.notice != null && input.error == null -> Text(
+            input.notice.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center, modifier = modifier.fillMaxWidth().padding(top = 8.dp),
+        )
         input.error != null -> Text(
             input.error.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Danger,
             textAlign = TextAlign.Center, modifier = modifier.fillMaxWidth().padding(top = 8.dp),

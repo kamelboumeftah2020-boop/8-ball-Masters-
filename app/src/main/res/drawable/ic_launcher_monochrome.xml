@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon version: the bubble with the bars cut out, plus the spark. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M40,30 H68 A12,12 0 0 1 80,42 V60 A12,12 0 0 1 68,72 H52 L39,82 L41,72 H40 A12,12 0 0 1 28,60 V42 A12,12 0 0 1 40,30 Z
+            M39,59 A2,2 0 0 1 41,57 H44 A2,2 0 0 1 46,59 V64 H39 Z
+            M50.5,52 A2,2 0 0 1 52.5,50 H55.5 A2,2 0 0 1 57.5,52 V64 H50.5 Z
+            M62,44 A2,2 0 0 1 64,42 H67 A2,2 0 0 1 69,44 V64 H62 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M78,23 Q79.2,29.8 86,31 Q79.2,32.2 78,39 Q76.8,32.2 70,31 Q76.8,29.8 78,23 Z" />
+</vector>

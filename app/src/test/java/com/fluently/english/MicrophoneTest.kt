@@ -91,11 +91,14 @@ class MicrophoneTest {
         rule.onNode(hasText("يحتاج اتصالاً بالإنترنت", substring = true)).assertExists()
     }
 
-    @Test fun noSpeechServiceExplainsWhatToInstall() {
-        show() // no recognition service, no voice-typing screen on this "phone"
+    @Test fun noSpeechServiceOffersTheOfflinePack() {
+        // No Google recogniser and no voice-typing screen on this "phone".
+        shadowOf(rule.activity.application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        show()
         rule.onNode(hasContentDescription("تحدث")).performClick()
         rule.waitForIdle()
-        rule.onNode(hasText("لا توجد خدمة للتعرّف على الصوت", substring = true)).assertExists()
+        rule.onNode(hasText("شغّل الميكروفون بدون Google", substring = true)).assertExists()
+        rule.onNode(hasText("تنزيل الحزمة", substring = true)).assertExists()
     }
 
     @Test fun silenceCountsAsNotHeard() {

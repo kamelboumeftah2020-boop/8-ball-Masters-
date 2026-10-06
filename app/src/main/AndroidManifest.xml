@@ -24,7 +24,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Fluently">
+        android:theme="@style/Theme.Fluently.Starting">
         <activity
             android:name=".MainActivity"
             android:exported="true"

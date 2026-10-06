@@ -21,10 +21,12 @@ android {
         applicationId = "com.fluently.english"
         minSdk = 24
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.8.1"
+        versionCode = 15
+        versionName = "1.9.0"
         // Cloud accounts: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID (see README).
         // Without them, accounts and progress are kept on the device.
+        // Phones only (the offline speech engine ships native code per CPU type).
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         buildConfigField("String", "FIREBASE_API_KEY", "\"${setting("FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${setting("FIREBASE_PROJECT_ID")}\"")
     }
@@ -81,6 +83,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    // Offline English speech recognition for phones without Google's speech service.
+    implementation("com.alphacephei:vosk-android:0.3.75")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
