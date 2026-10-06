@@ -19,6 +19,7 @@ import { Quran } from "./pages/Quran";
 import { Settings } from "./pages/Settings";
 import { LibraryProvider } from "./store/library";
 import { PlayerProvider, usePlayer } from "./store/player";
+import { AdsProvider } from "./store/ads";
 import { SubscriptionsProvider } from "./store/subscriptions";
 
 function ScrollToTop() {
@@ -132,7 +133,9 @@ export default function App() {
       <LibraryProvider>
         <PlayerProvider>
           <SubscriptionsProvider>
-            <Shell />
+            <AdsProvider>
+              <Shell />
+            </AdsProvider>
           </SubscriptionsProvider>
         </PlayerProvider>
       </LibraryProvider>

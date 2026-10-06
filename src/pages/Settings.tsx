@@ -12,6 +12,7 @@ import { APP_VERSION } from "../lib/version";
 import { EpisodeChecker, isNative } from "../native";
 import { useLibrary } from "../store/library";
 import { usePlayer } from "../store/player";
+import { useAds } from "../store/ads";
 import { useSubscriptions } from "../store/subscriptions";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -45,6 +46,7 @@ export function Settings() {
   const lib = useLibrary();
   const player = usePlayer();
   const subs = useSubscriptions();
+  const ads = useAds();
   const navigate = useNavigate();
   const [theme, setTheme] = useState(getThemePref());
   const [feedUrl, setFeedUrl] = useState("");
@@ -128,6 +130,31 @@ export function Settings() {
           </select>
         </label>
       </Section>
+
+      {ads.available && (
+        <Section title="الإعلانات">
+          <button
+            className="subs-row action"
+            disabled={!ads.rewardedReady || !!busy}
+            onClick={() => run("reward", async () => {
+              const ok = await ads.watchForAdFree();
+              return ok ? "✓ استمتع بساعة بدون إعلانات" : "لم يكتمل الإعلان، حاول مرة أخرى";
+            })}
+          >
+            <span>
+              <strong>ساعة بدون إعلانات</strong>
+              <small>
+                {ads.adFreeUntil
+                  ? `مفعّلة حتى ${new Date(ads.adFreeUntil).toLocaleTimeString("ar-u-nu-latn", { hour: "2-digit", minute: "2-digit" })} · شاهد إعلاناً لإضافة ساعة`
+                  : ads.rewardedReady
+                    ? "شاهد إعلاناً قصيراً واستمع ساعة كاملة بدون إعلانات"
+                    : "جارٍ تجهيز الإعلان…"}
+              </small>
+            </span>
+            {busy === "reward" ? <Spinner small /> : <span className="chev">‹</span>}
+          </button>
+        </Section>
+      )}
 
       <Section title="الاستماع">
         <Toggle title="تقوية الصوت" hint="يرفع الأصوات الخافتة ويوازن الصوت" checked={player.fx.boost} onChange={(v) => player.setFx({ ...player.fx, boost: v })} />

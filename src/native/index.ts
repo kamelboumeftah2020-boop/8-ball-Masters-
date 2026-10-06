@@ -96,3 +96,17 @@ interface EpisodeCheckerPlugin {
 }
 
 export const EpisodeChecker = registerPlugin<EpisodeCheckerPlugin>("EpisodeChecker");
+
+/* ---------- Ads (Unity LevelPlay) ---------- */
+
+interface AdsPlugin {
+  showBanner(): Promise<void>;
+  hideBanner(): Promise<void>;
+  showInterstitial(): Promise<{ shown: boolean }>;
+  isRewardedReady(): Promise<{ ready: boolean }>;
+  showRewarded(): Promise<{ rewarded: boolean }>;
+  addListener(event: "banner", fn: (e: { height: number }) => void): Promise<PluginListenerHandle>;
+  addListener(event: "status", fn: (e: { ready?: boolean; rewardedReady?: boolean }) => void): Promise<PluginListenerHandle>;
+}
+
+export const Ads = registerPlugin<AdsPlugin>("Ads");

@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MediaPlaybackPlugin.class);
         registerPlugin(EpisodeCheckerPlugin.class);
+        registerPlugin(AdsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
