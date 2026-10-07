@@ -3,37 +3,21 @@ import { View, Alert } from 'react-native';
 import { useTheme, radius } from '../theme';
 import { Txt, Btn, Card } from './ui';
 import { SurahPicker } from './SurahPicker';
-import { fetchAndCacheQuran, isQuranCached } from '../lib/quran-online';
 import { reciterFor, downloadSurahForOffline, downloadedSurahs } from '../lib/audio';
 import { SURAHS, JUZ_AMMA, arNum } from '../lib/surahs';
 import type { Riwaya } from '../db/queries';
 
-export function OfflineManager({ riwaya, onTextReady }: { riwaya: Riwaya; onTextReady?: () => void }) {
+export function OfflineManager({ riwaya }: { riwaya: Riwaya }) {
   const t = useTheme();
   const rec = reciterFor(riwaya);
-  const [cached, setCached] = useState(false);
-  const [textPct, setTextPct] = useState<number | null>(null);
   const [audioMsg, setAudioMsg] = useState<string | null>(null);
   const [have, setHave] = useState<Set<number>>(new Set());
   const [pick, setPick] = useState(false);
 
   const refresh = useCallback(() => {
-    isQuranCached(riwaya).then(setCached);
     downloadedSurahs(rec.id).then(setHave);
   }, [riwaya, rec.id]);
   useEffect(refresh, [refresh]);
-
-  const downloadMushaf = async () => {
-    try {
-      const total = await fetchAndCacheQuran(riwaya, setTextPct);
-      Alert.alert('تم', `تم تحميل ${arNum(total)} آية، المصحف يعمل الآن بدون انترنت`);
-      onTextReady?.();
-    } catch {
-      Alert.alert('خطأ', 'فشل التحميل، تأكد من الانترنت وحاول مجددًا');
-    }
-    setTextPct(null);
-    refresh();
-  };
 
   const downloadAudio = async (surahs: number[]) => {
     const todo = surahs.filter((s) => !have.has(s));
@@ -53,18 +37,8 @@ export function OfflineManager({ riwaya, onTextReady }: { riwaya: Riwaya; onText
   const busy = audioMsg !== null;
   return (
     <Card style={{ gap: 12 }}>
-      <Txt bold size={18}>التحميل للاستعمال بدون انترنت</Txt>
-      <Txt muted size={13}>التطبيق خفيف: المصحف والصوتيات تُجلب من الانترنت، ويمكنك تحميلها هنا لتعمل بدون اتصال.</Txt>
-
-      <View style={{ backgroundColor: t.soft, borderRadius: radius.md, padding: 12, gap: 8 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Txt bold>المصحف - {riwaya === 'hafs' ? 'حفص' : 'ورش'}</Txt>
-          <Txt size={12} color={cached ? t.good : t.muted}>{cached ? 'محمّل ✓' : 'غير محمّل'}</Txt>
-        </View>
-        {!cached && (
-          <Btn label={textPct !== null ? `جاري التحميل... ${arNum(textPct)}٪` : 'تحميل المصحف كاملًا (2MB)'} disabled={textPct !== null} onPress={downloadMushaf} />
-        )}
-      </View>
+      <Txt bold size={18}>الصوتيات بدون انترنت</Txt>
+      <Txt muted size={13}>المصحف مضمّن ويعمل بدون انترنت. التلاوة تُشغَّل من الانترنت، ويمكنك تحميلها هنا للاستماع بدون اتصال.</Txt>
 
       <View style={{ backgroundColor: t.soft, borderRadius: radius.md, padding: 12, gap: 8 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

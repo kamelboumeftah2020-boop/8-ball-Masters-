@@ -9,12 +9,12 @@ import { SurahPicker } from '../../src/components/SurahPicker';
 import { SURAHS, arNum, ayahCount } from '../../src/lib/surahs';
 import { useSettings } from '../../src/store/settings';
 import { Ayah, rangeAyahs } from '../../src/db/queries';
-import { fetchAndCacheQuran } from '../../src/lib/quran-online';
-import { playRange, reciterFor, stopAudio } from '../../src/lib/audio';
+import { ensureQuran } from '../../src/lib/quran-data';
+import { playRange, stopAudio } from '../../src/lib/audio';
 
 export default function Hifz() {
   const t = useTheme();
-  const params = useLocalSearchParams<{ surah?: string }>();
+  const params = useLocalSearchParams<{ surah?: string; from?: string }>();
   const riwaya = useSettings((s) => s.riwaya);
   const [surah, setSurah] = useState(1);
   const [from, setFrom] = useState(1);
@@ -24,19 +24,16 @@ export default function Hifz() {
   const [listening, setListening] = useState<number | null>(null);
   const [run, setRun] = useState<Ayah[] | null>(null);
 
-  useEffect(() => { if (params.surah) { setSurah(Number(params.surah)); setFrom(1); } }, [params.surah]);
+  useEffect(() => { if (params.surah) { setSurah(Number(params.surah)); setFrom(Number(params.from) || 1); } }, [params.surah, params.from]);
   useEffect(() => () => { stopAudio(); }, []);
 
-  const max = ayahCount(surah);
+  const max = ayahCount(surah, riwaya);
   const to = Math.min(max, from + count - 1);
 
   const start = async () => {
     setBusy(true);
-    let rows = await rangeAyahs(riwaya, surah, from, to);
-    if (!rows.length) {
-      try { await fetchAndCacheQuran(riwaya); rows = await rangeAyahs(riwaya, surah, from, to); }
-      catch { Alert.alert('يلزم الانترنت', 'حمّل المصحف مرة واحدة من الصفحة الرئيسية ثم يعمل بدون انترنت.'); }
-    }
+    await ensureQuran(riwaya).catch(() => {});
+    const rows = await rangeAyahs(riwaya, surah, from, to);
     setBusy(false);
     stopAudio(); setListening(null);
     if (rows.length) setRun(rows);
@@ -44,7 +41,7 @@ export default function Hifz() {
 
   const listen = () => {
     if (listening != null) { stopAudio(); setListening(null); return; }
-    playRange(surah, from, reciterFor(riwaya).id, { to, repeat: 3, onAyah: setListening })
+    playRange(riwaya, surah, from, { to, repeat: 3, onAyah: setListening })
       .catch(() => Alert.alert('تعذّر التشغيل', 'تأكد من الانترنت'));
   };
 
@@ -74,7 +71,7 @@ export default function Hifz() {
           <Txt muted size={13} style={{ lineHeight: 22 }}>١. استمع للمقطع وردّده مع القارئ.{'\n'}٢. ابدأ التسميع: الآيات مخفية، اقرأها من حفظك ثم المس البطاقة للتحقق.{'\n'}٣. قيّم تسميعك، وسيذكّرك التطبيق بمراجعتها في الوقت المناسب.</Txt>
         </Card>
       </ScrollView>
-      <SurahPicker visible={pick} current={surah} onClose={() => setPick(false)} onPick={(s) => { setSurah(s); setFrom(1); setPick(false); }} />
+      <SurahPicker visible={pick} current={surah} riwaya={riwaya} onClose={() => setPick(false)} onPick={(s) => { setSurah(s); setFrom(1); setPick(false); }} />
     </SafeAreaView>
   );
 }

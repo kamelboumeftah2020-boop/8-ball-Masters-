@@ -4,9 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, space, radius } from '../theme';
 import { Txt } from './ui';
 import { SURAHS, arNum, ayahCount } from '../lib/surahs';
+import type { Riwaya } from '../db/queries';
 
-export function SurahPicker({ visible, current, onPick, onClose, marks }: {
-  visible: boolean; current?: number; onPick: (surah: number) => void; onClose: () => void; marks?: Set<number>;
+export function SurahPicker({ visible, current, onPick, onClose, marks, riwaya = 'hafs' }: {
+  visible: boolean; riwaya?: Riwaya; current?: number; onPick: (surah: number) => void; onClose: () => void; marks?: Set<number>;
 }) {
   const t = useTheme();
   return (
@@ -22,7 +23,7 @@ export function SurahPicker({ visible, current, onPick, onClose, marks }: {
             <Pressable onPress={() => onPick(index + 1)}
               style={{ padding: 14, borderRadius: radius.md, backgroundColor: index + 1 === current ? t.soft : t.card, flexDirection: 'row', justifyContent: 'space-between' }}>
               <Txt bold>{arNum(index + 1)} · {item}</Txt>
-              <Txt muted size={12}>{marks?.has(index + 1) ? '✓ ' : ''}{arNum(ayahCount(index + 1))} آية</Txt>
+              <Txt muted size={12}>{marks?.has(index + 1) ? '✓ ' : ''}{arNum(ayahCount(index + 1, riwaya))} آية</Txt>
             </Pressable>
           )} />
       </SafeAreaView>

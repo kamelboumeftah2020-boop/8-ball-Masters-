@@ -3,7 +3,8 @@ import { Pressable, Platform, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { useTheme, space, radius } from '../../src/theme';
+import { useTheme, space, radius, quranFont } from '../../src/theme';
+import { pageOf } from '../../src/lib/mushaf';
 import { Btn, Card, Segmented, Stepper, Txt } from '../../src/components/ui';
 import { useSettings } from '../../src/store/settings';
 import { stats, allBookmarks } from '../../src/db/queries';
@@ -48,12 +49,12 @@ export default function Profile() {
 
         <Card style={{ gap: 8 }}>
           <Txt bold>العلامات المرجعية</Txt>
-          {marks.length === 0 ? <Txt muted size={13}>اضغط على آية في المصحف ثم على أيقونة العلامة لحفظها هنا.</Txt> :
+          {marks.length === 0 ? <Txt muted size={13}>اضغط على آية في المصحف ثم «علامة»، أو على أيقونة العلامة أعلى الصفحة.</Txt> :
             marks.map((m) => (
-              <Pressable key={`${m.surah}:${m.ayah}`} onPress={() => router.push(`/surah/${m.surah}`)}
+              <Pressable key={`${m.surah}:${m.ayah}`} onPress={() => router.push({ pathname: '/page/[n]', params: { n: String(pageOf(riwaya, m.surah, m.ayah)), s: String(m.surah), a: String(m.ayah) } })}
                 style={{ backgroundColor: t.soft, borderRadius: radius.sm, padding: 10 }}>
-                <Txt bold size={13} color={t.gold}>{SURAHS[m.surah - 1]} · {arNum(m.ayah)}</Txt>
-                {m.text ? <Txt size={13} numberOfLines={1}>{m.text}</Txt> : null}
+                <Txt bold size={13} color={t.gold}>{SURAHS[m.surah - 1]} · الآية {arNum(m.ayah)} · صفحة {arNum(pageOf(riwaya, m.surah, m.ayah))}</Txt>
+                {m.text ? <Txt size={15} numberOfLines={1} style={{ fontFamily: quranFont(riwaya) }}>{m.text}</Txt> : null}
               </Pressable>
             ))}
         </Card>
@@ -78,7 +79,7 @@ export default function Profile() {
             <Stepper label="الساعة" value={reminderHour} min={0} max={23} onChange={async (h) => { await set({ reminderHour: h }); await scheduleDaily(h); }} />
           )}
         </Card>
-        <Txt muted size={12} style={{ textAlign: 'center' }}>النص: fawazahmed0/quran-api · الصوت: everyayah.com · التفسير الميسّر: spa5k/tafsir_api</Txt>
+        <Txt muted size={12} style={{ textAlign: 'center' }}>النص والخط: مجمع الملك فهد لطباعة المصحف الشريف · الصوت: everyayah.com · التفسير الميسّر: spa5k/tafsir_api</Txt>
       </ScrollView>
     </SafeAreaView>
   );

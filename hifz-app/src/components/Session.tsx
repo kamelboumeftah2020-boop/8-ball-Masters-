@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { ScrollView, Pressable, View } from 'react-native';
-import { useTheme, radius, space, font } from '../theme';
+import { useTheme, radius, space, quranFont } from '../theme';
 import { useSettings } from '../store/settings';
 import { Ayah, rate } from '../db/queries';
 import { Btn, Txt } from './ui';
 import { arNum, SURAHS } from '../lib/surahs';
-import { playAyah, reciterFor, stopAudio } from '../lib/audio';
+import { playAyah, stopAudio } from '../lib/audio';
 
 // الحالات: 0 مخفية، 1 تلميح (أول كلمة)، 2 ظاهرة
 export function Session({ ayahs, kind, onDone }: { ayahs: Ayah[]; kind: 'hifz' | 'review'; onDone: () => void }) {
@@ -17,7 +17,7 @@ export function Session({ ayahs, kind, onDone }: { ayahs: Ayah[]; kind: 'hifz' |
   const step = (a: Ayah) => setLv((p) => ({ ...p, [key(a)]: Math.min(2, (p[key(a)] ?? 0) + 1) }));
   const showAll = () => setLv(Object.fromEntries(ayahs.map((a) => [key(a), 2])));
   const finish = async (r: 0 | 1 | 2) => { stopAudio(); await rate(riwaya, ayahs, r, kind); onDone(); };
-  const listen = (a: Ayah) => playAyah(a.surah, a.ayah, reciterFor(riwaya).id).catch(() => {});
+  const listen = (a: Ayah) => playAyah(riwaya, a.surah, a.ayah).catch(() => {});
 
   return (
     <View style={{ flex: 1 }}>
@@ -25,12 +25,12 @@ export function Session({ ayahs, kind, onDone }: { ayahs: Ayah[]; kind: 'hifz' |
         <Txt muted style={{ textAlign: 'center' }}>اقرأ الآية من حفظك، ثم المس البطاقة لتتحقق · اضغط مطولًا للاستماع</Txt>
         {ayahs.map((a) => {
           const l = lv[key(a)] ?? 0;
-          const first = a.text.split(' ')[0];
+          const first = a.text.replace(/^۞\s*/, '').split(/\s/)[0];
           return (
             <Pressable key={key(a)} onPress={() => step(a)} onLongPress={() => listen(a)}
               style={{ backgroundColor: t.card, borderRadius: radius.md, padding: space.md, borderWidth: 1, borderColor: l === 2 ? t.primary : t.border, borderStyle: l === 0 ? 'dashed' : 'solid' }}>
               <Txt size={12} color={t.gold} bold>{SURAHS[a.surah - 1]} · {arNum(a.ayah)}</Txt>
-              <Txt style={{ fontFamily: font.quran, fontSize, lineHeight: fontSize * 1.9, marginTop: 8, textAlign: 'center' }}>
+              <Txt style={{ fontFamily: quranFont(riwaya), fontSize, lineHeight: fontSize * 1.9, marginTop: 8, textAlign: 'center' }}>
                 {l === 0 ? '﴿ ● ● ● ● ● ﴾' : l === 1 ? `${first} …` : a.text}
               </Txt>
             </Pressable>

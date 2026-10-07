@@ -79,3 +79,8 @@ export async function allBookmarks(r: Riwaya) {
     `SELECT b.surah, b.ayah, a.text FROM bookmarks b LEFT JOIN ayahs a ON a.riwaya=b.riwaya AND a.surah=b.surah AND a.ayah=b.ayah
      WHERE b.riwaya=? ORDER BY b.surah, b.ayah`, [r]);
 }
+export async function bookmarksAll(r: Riwaya) {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ surah: number; ayah: number }>('SELECT surah, ayah FROM bookmarks WHERE riwaya=?', [r]);
+  return new Set(rows.map((x) => `${x.surah}:${x.ayah}`));
+}

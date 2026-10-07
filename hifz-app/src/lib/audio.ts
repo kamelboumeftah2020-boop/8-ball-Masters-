@@ -2,6 +2,7 @@ import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { getDb } from '../db';
 import { ayahCount } from './surahs';
+import { hafsAyahsOf } from './mushaf';
 import type { Riwaya } from '../db/queries';
 
 export type Reciter = { id: string; name: string; riwaya: Riwaya; baseUrl: string };
@@ -31,7 +32,7 @@ async function sourceFor(rec: Reciter, s: number, a: number) {
 }
 
 let sound: Audio.Sound | null = null;
-let token = 0; // يلغي أي تشغيل متتابع قديم
+let token = 0; // يلغي أي تشغيل سابق
 
 export async function stopAudio() {
   token++;
@@ -39,35 +40,51 @@ export async function stopAudio() {
   if (s) { try { await s.stopAsync(); await s.unloadAsync(); } catch {} }
 }
 
-// يشغّل آية واحدة. onEnd يُستدعى عند انتهائها.
-export async function playAyah(s: number, a: number, reciterId = 'afasy', onEnd?: () => void) {
+// يشغّل ملفًا واحدًا (ترقيم حفص) ويستدعي onEnd عند انتهائه إن لم يُلغَ
+async function playFile(rec: Reciter, s: number, hafsAyah: number, my: number, onEnd: () => void) {
+  const { sound: snd } = await Audio.Sound.createAsync(await sourceFor(rec, s, hafsAyah), { shouldPlay: true },
+    (st: AVPlaybackStatus) => { if (st.isLoaded && st.didJustFinish && my === token) onEnd(); });
+  if (my !== token) { snd.unloadAsync().catch(() => {}); return; }
+  const old = sound; sound = snd;
+  if (old && old !== snd) old.unloadAsync().catch(() => {});
+}
+
+// يشغّل آية من الرواية المختارة (قد تقابل أكثر من ملف في ترقيم حفص)
+async function playAyahInner(r: Riwaya, s: number, a: number, my: number, onEnd?: () => void) {
+  const rec = reciterFor(r);
+  const files = hafsAyahsOf(r, s, a);
+  let i = 0;
+  const next = async (): Promise<void> => {
+    if (my !== token) return;
+    if (i >= files.length) { onEnd?.(); return; }
+    await playFile(rec, s, files[i++], my, () => { next().catch(() => onEnd?.()); });
+  };
+  await next();
+}
+
+export async function playAyah(r: Riwaya, s: number, a: number, onEnd?: () => void) {
+  await stopAudio();
+  await ensureMode();
+  await playAyahInner(r, s, a, token, onEnd);
+}
+
+// تشغيل متتابع من آية حتى آخر السورة (أو `to`) مع تكرار كل آية `repeat` مرات
+export async function playRange(r: Riwaya, surah: number, from: number,
+  opts: { to?: number; repeat?: number; onAyah?: (a: number | null) => void } = {}) {
   await stopAudio();
   await ensureMode();
   const my = token;
-  const rec = getRec(reciterId);
-  const { sound: snd } = await Audio.Sound.createAsync(await sourceFor(rec, s, a), { shouldPlay: true },
-    (st: AVPlaybackStatus) => { if (st.isLoaded && st.didJustFinish && my === token) onEnd?.(); });
-  if (my !== token) { snd.unloadAsync().catch(() => {}); return; }
-  sound = snd;
-}
-
-// تشغيل متتابع من آية إلى آخر السورة (أو حتى `to`)، مع تكرار كل آية `repeat` مرات
-export async function playRange(surah: number, from: number, reciterId: string,
-  opts: { to?: number; repeat?: number; onAyah?: (a: number | null) => void } = {}) {
-  const to = opts.to ?? ayahCount(surah);
+  const to = opts.to ?? ayahCount(surah, r);
   const repeat = Math.max(1, opts.repeat ?? 1);
   let a = from, n = 1;
   const step = async (): Promise<void> => {
+    if (my !== token) return;
     if (a > to) { opts.onAyah?.(null); return; }
     opts.onAyah?.(a);
-    const mine = token + 1; // playAyah يزيد token مرة واحدة
-    try {
-      await playAyah(surah, a, reciterId, () => {
-        if (mine !== token) return;
-        if (n < repeat) n++; else { n = 1; a++; }
-        step();
-      });
-    } catch { opts.onAyah?.(null); }
+    await playAyahInner(r, surah, a, my, () => {
+      if (n < repeat) n++; else { n = 1; a++; }
+      step().catch(() => opts.onAyah?.(null));
+    });
   };
   await step();
 }

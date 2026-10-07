@@ -7,13 +7,15 @@ import { Btn, Card, Segmented, Txt, Empty } from '../../src/components/ui';
 import { useSettings } from '../../src/store/settings';
 import { OfflineManager } from '../../src/components/OfflineManager';
 import { stats } from '../../src/db/queries';
+import { ensureQuran } from '../../src/lib/quran-data';
 import { arNum } from '../../src/lib/surahs';
 
 export default function Home() {
   const t = useTheme(); const router = useRouter();
   const { riwaya, set } = useSettings();
+  const lastPage = useSettings((x) => x.lastPage[x.riwaya] ?? 1);
   const [s, setS] = useState({ due: 0, memorized: 0, learning: 0, total: 0, todayCount: 0, streak: 0 });
-  const refresh = useCallback(() => { stats(riwaya).then(setS); }, [riwaya]);
+  const refresh = useCallback(() => { ensureQuran(riwaya).catch(() => {}).then(() => stats(riwaya)).then(setS); }, [riwaya]);
   useFocusEffect(refresh);
 
   const pct = s.total ? Math.round((s.memorized / s.total) * 100) : 0;
@@ -27,7 +29,7 @@ export default function Home() {
         <Segmented value={riwaya} onChange={(v) => set({ riwaya: v })} options={[{ v: 'hafs', label: 'رواية حفص' }, { v: 'warsh', label: 'رواية ورش' }]} />
 
         {s.total === 0 ? (
-          <Card><Empty title="جاري تجهيز المصحف" body={'يتم تحميل نص هذه الرواية من الانترنت (مرة واحدة فقط). إن لم يكتمل، اضغط زر التحميل في الأسفل.'} /></Card>
+          <Card><Empty title="جاري تجهيز المصحف" body="لحظات فقط…" /></Card>
         ) : (
           <>
             <View style={{ backgroundColor: t.primary, borderRadius: radius.lg, padding: space.lg, gap: 14 }}>
@@ -49,9 +51,10 @@ export default function Home() {
 
             <Btn label={s.due > 0 ? `ابدأ المراجعة (${arNum(s.due)})` : 'لا مراجعة اليوم'} disabled={s.due === 0} onPress={() => router.push('/review')} />
             <Btn kind="soft" label="حفظ جديد" onPress={() => router.push('/hifz')} />
+            <Btn kind="ghost" label={`متابعة القراءة · صفحة ${arNum(lastPage)}`} onPress={() => router.push(`/page/${lastPage}`)} />
           </>
         )}
-        <OfflineManager riwaya={riwaya} onTextReady={refresh} />
+        <OfflineManager riwaya={riwaya} />
       </ScrollView>
     </SafeAreaView>
   );
